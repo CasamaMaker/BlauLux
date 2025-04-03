@@ -30,10 +30,10 @@ CRGB leds[NUM_LEDS];
 bool ledState = false;
 
 // Flag para habilitar o deshabilitar cifrado ESP-NOW
-#define ENABLE_ENCRYPTION 0  // 1 = cifrado habilitado, 0 = cifrado deshabilitado
+#define ENABLE_ENCRYPTION 1  // 1 = cifrado habilitado, 0 = cifrado deshabilitado
 
 // Define la clave de cifrado (debe coincidir con el emisor)
-#define CRYPTO_KEY "PASSWORD1"  // La misma clave que en el dispositivo emisor
+#define CRYPTO_KEY "PASSWORD12345678"  // La misma clave que en el dispositivo emisor
 
 // Estructura del mensaje (debe coincidir con el emisor)
 typedef struct {
