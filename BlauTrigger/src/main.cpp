@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <FastLED.h>
+#include <esp_wifi.h>  // Necesario para modificar la MAC del AP
 
 // Configuración de WiFi
 #define WIFI_SSID "SALICRU-BYOD"           // Cambiar por tu SSID
@@ -26,14 +27,31 @@
 #define DATA_PIN 6
 CRGB leds[NUM_LEDS];
 
+// Configuración del botón
+#define BUTTON_PIN 5
+bool buttonPressed = false;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+int buttonState = HIGH;  // Estado inicial es HIGH por el pull-up
+int lastButtonState = HIGH;
+
+// Configuración para modo de identificación
+bool idModeActive = false;
+unsigned long idModeStartTime = 0;
+const unsigned long ID_MODE_DURATION = 60000; // 1 minuto en milisegundos
+
 // Estado actual del LED
 bool ledState = false;
+CRGB previousLedColor = CRGB::Black;
 
 // Flag para habilitar o deshabilitar cifrado ESP-NOW
 #define ENABLE_ENCRYPTION 1  // 1 = cifrado habilitado, 0 = cifrado deshabilitado
 
 // Define la clave de cifrado (debe coincidir con el emisor)
 #define CRYPTO_KEY "PASSWORD12345678"  // La misma clave que en el dispositivo emisor
+
+// MAC Address para almacenar la original
+uint8_t originalMacAddress[6];
 
 // Estructura del mensaje (debe coincidir con el emisor)
 typedef struct {
@@ -54,15 +72,10 @@ void connectToMQTT();
 void publishHomeAssistantConfig();
 void updateLEDState(bool state);
 void handleMQTTMessage(char* topic, byte* payload, unsigned int length);
-
-// bool isAnyLedOn() {
-//   for (int i = 0; i < NUM_LEDS; i++) {
-//     if (leds[i].r > 0 || leds[i].g > 0 || leds[i].b > 0) {
-//       return true;  // Al menos un LED está encendido
-//     }
-//   }
-//   return false;  // Todos los LEDs están apagados
-// }
+void handleButton();
+void enterIdentificationMode();
+void exitIdentificationMode();
+void checkIdModeTimeout();
 
 // Callback ESP-NOW actualizado compatible con ESP-IDF 5.x
 void OnDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *incomingData, int len) {
@@ -84,18 +97,8 @@ void OnDataRecv(const esp_now_recv_info_t *recv_info, const uint8_t *incomingDat
   
   // Procesar el comando recibido por ESP-NOW
   if (strcmp(incomingMessage.topic, "luz") == 0) {
-    // if (strcmp(incomingMessage.payload, "ON") == 0) {
-    //   // Encender la luz
     updateLEDState(!ledState);
     mqttClient.publish(HA_TOPIC_STATE, ledState ? "ON" : "OFF", true);
-    //   // Publicar el nuevo estado en MQTT para mantener sincronizado Home Assistant
-    //   mqttClient.publish(HA_TOPIC_STATE, "ON", true);
-    // } else if (strcmp(incomingMessage.payload, "OFF") == 0) {
-    //   // Apagar la luz
-    //   updateLEDState(false);
-    //   // Publicar el nuevo estado en MQTT para mantener sincronizado Home Assistant
-    //   mqttClient.publish(HA_TOPIC_STATE, "OFF", true);
-    // }
   }
 }
 
@@ -108,17 +111,29 @@ void setup() {
   
   Serial.println("Iniciando ESP32-C3 con ESP-NOW y MQTT para Home Assistant...");
   
-  // Configurar el pin del LED como salida
+  // Configurar els pins
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
   
   // Inicializar FastLED
   FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
-  FastLED.setBrightness(50);  // 0-255
+  FastLED.setBrightness(25);  // 0-255
   leds[0] = CRGB::Black;
   FastLED.show();
   
   // Primero inicializamos ESP-NOW para recibir comandos mientras nos conectamos a WiFi
   WiFi.mode(WIFI_STA);
+  
+  // Guardar la MAC original
+  String macString = WiFi.macAddress();
+  Serial.print("MAC original: ");
+  Serial.println(macString);
+  
+  // Convertir la MAC String a un array de bytes
+  sscanf(macString.c_str(), "%x:%x:%x:%x:%x:%x", 
+         &originalMacAddress[0], &originalMacAddress[1], &originalMacAddress[2], 
+         &originalMacAddress[3], &originalMacAddress[4], &originalMacAddress[5]);
+;
   
   // Inicializar ESP-NOW
   if (esp_now_init() != ESP_OK) {
@@ -142,7 +157,7 @@ void setup() {
   esp_now_register_recv_cb(OnDataRecv);
   
   // Mostrar la dirección MAC del receptor
-  Serial.print("Dirección MAC del receptor: ");
+  Serial.print("Dirección MAC del receptor ESP-NOW: ");
   Serial.println(WiFi.macAddress());
   
   // Configurar el cliente MQTT
@@ -164,22 +179,172 @@ void setup() {
   mqttClient.publish(HA_TOPIC_STATE, "OFF", true);
   
   Serial.println("Dispositivo listo para recibir comandos por ESP-NOW y MQTT");
+  Serial.println("Presiona el botón en pin 5 para mostrar la MAC durante 1 minuto");
 }
 
 void loop() {
-  // Mantener la conexión MQTT activa
-  if (!mqttClient.connected()) {
-    connectToMQTT();
-  }
-  mqttClient.loop();
+  // Monitorear el botón
+  handleButton();
   
-  // Comprobar conexión WiFi
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Conexión WiFi perdida. Reconectando...");
-    connectToWiFi();
+  // Comprobar si el modo de identificación debe finalizar
+  if (idModeActive) {
+    checkIdModeTimeout();
+  } else {
+    // Modo normal - mantener la conexión MQTT activa
+    if (!mqttClient.connected()) {
+      connectToMQTT();
+    }
+    mqttClient.loop();
+    
+    // Comprobar conexión WiFi
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("Conexión WiFi perdida. Reconectando...");
+      connectToWiFi();
+    }
   }
   
   delay(10);
+}
+
+void handleButton() {
+  // Leer el estado actual del botón
+  int reading = digitalRead(BUTTON_PIN);
+  
+  // Comprobar si ha cambiado el estado del botón
+  if (reading != lastButtonState) {
+    // Reiniciar el temporizador de debounce
+    lastDebounceTime = millis();
+  }
+  
+  // Si ha pasado suficiente tiempo desde el último cambio...
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // Si el estado ha cambiado realmente...
+    if (reading != buttonState) {
+      buttonState = reading;
+      
+      // Si el botón ha sido presionado (HIGH según corrección)
+      if (buttonState == HIGH) {
+        Serial.println("Botón presionado");
+        
+        // Alternar el modo de identificación
+        if (idModeActive) {
+          exitIdentificationMode();
+        } else {
+          enterIdentificationMode();
+        }
+      }
+    }
+  }
+  
+  // Guardar el último estado del botón
+  lastButtonState = reading;
+}
+
+void enterIdentificationMode() {
+  if (idModeActive) return;  // Ya está en modo identificación
+  
+  Serial.println("Entrando en modo de identificación...");
+  idModeActive = true;
+  idModeStartTime = millis();
+  
+  // Guardar el color actual del LED para restaurarlo después
+  previousLedColor = leds[0];
+  
+  // Desconectar WiFi si está conectado
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Desconectando WiFi para cambiar a modo AP...");
+    WiFi.disconnect();
+    delay(100);
+  }
+  
+  // Cambiar a modo AP para mostrar la MAC
+  WiFi.mode(WIFI_AP);
+  
+  // Asegurar que la MAC del AP sea la misma que la de ESP-NOW (STA)
+  esp_wifi_set_mac(WIFI_IF_AP, originalMacAddress);
+  
+  // Obtener la MAC que se usará en AP
+  uint8_t ap_mac[6];
+  esp_wifi_get_mac(WIFI_IF_AP, ap_mac);
+  
+  // Convertir MAC a string legible
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+           ap_mac[0], ap_mac[1], ap_mac[2], ap_mac[3], ap_mac[4], ap_mac[5]);
+           
+  // Crear un nombre de red que incluya la MAC
+  String ap_ssid = "ESP32-";
+  for (int i = 0; i < 6; i++) {
+    if (ap_mac[i] < 0x10) ap_ssid += "0";
+    ap_ssid += String(ap_mac[i], HEX);
+  }
+  
+  // Iniciar AP sin contraseña
+  if (WiFi.softAP(ap_ssid.c_str())) {
+    Serial.println("Punto de acceso creado correctamente");
+    Serial.print("SSID: ");
+    Serial.println(ap_ssid);
+    Serial.print("Dirección MAC del AP: ");
+    Serial.println(macStr);
+    Serial.println("Esta MAC es la que deben usar otros dispositivos para ESP-NOW");
+    
+    // Encender el LED en rojo para indicar modo de identificación
+    leds[0] = CRGB::Red;
+    FastLED.show();
+  } else {
+    Serial.println("Error al crear punto de acceso");
+    exitIdentificationMode();  // Salir del modo si hay error
+  }
+}
+
+void exitIdentificationMode() {
+  if (!idModeActive) return;  // No está en modo identificación
+  
+  Serial.println("Saliendo del modo de identificación...");
+  idModeActive = false;
+  
+  // Detener el AP
+  WiFi.softAPdisconnect(true);
+  delay(100);
+  
+  // Volver a modo estación para WiFi y ESP-NOW
+  WiFi.mode(WIFI_STA);
+  
+  // Restaurar la MAC original en modo STA si fuera necesario
+  esp_wifi_set_mac(WIFI_IF_STA, originalMacAddress);
+  
+  // Restaurar el color anterior del LED
+  leds[0] = previousLedColor;
+  FastLED.show();
+  
+  // Reconectar a WiFi
+  connectToWiFi();
+  
+  // Reiniciar ESP-NOW
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("Error reinicializando ESP-NOW");
+  } else {
+    // Registrar nuevamente el callback
+    esp_now_register_recv_cb(OnDataRecv);
+    
+    #if ENABLE_ENCRYPTION
+      esp_err_t result = esp_now_set_pmk((uint8_t *)CRYPTO_KEY);
+      if (result == ESP_OK) {
+        Serial.println("Cifrado PMK rehabilitado correctamente");
+      }
+    #endif
+  }
+  
+  // Reconectar a MQTT
+  connectToMQTT();
+}
+
+void checkIdModeTimeout() {
+  // Comprobar si ha transcurrido el tiempo asignado para el modo de identificación
+  if (millis() - idModeStartTime > ID_MODE_DURATION) {
+    Serial.println("Tiempo de modo de identificación expirado");
+    exitIdentificationMode();
+  }
 }
 
 // Conectar a la red WiFi
@@ -243,23 +408,26 @@ void connectToMQTT() {
 void publishHomeAssistantConfig() {
   if (!mqttClient.connected()) return;
   
+  // Get MAC address once and store it
+  String mac = WiFi.macAddress();
   // Crear configuración en formato JSON para que Home Assistant descubra automáticamente este dispositivo
   String config = "{";
   config += "\"name\":\"ESP32 LED\",";
-  config += "\"unique_id\":\"esp32_c3_led\""+ WiFi.macAddress()+",";
-  config += "\"state_topic\":\"" + String(HA_TOPIC_STATE) + "\",";
-  config += "\"command_topic\":\"" + String(HA_TOPIC_COMMAND) + "\",";
+  config += "\"unique_id\":\"esp32_c3_led_";
+  config += mac;
+  config += "\",";
+  config += "\"state_topic\":\"";
+  config += HA_TOPIC_STATE;
+  config += "\",";
+  config += "\"command_topic\":\"";
+  config += HA_TOPIC_COMMAND;
+  config += "\",";
   config += "\"payload_on\":\"ON\",";
   config += "\"payload_off\":\"OFF\",";
-  config += "\"retain\":true,";
-  config += "\"device\":{";
-  config += "\"identifiers\":[\"esp32c3_" + WiFi.macAddress() + "\"],";
-  config += "\"name\":\"ESP32-C3 con ESP-NOW\",";
-  config += "\"manufacturer\":\"ESP\",";
-  config += "\"model\":\"ESP32-C3\"";
-  config += "}";
+  config += "\"retain\":true";
   config += "}";
   
+  mqttClient.setBufferSize(1024);  // Increase from 512 to 1024
   // Publicar la configuración
   Serial.println("Publicando configuración para Home Assistant...");
   mqttClient.publish(HA_TOPIC_CONFIG, config.c_str(), true);
@@ -268,6 +436,9 @@ void publishHomeAssistantConfig() {
 // Actualizar el estado del LED (tanto LED_BUILTIN como FastLED)
 void updateLEDState(bool state) {
   ledState = state;
+  
+  // No actualizar si estamos en modo de identificación
+  if (idModeActive) return;
   
   // Actualizar LED integrado
   digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
@@ -279,6 +450,9 @@ void updateLEDState(bool state) {
     leds[0] = CRGB::Black;
   }
   FastLED.show();
+  
+  // Guardar el color actual para recordarlo cuando salga del modo de identificación
+  previousLedColor = leds[0];
   
   Serial.println(state ? "LED encendido" : "LED apagado");
 }
