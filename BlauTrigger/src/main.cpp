@@ -1,3 +1,4 @@
+// Blautrigger, codi que controla la càrrega AC, ja sigui una bombeta, una tira de leds pwm, CW/WW, RGB, dirigible, un relé on/off
 /* ESP-32 Captive portal example
  * github.com/elliotmade/ESP32-Captive-Portal-Example
  * This isn't anything new, and doesn't do anything special
@@ -18,6 +19,8 @@
 #include <EEPROM.h>
 #include <esp_now.h>
 #include <FastLED.h>
+#include <blauprotocol.h>
+#include <blauprotocol_trg.h>
 
 
 
@@ -25,7 +28,8 @@
 // #define BLAULINK_V1
 // #define BLAULINK_V2
 // #define PICO_CLICK
-#define FIRSTRELE
+// #define FIRSTRELE
+#define S3ZERO
 
 
 #if defined(BLAULINK_V1)
@@ -63,6 +67,13 @@
   #define enBoto 99
   #define digitalLed 13
 
+#elif defined(S3ZERO)
+  #define enVBatterySense 99  // No implementat
+  #define VbatSense 99
+  #define Boto 0    // GPIO0 (boot button)
+  #define enBoto 99
+  #define digitalLed 21   // WS2812 integrat a l'S3-Zero
+
 #else
   #error "Defineix una versió del dispositiu (BLAULINK_V1, BLAULINK_V2 o PICO_CLICK)"
 #endif
@@ -97,14 +108,14 @@ int brightness = BRIGHTNESS;
 
 unsigned long startTime; // Variable per emmagatzemar el temps d'inici
 
-// Structure example to send data
-typedef struct {
-  char topic[50];
-  char payload[50];
-} struct_message;
+// // Structure example to send data
+// typedef struct {
+//   char topic[50];
+//   char payload[50];
+// } struct_message;
 
-// Create a struct_message called missatge
-struct_message missatge;
+// // Create a struct_message called missatge
+// struct_message missatge;
 
 bool state = false;
 
@@ -372,25 +383,42 @@ void controlLlum(String trigger){
   state = !state;
 }
 
-void OnDataRecv(const uint8_t * mac, const uint8_t *data, int len) {
+// void OnDataRecv(const uint8_t * mac, const uint8_t *data, int len) {
   
-  // Missatge rebut
-  char macStr[18];
-  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  Serial.print("Last Packet Recv from: "); Serial.println(macStr);
+//   // Missatge rebut
+//   char macStr[18];
+//   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+//            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+//   Serial.print("Last Packet Recv from: "); Serial.println(macStr);
 
-  const struct_message* msg = (const struct_message*) data;
-  Serial.print("Topic: "); Serial.println(msg->topic);
-  Serial.print("Payload: "); Serial.println(msg->payload);
-  Serial.println();
+//   const struct_message* msg = (const struct_message*) data;
+//   Serial.print("Topic: "); Serial.println(msg->topic);
+//   Serial.print("Payload: "); Serial.println(msg->payload);
+//   Serial.println();
 
 
-  // Acció al missatge rebut
-  controlLlum("espnow");
-  // leds[0] = state ? CRGB::Black : CRGB::Red;
-  // FastLED.show();
-  // state = !state;
+//   // Acció al missatge rebut
+//   controlLlum("espnow");
+//   // leds[0] = state ? CRGB::Black : CRGB::Red;
+//   // FastLED.show();
+//   // state = !state;
+// }
+
+void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+
+  BlauPacket_t pkt;
+  if (!blau_parse_packet(data, len, &pkt)) {
+    Serial.println("Paquet invàlid (mida, CRC o versió)");
+    return;
+  }
+
+  Serial.print("Paquet rebut: type=0x"); Serial.print(pkt.type, HEX);
+  Serial.print(" cmd=0x");  Serial.print(pkt.cmd, HEX);
+  Serial.print(" seq=");    Serial.println(pkt.seq);
+
+  if (pkt.type == TYPE_EVENT && pkt.cmd == EVT_CLICK_1) {
+    controlLlum("espnow");
+  }
 }
 
 void wifiApModeServer(){
@@ -412,7 +440,7 @@ void setup() {
 
   Serial.begin(115200);   // Inicialització port sèrie
 
-  control_type=0;
+  control_type=1;
   configuracioLlum();     // configuració el control de la llum
   controlLlum("inici");
 
