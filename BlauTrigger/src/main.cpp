@@ -116,15 +116,6 @@ int brightness = BRIGHTNESS;
 
 unsigned long startTime; // Variable per emmagatzemar el temps d'inici
 
-// // Structure example to send data
-// typedef struct {
-//   char topic[50];
-//   char payload[50];
-// } struct_message;
-
-// // Create a struct_message called missatge
-// struct_message missatge;
-
 bool state = false;
 // static uint8_t last_seq = 0xFF;  // valor inicial impossible
 static volatile bool  _ack_pending = false;
@@ -399,27 +390,6 @@ void controlLlum(String trigger){
   state = !state;
 }
 
-// void OnDataRecv(const uint8_t * mac, const uint8_t *data, int len) {
-  
-//   // Missatge rebut
-//   char macStr[18];
-//   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-//            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-//   Serial.print("Last Packet Recv from: "); Serial.println(macStr);
-
-//   const struct_message* msg = (const struct_message*) data;
-//   Serial.print("Topic: "); Serial.println(msg->topic);
-//   Serial.print("Payload: "); Serial.println(msg->payload);
-//   Serial.println();
-
-
-//   // Acció al missatge rebut
-//   controlLlum("espnow");
-//   // leds[0] = state ? CRGB::Black : CRGB::Red;
-//   // FastLED.show();
-//   // state = !state;
-// }
-
 void printPacket(const BlauPacket_t* pkt) {
   Serial.println("---- PACKET ----");
   Serial.printf("version: 0x%02X\n", pkt->version);
@@ -435,19 +405,7 @@ void printPacket(const BlauPacket_t* pkt) {
 }
 
 void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
-  // Serial.print("len: ");
-  // Serial.println(len);
 
-  // Serial.print("mac: ");
-  // for (int i = 0; i < 6; i++) {
-  //   Serial.printf("%02X", mac[i]);
-  //   if (i < 5) Serial.print(":");
-  // }
-  // Serial.println();
-
-  // printPacket((BlauPacket_t*)data);
-
-  // Serial.println();
   BlauPacket_t pkt;
   if (!blau_parse_packet(data, len, &pkt)) {
     Serial.println("Paquet invàlid (mida, CRC o versió)");
@@ -458,39 +416,98 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
   Serial.print(" cmd=0x");  Serial.print(pkt.cmd, HEX);
   Serial.print(" seq=");    Serial.println(pkt.seq);
 
-  if (pkt.type == TYPE_EVENT && pkt.cmd == EVT_CLICK_1) {
+  bool dup      = blau_is_duplicate(pkt.src_id, pkt.seq);
+  uint8_t ack_s = ACK_OK;
+  bool need_ack = true;   // PING i STATUS_REQ envien resposta directa, no ACK
 
-    bool dup = blau_is_duplicate(pkt.src_id, pkt.seq);
+  switch (pkt.type) {
 
-    if (!dup) {
-      controlLlum("espnow");                         // acció: 1 sola vegada
-    } else {
-      Serial.println("Duplicat ignorat");
-    }
-    // Serial.println(mac);
-    // Peer: registrar sempre (necessari per respondre)
-    // if (!esp_now_is_peer_exist(mac)) {
-    //   esp_now_peer_info_t peerInfo = {};
-    //   memcpy(peerInfo.peer_addr, mac, 6);
-    //   peerInfo.channel = 0;
-    //   peerInfo.encrypt = false;
-    //   esp_now_add_peer(&peerInfo);
-    // }
+    // ── TYPE_EVENT ────────────────────────────────────────────────
+    case TYPE_EVENT:
+      if (dup) {
+        ack_s = ACK_DUPLICATE;
+        Serial.println("Duplicat ignorat");
+      } else {
+        switch (pkt.cmd) {
+          case EVT_CLICK_1:
+          case EVT_CLICK_2:
+          case EVT_CLICK_3:
+            controlLlum("espnow");
+            ack_s = ACK_OK;
+            break;
+          case EVT_LONG_START:
+          case EVT_LONG_END:
+            ack_s = ACK_OK;   // acceptat, no implementat encara
+            break;
+          default:
+            Serial.print("EVT desconegut: 0x"); Serial.println(pkt.cmd, HEX);
+            ack_s = ACK_ERROR;
+        }
+      }
+      break;
 
-    // ACK sempre — BlauLink necessita saber que ha arribat, sigui duplicat o no
-    // BlauPacket_t ack;
-    // blau_build_ack(&ack, pkt.seq, dup ? ACK_DUPLICATE : ACK_OK);
-    // esp_now_send(mac, (uint8_t*)&ack, sizeof(ack));
-    // Serial.print("ACK enviat (");
-    // Serial.print(dup ? "DUPLICATE" : "OK");
-    // Serial.print(") seq="); Serial.println(pkt.seq);
+    // ── TYPE_CMD ─────────────────────────────────────────────────
+    case TYPE_CMD:
+      if (dup) {
+        ack_s = ACK_DUPLICATE;
+      } else {
+        switch (pkt.cmd) {
+          case CMD_TOGGLE:
+            controlLlum("espnow");
+            ack_s = ACK_OK;
+            break;
+          case CMD_ON:
+            if (!state) controlLlum("espnow");   // state=false → càrrega apagada
+            ack_s = ACK_OK;
+            break;
+          case CMD_OFF:
+            if (state) controlLlum("espnow");    // state=true → càrrega encesa
+            ack_s = ACK_OK;
+            break;
+          default:
+            Serial.print("CMD no implementat: 0x"); Serial.println(pkt.cmd, HEX);
+            ack_s = ACK_ERROR;
+        }
+      }
+      break;
+
+    // ── TYPE_PING → respon PONG (no ACK) ─────────────────────────
+    case TYPE_PING:
+      blau_build_pong(&_ack_pkt, pkt.seq);
+      memcpy(_ack_mac, mac, 6);
+      _ack_pending = true;
+      need_ack = false;
+      Serial.print("PING rebut, PONG pendent seq="); Serial.println(pkt.seq);
+      break;
+
+    // ── TYPE_STATUS_REQ → respon STATUS_RSP (no ACK) ─────────────
+    case TYPE_STATUS_REQ:
+      blau_build_status_rsp(&_ack_pkt, pkt.seq,
+                             /*is_on=*/ state,
+                             /*brightness=*/ 50,
+                             /*control_type=*/ (uint8_t)control_type);
+      memcpy(_ack_mac, mac, 6);
+      _ack_pending = true;
+      need_ack = false;
+      Serial.println("STATUS_REQ rebut, STATUS_RSP pendent");
+      break;
+
+    // ── Tipus desconegut → ignora silenciosament ─────────────────
+    default:
+      Serial.print("Tipus desconegut ignorat: 0x"); Serial.println(pkt.type, HEX);
+      need_ack = false;
+      break;
+  }
+
+  if (need_ack) {
     memcpy(_ack_mac, mac, 6);
-    blau_build_ack(&_ack_pkt, pkt.seq, dup ? ACK_DUPLICATE : ACK_OK);
+    blau_build_ack(&_ack_pkt, pkt.seq, ack_s);
     _ack_pending = true;
-    Serial.print("ACK pendent seq="); Serial.println(pkt.seq);
+    Serial.print("ACK pendent (");
+    Serial.print(ack_s == ACK_OK ? "OK" : ack_s == ACK_DUPLICATE ? "DUP" : "ERR");
+    Serial.print(") seq="); Serial.println(pkt.seq);
   }
 }
-
 
 void wifiApModeServer(){
   
@@ -504,8 +521,6 @@ void wifiApModeServer(){
   webServerSetup();                                         //Configures the behavior of the web server
   Serial.println("Setup complete");
 }
-
-
 
 void setup() {
 
@@ -526,30 +541,12 @@ void setup() {
   // Init ESPNow with a fallback logic
   InitESPNow();
 
-  // Once ESPNow is successfully Init, we will register for recv CB to
-  // get recv packer info.
-  // esp_now_register_recv_cb(OnDataRecv);
-
   esp_now_register_send_cb(OnDataSent_TRG);
   esp_now_register_recv_cb(OnDataRecv);
-  // delay(1000);
 
-  // leds[0] = CRGB::Black;
-  // FastLED.show();
-  
-
-  
-  // pin1=23;
-  // pin2=44;
 }
 
 void loop() {
-
-  // static unsigned long lastTick = 0;
-  // if (millis() - lastTick > 3000) {
-  //   Serial.printf("[TRG] loop viu, _ack_pending=%d\n", (int)_ack_pending);
-  //   lastTick = millis();
-  // }
 
   if (_ack_pending) {
     _ack_pending = false;
