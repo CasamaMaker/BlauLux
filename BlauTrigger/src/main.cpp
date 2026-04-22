@@ -27,53 +27,13 @@
 
 // #define BLAULINK_V1
 // #define BLAULINK_V2
-// #define PICO_CLICK
+#define PICO_CLICK
 // #define FIRSTRELE
 // #define S3ZERO
-#define SONOFF_BASIC_R4
+// #define SONOFF_BASIC_R4
 
-#if defined(BLAULINK_V1)
-  #define enVBatterySense 4
-  #define VbatSense 3
-  #define Boto 5
-  #define enBoto 99  // 99 per indicar no disponible o mode deepsleep
-  #define digitalLed 6
 
-#elif defined(BLAULINK_V2)
-  #define enVBatterySense 0
-  #define VbatSense 3
-  #define Boto 1
-  #define enBoto 4
-  #define digitalLed 5
-
-#elif defined(PICO_CLICK)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 4
-  #define Boto 5
-  #define enBoto 3
-  #define digitalLed 6
-
-#elif defined(YEELIGHT_LAMP)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 4
-  #define Boto 5
-  #define enBoto 3
-  #define digitalLed 19
-
-#elif defined(FIRSTRELE)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 99
-  #define Boto 0
-  #define enBoto 99
-  #define digitalLed 13
-
-#elif defined(S3ZERO)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 99
-  #define Boto 0    // GPIO0 (boot button)
-  #define enBoto 99
-  #define digitalLed 21   // WS2812 integrat a l'S3-Zero
-#elif defined(SONOFF_BASIC_R4)
+#if defined(SONOFF_BASIC_R4)
   #define enVBatterySense 99  // No implementat
   #define VbatSense 99
   #define Boto 9    // GPIO0 (boot button)
@@ -81,6 +41,62 @@
   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
   #define rele 4
   #define led 6
+  #define control_type 0
+
+// #elif defined(BLAULINK_V1)
+//   #define enVBatterySense 4
+//   #define VbatSense 3
+//   #define Boto 5
+//   #define enBoto 99  // 99 per indicar no disponible o mode deepsleep
+//   #define digitalLed 6
+
+// #elif defined(BLAULINK_V2)
+//   #define enVBatterySense 0
+//   #define VbatSense 3
+//   #define Boto 1
+//   #define enBoto 4
+//   #define digitalLed 5
+
+#elif defined(PICO_CLICK)
+  #define enVBatterySense 99  // No implementat
+  #define VbatSense 4
+  #define Boto 5
+  #define enBoto 3
+  #define rele 99
+  #define led 99
+  #define digitalLed 6
+  #define control_type 1
+
+// #elif defined(YEELIGHT_LAMP)
+//   #define enVBatterySense 99  // No implementat
+//   #define VbatSense 4
+//   #define Boto 5
+//   #define enBoto 3
+//   #define digitalLed 19
+
+// #elif defined(FIRSTRELE)
+//   #define enVBatterySense 99  // No implementat
+//   #define VbatSense 99
+//   #define Boto 0
+//   #define enBoto 99
+//   #define digitalLed 13
+
+// #elif defined(S3ZERO)
+//   #define enVBatterySense 99  // No implementat
+//   #define VbatSense 99
+//   #define Boto 0    // GPIO0 (boot button)
+//   #define enBoto 99
+//   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
+
+// #elif defined(SONOFF_BASIC_R4)
+//   #define enVBatterySense 99  // No implementat
+//   #define VbatSense 99
+//   #define Boto 9    // GPIO0 (boot button)
+//   #define enBoto 99
+//   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
+//   #define rele 4
+//   #define led 6
+//   #define control_type 0
 
 #else
   #error "Defineix una versió del dispositiu (BLAULINK_V1, BLAULINK_V2 o PICO_CLICK)"
@@ -100,7 +116,7 @@ DNSServer dnsServer;                      //This creates a DNS server, required 
 
 #define CHANNEL 1
 
-int control_type, pin1, pin2;
+int pin1, pin2;
 
 String myAddresss, myAddresssEnd;
 
@@ -211,7 +227,7 @@ void webServerSetup(){
           String buf = p->value().c_str();
           Serial.print("control_type: ");
           Serial.println(buf);
-          control_type=buf.toInt();
+          // control_type=buf.toInt();
           // guardar EEPROM
         }
         if (p->name() == "pin1") {
@@ -390,123 +406,39 @@ void controlLlum(String trigger){
   state = !state;
 }
 
-void printPacket(const BlauPacket_t* pkt) {
-  Serial.println("---- PACKET ----");
-  Serial.printf("version: 0x%02X\n", pkt->version);
-  Serial.printf("type:    0x%02X\n", pkt->type);
-  Serial.printf("seq:     %d\n", pkt->seq);
-  Serial.printf("cmd:     0x%02X\n", pkt->cmd);
-  Serial.printf("p1:      0x%02X\n", pkt->p1);
-  Serial.printf("p2:      0x%02X\n", pkt->p2);
-  Serial.printf("p3:      0x%02X\n", pkt->p3);
-  Serial.printf("src_id:  0x%04X\n", pkt->src_id);
-  Serial.printf("crc:     0x%02X\n", pkt->crc8);
-  Serial.println("----------------");
+uint8_t handleAction(uint8_t pkt_type, uint8_t cmd,
+                     uint8_t p1, uint8_t p2, uint8_t p3) {
+  (void)p1; (void)p2; (void)p3;
+  if (pkt_type == TYPE_EVENT) {
+    switch (cmd) {
+      case EVT_CLICK_1:
+      case EVT_CLICK_2:
+      case EVT_CLICK_3:    controlLlum("espnow"); return ACK_OK;
+      case EVT_LONG_START:
+      case EVT_LONG_END:                          return ACK_OK;
+      default:
+        Serial.print("EVT desconegut: 0x"); Serial.println(cmd, HEX);
+        return ACK_ERROR;
+    }
+  }
+  if (pkt_type == TYPE_CMD) {
+    switch (cmd) {
+      case CMD_TOGGLE:                       controlLlum("espnow"); return ACK_OK;
+      case CMD_ON:   if (!state)             controlLlum("espnow"); return ACK_OK;
+      case CMD_OFF:  if ( state)             controlLlum("espnow"); return ACK_OK;
+      default:
+        Serial.print("CMD no implementat: 0x"); Serial.println(cmd, HEX);
+        return ACK_ERROR;
+    }
+  }
+  return ACK_ERROR;
 }
 
 void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
-
-  BlauPacket_t pkt;
-  if (!blau_parse_packet(data, len, &pkt)) {
-    Serial.println("Paquet invàlid (mida, CRC o versió)");
-    return;
-  }
-
-  Serial.print("Paquet rebut: type=0x"); Serial.print(pkt.type, HEX);
-  Serial.print(" cmd=0x");  Serial.print(pkt.cmd, HEX);
-  Serial.print(" seq=");    Serial.println(pkt.seq);
-
-  bool dup      = blau_is_duplicate(pkt.src_id, pkt.seq);
-  uint8_t ack_s = ACK_OK;
-  bool need_ack = true;   // PING i STATUS_REQ envien resposta directa, no ACK
-
-  switch (pkt.type) {
-
-    // ── TYPE_EVENT ────────────────────────────────────────────────
-    case TYPE_EVENT:
-      if (dup) {
-        ack_s = ACK_DUPLICATE;
-        Serial.println("Duplicat ignorat");
-      } else {
-        switch (pkt.cmd) {
-          case EVT_CLICK_1:
-          case EVT_CLICK_2:
-          case EVT_CLICK_3:
-            controlLlum("espnow");
-            ack_s = ACK_OK;
-            break;
-          case EVT_LONG_START:
-          case EVT_LONG_END:
-            ack_s = ACK_OK;   // acceptat, no implementat encara
-            break;
-          default:
-            Serial.print("EVT desconegut: 0x"); Serial.println(pkt.cmd, HEX);
-            ack_s = ACK_ERROR;
-        }
-      }
-      break;
-
-    // ── TYPE_CMD ─────────────────────────────────────────────────
-    case TYPE_CMD:
-      if (dup) {
-        ack_s = ACK_DUPLICATE;
-      } else {
-        switch (pkt.cmd) {
-          case CMD_TOGGLE:
-            controlLlum("espnow");
-            ack_s = ACK_OK;
-            break;
-          case CMD_ON:
-            if (!state) controlLlum("espnow");   // state=false → càrrega apagada
-            ack_s = ACK_OK;
-            break;
-          case CMD_OFF:
-            if (state) controlLlum("espnow");    // state=true → càrrega encesa
-            ack_s = ACK_OK;
-            break;
-          default:
-            Serial.print("CMD no implementat: 0x"); Serial.println(pkt.cmd, HEX);
-            ack_s = ACK_ERROR;
-        }
-      }
-      break;
-
-    // ── TYPE_PING → respon PONG (no ACK) ─────────────────────────
-    case TYPE_PING:
-      blau_build_pong(&_ack_pkt, pkt.seq);
-      memcpy(_ack_mac, mac, 6);
-      _ack_pending = true;
-      need_ack = false;
-      Serial.print("PING rebut, PONG pendent seq="); Serial.println(pkt.seq);
-      break;
-
-    // ── TYPE_STATUS_REQ → respon STATUS_RSP (no ACK) ─────────────
-    case TYPE_STATUS_REQ:
-      blau_build_status_rsp(&_ack_pkt, pkt.seq,
-                             /*is_on=*/ state,
-                             /*brightness=*/ 50,
-                             /*control_type=*/ (uint8_t)control_type);
-      memcpy(_ack_mac, mac, 6);
-      _ack_pending = true;
-      need_ack = false;
-      Serial.println("STATUS_REQ rebut, STATUS_RSP pendent");
-      break;
-
-    // ── Tipus desconegut → ignora silenciosament ─────────────────
-    default:
-      Serial.print("Tipus desconegut ignorat: 0x"); Serial.println(pkt.type, HEX);
-      need_ack = false;
-      break;
-  }
-
-  if (need_ack) {
-    memcpy(_ack_mac, mac, 6);
-    blau_build_ack(&_ack_pkt, pkt.seq, ack_s);
-    _ack_pending = true;
-    Serial.print("ACK pendent (");
-    Serial.print(ack_s == ACK_OK ? "OK" : ack_s == ACK_DUPLICATE ? "DUP" : "ERR");
-    Serial.print(") seq="); Serial.println(pkt.seq);
-  }
+  blau_trg_on_data_recv(mac, data, len,
+                        &_ack_pending, _ack_mac, &_ack_pkt,
+                        handleAction,
+                        state, (uint8_t)brightness, (uint8_t)control_type);
 }
 
 void wifiApModeServer(){
@@ -526,7 +458,7 @@ void setup() {
 
   Serial.begin(115200);   // Inicialització port sèrie
 
-  control_type=0;
+  // control_type=0;
   configuracioLlum();     // configuració el control de la llum
   controlLlum("inici");
 
@@ -548,20 +480,7 @@ void setup() {
 
 void loop() {
 
-  if (_ack_pending) {
-    _ack_pending = false;
-    if (!esp_now_is_peer_exist(_ack_mac)) {
-      esp_now_peer_info_t p = {};
-      memcpy(p.peer_addr, _ack_mac, 6);
-      p.channel = 0;
-      p.encrypt = false;
-      p.ifidx = WIFI_IF_AP;     // ← BlauTrigger és en WIFI_AP mode
-      esp_err_t addResult = esp_now_add_peer(&p);
-      Serial.print("add_peer: 0x"); Serial.println(addResult, HEX);
-    }
-    esp_err_t r = esp_now_send(_ack_mac, (uint8_t*)&_ack_pkt, sizeof(_ack_pkt));
-    Serial.print("ACK esp_now_send: 0x"); Serial.println(r, HEX);
-  }
+  blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
 
   if(!digitalRead(Boto)){
     startTime = millis(); // Guarda el temps actual en mil·lisegons al iniciar
