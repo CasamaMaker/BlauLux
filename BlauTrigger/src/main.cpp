@@ -29,8 +29,8 @@
 // #define BLAULINK_V2
 // #define PICO_CLICK
 // #define FIRSTRELE
-#define S3ZERO
-
+// #define S3ZERO
+#define SONOFF_BASIC_R4
 
 #if defined(BLAULINK_V1)
   #define enVBatterySense 4
@@ -73,6 +73,14 @@
   #define Boto 0    // GPIO0 (boot button)
   #define enBoto 99
   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
+#elif defined(SONOFF_BASIC_R4)
+  #define enVBatterySense 99  // No implementat
+  #define VbatSense 99
+  #define Boto 9    // GPIO0 (boot button)
+  #define enBoto 99
+  #define digitalLed 21   // WS2812 integrat a l'S3-Zero
+  #define rele 4
+  #define led 6
 
 #else
   #error "Defineix una versió del dispositiu (BLAULINK_V1, BLAULINK_V2 o PICO_CLICK)"
@@ -118,11 +126,19 @@ unsigned long startTime; // Variable per emmagatzemar el temps d'inici
 // struct_message missatge;
 
 bool state = false;
+// static uint8_t last_seq = 0xFF;  // valor inicial impossible
+static volatile bool  _ack_pending = false;
+static uint8_t        _ack_mac[6];
+static BlauPacket_t   _ack_pkt;
 
 
 int freq = 5000;      // Freqüència del senyal PWM en Hz
 int pwmChannel = 0;   // Canal PWM (0–7 per ESP32-C3)
 int resolution = 8;   // Resolució (8 bits → valors de 0 a 255) 
+
+void OnDataSent_TRG(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ACK TX: OK" : "ACK TX: FAIL");
+}
 
 // Init ESP Now with fallback
 void InitESPNow() {
@@ -308,8 +324,8 @@ void configuracioLlum(){
   switch(control_type){
     case 0:     // on/off                     ----> topic: light  &  payload: "toogle"
       // digitalWrite(19, state);
-      pinMode(12, OUTPUT);  //rele
-      pinMode(13, OUTPUT);  //led
+      pinMode(rele, OUTPUT);  //rele
+      pinMode(led, OUTPUT);  //led
       break;
     
     case 1:     // Digital led                ----> topic: digled  &  payload: color
@@ -353,8 +369,8 @@ void controlLlum(String trigger){
       // analogWrite(19, map(100, 0, 100, 0, 255));
       // delay(1000);
       // analogWrite(19, map(50, 0, 100, 0, 255));
-      digitalWrite(12, state ? HIGH : LOW);
-      digitalWrite(13, state ? HIGH : LOW);
+      digitalWrite(rele, state ? HIGH : LOW);
+      digitalWrite(led, state ? HIGH : LOW);
       break;
 
     case 1:     // Digital led
@@ -404,8 +420,34 @@ void controlLlum(String trigger){
 //   // state = !state;
 // }
 
-void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+void printPacket(const BlauPacket_t* pkt) {
+  Serial.println("---- PACKET ----");
+  Serial.printf("version: 0x%02X\n", pkt->version);
+  Serial.printf("type:    0x%02X\n", pkt->type);
+  Serial.printf("seq:     %d\n", pkt->seq);
+  Serial.printf("cmd:     0x%02X\n", pkt->cmd);
+  Serial.printf("p1:      0x%02X\n", pkt->p1);
+  Serial.printf("p2:      0x%02X\n", pkt->p2);
+  Serial.printf("p3:      0x%02X\n", pkt->p3);
+  Serial.printf("src_id:  0x%04X\n", pkt->src_id);
+  Serial.printf("crc:     0x%02X\n", pkt->crc8);
+  Serial.println("----------------");
+}
 
+void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  // Serial.print("len: ");
+  // Serial.println(len);
+
+  // Serial.print("mac: ");
+  // for (int i = 0; i < 6; i++) {
+  //   Serial.printf("%02X", mac[i]);
+  //   if (i < 5) Serial.print(":");
+  // }
+  // Serial.println();
+
+  // printPacket((BlauPacket_t*)data);
+
+  // Serial.println();
   BlauPacket_t pkt;
   if (!blau_parse_packet(data, len, &pkt)) {
     Serial.println("Paquet invàlid (mida, CRC o versió)");
@@ -417,9 +459,38 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
   Serial.print(" seq=");    Serial.println(pkt.seq);
 
   if (pkt.type == TYPE_EVENT && pkt.cmd == EVT_CLICK_1) {
-    controlLlum("espnow");
+
+    bool dup = blau_is_duplicate(pkt.src_id, pkt.seq);
+
+    if (!dup) {
+      controlLlum("espnow");                         // acció: 1 sola vegada
+    } else {
+      Serial.println("Duplicat ignorat");
+    }
+    // Serial.println(mac);
+    // Peer: registrar sempre (necessari per respondre)
+    // if (!esp_now_is_peer_exist(mac)) {
+    //   esp_now_peer_info_t peerInfo = {};
+    //   memcpy(peerInfo.peer_addr, mac, 6);
+    //   peerInfo.channel = 0;
+    //   peerInfo.encrypt = false;
+    //   esp_now_add_peer(&peerInfo);
+    // }
+
+    // ACK sempre — BlauLink necessita saber que ha arribat, sigui duplicat o no
+    // BlauPacket_t ack;
+    // blau_build_ack(&ack, pkt.seq, dup ? ACK_DUPLICATE : ACK_OK);
+    // esp_now_send(mac, (uint8_t*)&ack, sizeof(ack));
+    // Serial.print("ACK enviat (");
+    // Serial.print(dup ? "DUPLICATE" : "OK");
+    // Serial.print(") seq="); Serial.println(pkt.seq);
+    memcpy(_ack_mac, mac, 6);
+    blau_build_ack(&_ack_pkt, pkt.seq, dup ? ACK_DUPLICATE : ACK_OK);
+    _ack_pending = true;
+    Serial.print("ACK pendent seq="); Serial.println(pkt.seq);
   }
 }
+
 
 void wifiApModeServer(){
   
@@ -440,7 +511,7 @@ void setup() {
 
   Serial.begin(115200);   // Inicialització port sèrie
 
-  control_type=1;
+  control_type=0;
   configuracioLlum();     // configuració el control de la llum
   controlLlum("inici");
 
@@ -457,6 +528,9 @@ void setup() {
 
   // Once ESPNow is successfully Init, we will register for recv CB to
   // get recv packer info.
+  // esp_now_register_recv_cb(OnDataRecv);
+
+  esp_now_register_send_cb(OnDataSent_TRG);
   esp_now_register_recv_cb(OnDataRecv);
   // delay(1000);
 
@@ -470,6 +544,28 @@ void setup() {
 }
 
 void loop() {
+
+  // static unsigned long lastTick = 0;
+  // if (millis() - lastTick > 3000) {
+  //   Serial.printf("[TRG] loop viu, _ack_pending=%d\n", (int)_ack_pending);
+  //   lastTick = millis();
+  // }
+
+  if (_ack_pending) {
+    _ack_pending = false;
+    if (!esp_now_is_peer_exist(_ack_mac)) {
+      esp_now_peer_info_t p = {};
+      memcpy(p.peer_addr, _ack_mac, 6);
+      p.channel = 0;
+      p.encrypt = false;
+      p.ifidx = WIFI_IF_AP;     // ← BlauTrigger és en WIFI_AP mode
+      esp_err_t addResult = esp_now_add_peer(&p);
+      Serial.print("add_peer: 0x"); Serial.println(addResult, HEX);
+    }
+    esp_err_t r = esp_now_send(_ack_mac, (uint8_t*)&_ack_pkt, sizeof(_ack_pkt));
+    Serial.print("ACK esp_now_send: 0x"); Serial.println(r, HEX);
+  }
+
   if(!digitalRead(Boto)){
     startTime = millis(); // Guarda el temps actual en mil·lisegons al iniciar
 
@@ -479,6 +575,7 @@ void loop() {
     // leds[0] = state ? CRGB::Black : CRGB::Blue;
     // FastLED.show();
     // state = !state;
+
 
     while(!digitalRead(Boto)){
       if(startTime + 3000 < millis()){
