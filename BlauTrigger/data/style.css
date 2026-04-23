@@ -448,3 +448,104 @@ footer {
   opacity: 0;
   transform: scale(0.8);
 }
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  border-radius: 28px;
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--secondary-color);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Duty cycle range */
+.duty-slider {
+  width: 100%;
+  accent-color: var(--secondary-color);
+  height: 6px;
+  cursor: pointer;
+}
+
+/* Mode info banner */
+.mode-info {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #856404;
+  font-weight: 400;
+}
+
+/* Mode group styling */
+.mode-group {
+  border-color: var(--primary-color);
+  background: #eaf2fb;
+}
+
+/* Disabled config fields */
+.disabled-section {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+/* Radio sub-text */
+.radio-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+}
+
+/* Color picker */
+.color-picker {
+  width: 52px;
+  height: 36px;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 2px;
+  background: none;
+  transition: border-color 0.2s;
+}
+
+.color-picker:hover {
+  border-color: var(--secondary-color);
+}

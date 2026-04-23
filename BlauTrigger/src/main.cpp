@@ -16,94 +16,63 @@
 #include "DNSServer.h"
 
 #include <esp_sleep.h>
-#include <EEPROM.h>
+#include <Preferences.h>
 #include <esp_now.h>
-#include <FastLED.h>
+#include <Adafruit_NeoPixel.h>
 #include <blauprotocol.h>
 #include <blauprotocol_trg.h>
 
 
 
 
-// #define BLAULINK_V1
-// #define BLAULINK_V2
+// DEFINICIÓ DEL DISPOSITIU
 #define PICO_CLICK
-// #define FIRSTRELE
-// #define S3ZERO
 // #define SONOFF_BASIC_R4
 
 
 #if defined(SONOFF_BASIC_R4)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 99
-  #define Boto 9    // GPIO0 (boot button)
-  #define enBoto 99
-  #define digitalLed 21   // WS2812 integrat a l'S3-Zero
-  #define rele 4
-  #define led 6
-  #define control_type 0
-
-// #elif defined(BLAULINK_V1)
-//   #define enVBatterySense 4
-//   #define VbatSense 3
-//   #define Boto 5
-//   #define enBoto 99  // 99 per indicar no disponible o mode deepsleep
-//   #define digitalLed 6
-
-// #elif defined(BLAULINK_V2)
-//   #define enVBatterySense 0
-//   #define VbatSense 3
-//   #define Boto 1
-//   #define enBoto 4
-//   #define digitalLed 5
+  // Pinout
+  #define Boto        9   // GPIO0 (boot button)
+  #define enBoto      99
+  #define rele        4   // relé que activa la càrrega AC
+  #define led         6   // led que segueix el relé
+  #define digitalLed  99
+  // Tipus de control per defecte i pins lògics associats
+  #define HW_CONTROL_TYPE  0   // 0=On/Off
+  #define HW_PIN1          rele
+  #define HW_PIN2          led
 
 #elif defined(PICO_CLICK)
-  #define enVBatterySense 99  // No implementat
-  #define VbatSense 4
-  #define Boto 5
-  #define enBoto 3
-  #define rele 99
-  #define led 99
-  #define digitalLed 6
-  #define control_type 1
-
-// #elif defined(YEELIGHT_LAMP)
-//   #define enVBatterySense 99  // No implementat
-//   #define VbatSense 4
-//   #define Boto 5
-//   #define enBoto 3
-//   #define digitalLed 19
-
-// #elif defined(FIRSTRELE)
-//   #define enVBatterySense 99  // No implementat
-//   #define VbatSense 99
-//   #define Boto 0
-//   #define enBoto 99
-//   #define digitalLed 13
-
-// #elif defined(S3ZERO)
-//   #define enVBatterySense 99  // No implementat
-//   #define VbatSense 99
-//   #define Boto 0    // GPIO0 (boot button)
-//   #define enBoto 99
-//   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
-
-// #elif defined(SONOFF_BASIC_R4)
-//   #define enVBatterySense 99  // No implementat
-//   #define VbatSense 99
-//   #define Boto 9    // GPIO0 (boot button)
-//   #define enBoto 99
-//   #define digitalLed 21   // WS2812 integrat a l'S3-Zero
-//   #define rele 4
-//   #define led 6
-//   #define control_type 0
+  // Pinout
+  #define Boto        5
+  #define enBoto      3
+  #define digitalLed  6
+  #define rele        99
+  #define led         99
+  // Tipus de control per defecte i pins lògics associats
+  #define HW_CONTROL_TYPE  1   // 1=Digital led
+  #define HW_PIN1          digitalLed
+  #define HW_PIN2          99
 
 #else
-  #error "Defineix una versió del dispositiu (BLAULINK_V1, BLAULINK_V2 o PICO_CLICK)"
+  #error "Defineix una versió del dispositiu"
 #endif
 
 
 
+
+// #define HARDCODED_CONFIG    // Comenta per permetre configuració via web (Preferences/NVS)
+
+// Resolució del tipus de control: constant en mode hardcoded, variable en mode web
+#ifdef HARDCODED_CONFIG
+  #define control_type HW_CONTROL_TYPE
+  #define pin1         HW_PIN1
+  #define pin2         HW_PIN2
+#else
+  int control_type = HW_CONTROL_TYPE;
+  int pin1         = HW_PIN1;
+  int pin2         = HW_PIN2;
+#endif
 
 #define idioma  "CAT"      // CAT:català (per defecte), EN:english
 
@@ -116,17 +85,14 @@ DNSServer dnsServer;                      //This creates a DNS server, required 
 
 #define CHANNEL 1
 
-int pin1, pin2;
-
 String myAddresss, myAddresssEnd;
 
 
 
 //****************** DIGITAL LED ******************************
-#define NUM_LEDS 1
-#define DATA_PIN digitalLed //6
-#define BRIGHTNESS  15
-CRGB leds[NUM_LEDS];
+#define NUM_LEDS   1
+#define BRIGHTNESS 15
+Adafruit_NeoPixel strip(NUM_LEDS, HW_PIN1, NEO_GRB + NEO_KHZ800);
 int brightness = BRIGHTNESS;
 
 
@@ -139,9 +105,32 @@ static uint8_t        _ack_mac[6];
 static BlauPacket_t   _ack_pkt;
 
 
-int freq = 5000;      // Freqüència del senyal PWM en Hz
-int pwmChannel = 0;   // Canal PWM (0–7 per ESP32-C3)
-int resolution = 8;   // Resolució (8 bits → valors de 0 a 255) 
+int freq = 5000;       // Freqüència del senyal PWM en Hz
+int pwmChannel  = 0;   // Canal PWM principal
+int pwmChannel2 = 1;   // Canal PWM secundari (WW/CW)
+int resolution  = 8;   // Resolució (8 bits → 0–255)
+
+#ifndef HARDCODED_CONFIG
+Preferences prefs;
+
+void loadConfig() {
+  prefs.begin("blau", true);
+  control_type = prefs.getInt("ct", HW_CONTROL_TYPE);
+  pin1         = prefs.getInt("p1", HW_PIN1);
+  pin2         = prefs.getInt("p2", HW_PIN2);
+  prefs.end();
+  Serial.printf("Config carregada: ct=%d p1=%d p2=%d\n", control_type, pin1, pin2);
+}
+
+void saveConfig() {
+  prefs.begin("blau", false);
+  prefs.putInt("ct", control_type);
+  prefs.putInt("p1", pin1);
+  prefs.putInt("p2", pin2);
+  prefs.end();
+  Serial.printf("Config guardada: ct=%d p1=%d p2=%d\n", control_type, pin1, pin2);
+}
+#endif
 
 void OnDataSent_TRG(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ACK TX: OK" : "ACK TX: FAIL");
@@ -202,8 +191,16 @@ void webServerSetup(){
   });
 
   server.on("/driverMode", HTTP_GET, [](AsyncWebServerRequest *request) {
-      request->send(200, "text/plain", String(control_type)); //String(mac).c_str());
+      request->send(200, "text/plain", String(control_type));
       Serial.println(control_type);
+  });
+
+  server.on("/configMode", HTTP_GET, [](AsyncWebServerRequest *request) {
+    #ifdef HARDCODED_CONFIG
+      request->send(200, "text/plain", "hardcoded");
+    #else
+      request->send(200, "text/plain", "web");
+    #endif
   });
 
   server.on("/mymac", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -217,43 +214,34 @@ void webServerSetup(){
     Serial.println(json);
   });
 
-  // reb les variables des de la web
+  // reb i guarda la configuració des de la web
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
-    int params = request->params();
-    for(int i=0;i<params;i++){
-      const AsyncWebParameter* p = request->getParam(i);
-      if(p->isPost()){
-        if (p->name() == "control_type") {
-          String buf = p->value().c_str();
-          Serial.print("control_type: ");
-          Serial.println(buf);
-          // control_type=buf.toInt();
-          // guardar EEPROM
-        }
-        if (p->name() == "pin1") {
-          String buf = p->value().c_str();
-          Serial.print("Pin1: ");
-          Serial.println(buf);
-          pin1=buf.toInt();
-          // guardar EEPROM
-        }
-        if (p->name() == "pin2") {
-          String buf = p->value().c_str();
-          Serial.print("Pin2: ");
-          Serial.println(buf);
-          pin2=buf.toInt();
-          // guardar EEPROM
+    #ifndef HARDCODED_CONFIG
+      int params = request->params();
+      for (int i = 0; i < params; i++) {
+        const AsyncWebParameter* p = request->getParam(i);
+        if (p->isPost()) {
+          if      (p->name() == "control_type") control_type = p->value().toInt();
+          else if (p->name() == "pin1")         pin1         = p->value().toInt();
+          else if (p->name() == "pin2")         pin2         = p->value().toInt();
         }
       }
-    }
-    request->send(200, "text/plain", "Configurat! Ja pots prova");
-    // delay(1000);
-    // stopWebServer();
-    // delay(200);
-    // leds[0] = CRGB::Black;
-    // FastLED.show();
+      saveConfig();
+    #endif
+    request->send(200, "text/plain", "Configurat!");
     ESP.restart();
+  });
 
+  server.on("/color", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("r", true) && request->hasParam("g", true) && request->hasParam("b", true)) {
+      int r = request->getParam("r", true)->value().toInt();
+      int g = request->getParam("g", true)->value().toInt();
+      int b = request->getParam("b", true)->value().toInt();
+      strip.setPixelColor(0, strip.Color(r, g, b));
+      strip.show();
+      Serial.printf("Color: rgb(%d,%d,%d)\n", r, g, b);
+    }
+    request->send(200, "text/plain", "OK");
   });
 
   server.on("/dutty", HTTP_POST, [](AsyncWebServerRequest *request){
@@ -272,8 +260,8 @@ void webServerSetup(){
     Serial.println(duty);
 
     brightness = duty;
-    FastLED.setBrightness(map(brightness, 0, 100, 0, 255));
-    FastLED.show();
+    strip.setBrightness(map(brightness, 0, 100, 0, 255));
+    strip.show();
     
     request->send(200, "text/plain", "OK");
   });
@@ -326,41 +314,31 @@ void configDeviceAP() {
   }
 }
 
-void configuracioLlum(){
-  // llegir EEPROM: control_type, pin1 i pin2
-  switch(control_type){
-    case 0:     // on/off                     ----> topic: light  &  payload: "toogle"
-      // digitalWrite(19, state);
-      pinMode(rele, OUTPUT);  //rele
-      pinMode(led, OUTPUT);  //led
-      break;
-    
-    case 1:     // Digital led                ----> topic: digled  &  payload: color
-      FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-      leds[0] = CRGB::Black;
-      FastLED.show();
+void configuracioLlum() {
+  switch (control_type) {
+    case 0:  // On/Off
+      pinMode(pin1, OUTPUT);    // rele
+      pinMode(pin2, OUTPUT);    // led
       break;
 
-    case 2:{     // Led Dimmer [PWM]           ----> topic: dimmer  &  payload: %255
-      // Defineix els paràmetres PWM
-      // int pwmPin = 4;       // El pin GPIO on vols treure el PWM
-      // int freq = 5000;      // Freqüència del senyal PWM en Hz
-      // int pwmChannel = 0;   // Canal PWM (0–7 per ESP32-C3)
-      // int resolution = 8;   // Resolució (8 bits → valors de 0 a 255) 
-      // Configura el canal PWM
+    case 1:  // Digital led
+      strip = Adafruit_NeoPixel(NUM_LEDS, pin1, NEO_GRB + NEO_KHZ800);
+      strip.begin();
+      strip.clear();
+      strip.show();
+      break;
+
+    case 2:  // Led Dimmer [PWM]
       ledcSetup(pwmChannel, freq, resolution);
-      
-      // Assigna el canal al pin
       ledcAttachPin(pin1, pwmChannel);
-
-      // Escriu un valor PWM (0 a 255 si resolution = 8)
-      int valor = (int)pow(2, 8)*50/100;
-      ledcWrite(pwmChannel, valor);  // 128:50% de cicle de treball
+      ledcWrite(pwmChannel, map(brightness, 0, 100, 0, 255));
       break;
-    }
 
-    case 3:     // Leds WW/CW  [2*PWM]        ----> topic: wwcw  &  payload: %255 & %255
-      Serial.println("3333");
+    case 3:  // Leds WW/CW [2×PWM]
+      ledcSetup(pwmChannel,  freq, resolution);
+      ledcSetup(pwmChannel2, freq, resolution);
+      ledcAttachPin(pin1, pwmChannel);
+      ledcAttachPin(pin2, pwmChannel2);
       break;
 
     default:
@@ -369,34 +347,56 @@ void configuracioLlum(){
   }
 }
 
-void controlLlum(String trigger){
-  switch(control_type){
-    case 0:     // on/off
-      // digitalWrite(pin1, state);
-      // analogWrite(19, map(100, 0, 100, 0, 255));
-      // delay(1000);
-      // analogWrite(19, map(50, 0, 100, 0, 255));
-      digitalWrite(rele, state ? HIGH : LOW);
-      digitalWrite(led, state ? HIGH : LOW);
-      break;
-
-    case 1:     // Digital led
-      FastLED.setBrightness(map(brightness, 0, 100, 0, 255));
-      if(trigger == "boto") leds[0] = state ? CRGB::Black : CRGB::Blue;
-      if(trigger == "espnow") leds[0] = state ? CRGB::Black : CRGB::Red;
-      if(trigger == "inici"){
-        leds[0] = CRGB::Yellow;
-        delay(500);
-        leds[0] = CRGB::Black;
+void controlLlum(String trigger) {
+  switch (control_type) {
+    case 0:  // On/Off
+      if (trigger == "boto" || trigger == "espnow"){
+        digitalWrite(pin1, state ? HIGH : LOW);   // rele
+        digitalWrite(pin2, state ? HIGH : LOW);   // led
       }
-      FastLED.show();
+      if (trigger == "inici") {
+        digitalWrite(pin2, HIGH);   // led
+        delay(500);
+        digitalWrite(pin2, LOW);   // led
+      }
       break;
 
-    case 2:     // Led Dimmer [PWM]
-      // analogWrite(pin1, state ? map(brightness, 0, 100, 0, 255) : 0);
+    case 1:  // Digital led
+      strip.setBrightness(map(brightness, 0, 100, 0, 255));
+      if (trigger == "boto")   strip.setPixelColor(0, state ? strip.Color(0,0,0) : strip.Color(0,0,255));
+      if (trigger == "espnow") strip.setPixelColor(0, state ? strip.Color(0,0,0) : strip.Color(255,0,0));
+      if (trigger == "inici") {
+        strip.setPixelColor(0, strip.Color(255,255,0));
+        strip.show();
+        delay(500);
+        strip.clear();
+      }
+      strip.show();
       break;
 
-    case 3:     // Leds WW/CW  [2*PWM]
+    case 2:  // Led Dimmer [PWM]
+      if (trigger == "boto" || trigger == "espnow"){
+        ledcWrite(pwmChannel, state ? map(brightness, 0, 100, 0, 255) : 0);
+      }
+      if (trigger == "inici") {
+        ledcWrite(pwmChannel, map(brightness, 0, 100, 0, 255));
+        delay(500);
+        ledcWrite(pwmChannel, 0);
+      }
+      break;
+
+    case 3:  // Leds WW/CW [2×PWM]
+      if (trigger == "boto" || trigger == "espnow"){
+        ledcWrite(pwmChannel,  state ? map(brightness, 0, 100, 0, 255) : 0);
+        ledcWrite(pwmChannel2, state ? map(brightness, 0, 100, 0, 255) : 0);
+      }
+      if (trigger == "inici") {
+        ledcWrite(pwmChannel,  map(brightness, 0, 100, 0, 255));
+        ledcWrite(pwmChannel2, map(brightness, 0, 100, 0, 255));
+        delay(500);
+        ledcWrite(pwmChannel,  0);
+        ledcWrite(pwmChannel2, 0);
+      }
       break;
 
     default:
@@ -456,9 +456,12 @@ void wifiApModeServer(){
 
 void setup() {
 
-  Serial.begin(115200);   // Inicialització port sèrie
+  Serial.begin(115200);
 
-  // control_type=0;
+  #ifndef HARDCODED_CONFIG
+  loadConfig();
+  #endif
+
   configuracioLlum();     // configuració el control de la llum
   controlLlum("inici");
 
@@ -482,7 +485,7 @@ void loop() {
 
   blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
 
-  if(!digitalRead(Boto)){
+  if(digitalRead(Boto)){
     startTime = millis(); // Guarda el temps actual en mil·lisegons al iniciar
 
     // Acció al missatge rebut
@@ -493,10 +496,10 @@ void loop() {
     // state = !state;
 
 
-    while(!digitalRead(Boto)){
+    while(digitalRead(Boto)){
       if(startTime + 3000 < millis()){
-        leds[0] = CRGB::Green;
-        FastLED.show();
+        strip.setPixelColor(0, strip.Color(0,255,0));
+        strip.show();
 
         configDeviceAP();       // Configuració de l'equip en mode Wifi Acces Point
         
