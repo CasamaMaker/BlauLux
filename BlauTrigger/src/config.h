@@ -97,3 +97,18 @@
 // ════════════════════════════════════════════════════════════════
 #define PWM_FREQ        5000   // freqüència Hz
 #define PWM_RESOLUTION  8      // bits (8 → rang 0–255)
+
+
+// ════════════════════════════════════════════════════════════════
+//  SISTEMA
+// ════════════════════════════════════════════════════════════════
+#define SERIAL_BAUD            115200  // velocitat del port sèrie
+#define WIFI_AP_HOLD_MS          3000  // ms prement el botó per entrar al mode AP
+#define WIFI_AP_TIMEOUT_MS      60000  // ms màxims en mode AP abans de reiniciar
+#define HTTP_PORT                  80  // port del servidor web
+#define DNS_PORT                   53  // port del servidor DNS
+#define DNS_POLL_MS               100  // interval de polling DNS al bucle AP
+#define ESPNOW_CHANNEL              1  // canal Wi-Fi per a ESP-NOW
+#define INICI_BLINK_MS            500  // durada del parpelleig d'inici
+#define BUTTON_DEBOUNCE_MS        500  // debounce després de clic de botó
+#define BUTTON_RELEASE_DEBOUNCE_MS 200 // debounce detecció alliberament de botó

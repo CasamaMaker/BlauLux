@@ -38,11 +38,10 @@
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 
-AsyncWebServer server(80);                //This creates a web server, required in order to host a page for connected devices
+AsyncWebServer server(HTTP_PORT);                //This creates a web server, required in order to host a page for connected devices
 
 DNSServer dnsServer;                      //This creates a DNS server, required for the captive portal
 
-#define CHANNEL 1
 
 String myAddresss, myAddresssEnd;
 
@@ -324,9 +323,9 @@ void controlLlum(String trigger) {
         digitalWrite(pin2, state ? HIGH : LOW);   // led
       }
       if (trigger == "inici") {
-        digitalWrite(pin2, HIGH);   // led
-        delay(500);
-        digitalWrite(pin2, LOW);   // led
+        digitalWrite(pin2, HIGH);
+        delay(INICI_BLINK_MS);
+        digitalWrite(pin2, LOW);
       }
       break;
 
@@ -337,7 +336,7 @@ void controlLlum(String trigger) {
       if (trigger == "inici") {
         strip.setPixelColor(0, COLOR_INICI);
         strip.show();
-        delay(500);
+        delay(INICI_BLINK_MS);
         strip.clear();
       }
       strip.show();
@@ -349,7 +348,7 @@ void controlLlum(String trigger) {
       }
       if (trigger == "inici") {
         ledcWrite(pwmChannel, map(brightness, 0, 100, 0, 255));
-        delay(500);
+        delay(INICI_BLINK_MS);
         ledcWrite(pwmChannel, 0);
       }
       break;
@@ -362,7 +361,7 @@ void controlLlum(String trigger) {
       if (trigger == "inici") {
         ledcWrite(pwmChannel,  map(brightness, 0, 100, 0, 255));
         ledcWrite(pwmChannel2, map(brightness, 0, 100, 0, 255));
-        delay(500);
+        delay(INICI_BLINK_MS);
         ledcWrite(pwmChannel,  0);
         ledcWrite(pwmChannel2, 0);
       }
@@ -417,7 +416,7 @@ void wifiApModeServer(){
   Serial.println("Wifi initialized");
   Serial.println(WiFi.softAPIP());                          //Print out the IP address
   
-  dnsServer.start(53, "*", WiFi.softAPIP());                //This starts the DNS server.  The "*" sends any request for port 53 straight to the IP address of the device
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());                //This starts the DNS server.  The "*" sends any request for port 53 straight to the IP address of the device
   
   webServerSetup();                                         //Configures the behavior of the web server
   Serial.println("Setup complete");
@@ -425,7 +424,7 @@ void wifiApModeServer(){
 
 void setup() {
 
-  Serial.begin(115200);
+  Serial.begin(SERIAL_BAUD);
 
   #ifndef HARDCODED_CONFIG
   #ifdef CLEAR_CONFIG
@@ -469,7 +468,7 @@ void loop() {
 
 
     while(digitalRead(Boto)){
-      if(startTime + 3000 < millis()){
+      if(startTime + WIFI_AP_HOLD_MS < millis()){
         strip.setPixelColor(0, COLOR_WIFI_AP);
         strip.show();
 
@@ -480,10 +479,10 @@ void loop() {
         bool buttonStateHigh2=false;
         bool buttonReleased = false;
         while(1){
-          dnsServer.processNextRequest();     //requisit dns constant
-          delay(100);
+          dnsServer.processNextRequest();
+          delay(DNS_POLL_MS);
 
-          if(startTime + 60000 < millis()){         // s'apaga l'equip després de 60 segons
+          if(startTime + WIFI_AP_TIMEOUT_MS < millis()){
             Serial.println("Temps excedit");
             
             ESP.restart();
@@ -496,7 +495,7 @@ void loop() {
           if (buttonState == LOW && lastButtonState == HIGH && !buttonReleased) {
               buttonReleased = true;                // Marquem que s'ha alliberat el botó
               Serial.println("Botó alliberat");
-              delay(200);
+              delay(BUTTON_RELEASE_DEBOUNCE_MS);
           }
 
           if (buttonState == HIGH && lastButtonState == LOW && buttonReleased) {
@@ -511,6 +510,6 @@ void loop() {
       }
       // noWifi();
     }
-    delay(500);
+    delay(BUTTON_DEBOUNCE_MS);
   }
 }
