@@ -21,47 +21,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <blauprotocol.h>
 #include <blauprotocol_trg.h>
+#include "config.h"
 
-
-
-
-// DEFINICIÓ DEL DISPOSITIU
-#define PICO_CLICK
-// #define SONOFF_BASIC_R4
-
-
-#if defined(SONOFF_BASIC_R4)
-  // Pinout
-  #define Boto        9   // GPIO0 (boot button)
-  #define enBoto      99
-  #define rele        4   // relé que activa la càrrega AC
-  #define led         6   // led que segueix el relé
-  #define digitalLed  99
-  // Tipus de control per defecte i pins lògics associats
-  #define HW_CONTROL_TYPE  0   // 0=On/Off
-  #define HW_PIN1          rele
-  #define HW_PIN2          led
-
-#elif defined(PICO_CLICK)
-  // Pinout
-  #define Boto        5
-  #define enBoto      3
-  #define digitalLed  6
-  #define rele        99
-  #define led         99
-  // Tipus de control per defecte i pins lògics associats
-  #define HW_CONTROL_TYPE  1   // 1=Digital led
-  #define HW_PIN1          digitalLed
-  #define HW_PIN2          99
-
-#else
-  #error "Defineix una versió del dispositiu"
-#endif
-
-
-
-
-// #define HARDCODED_CONFIG    // Comenta per permetre configuració via web (Preferences/NVS)
 
 // Resolució del tipus de control: constant en mode hardcoded, variable en mode web
 #ifdef HARDCODED_CONFIG
@@ -69,15 +30,13 @@
   #define pin1         HW_PIN1
   #define pin2         HW_PIN2
 #else
-  int control_type = HW_CONTROL_TYPE;
-  int pin1         = HW_PIN1;
-  int pin2         = HW_PIN2;
+  int control_type;// = HW_CONTROL_TYPE;
+  int pin1        ;// = HW_PIN1;
+  int pin2        ;// = HW_PIN2;
 #endif
 
-#define idioma  "CAT"      // CAT:català (per defecte), EN:english
-
-const char* ssid = "BlauTrigger"; //Name of the WIFI network hosted by the device
-const char* password =  "";               //Password
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 AsyncWebServer server(80);                //This creates a web server, required in order to host a page for connected devices
 
@@ -90,34 +49,42 @@ String myAddresss, myAddresssEnd;
 
 
 //****************** DIGITAL LED ******************************
-#define NUM_LEDS   1
-#define BRIGHTNESS 15
 Adafruit_NeoPixel strip(NUM_LEDS, HW_PIN1, NEO_GRB + NEO_KHZ800);
-int brightness = BRIGHTNESS;
+int brightness = BRIGHTNESS_DEF;
 
 
 unsigned long startTime; // Variable per emmagatzemar el temps d'inici
 
 bool state = false;
-// static uint8_t last_seq = 0xFF;  // valor inicial impossible
 static volatile bool  _ack_pending = false;
 static uint8_t        _ack_mac[6];
 static BlauPacket_t   _ack_pkt;
 
 
-int freq = 5000;       // Freqüència del senyal PWM en Hz
-int pwmChannel  = 0;   // Canal PWM principal
-int pwmChannel2 = 1;   // Canal PWM secundari (WW/CW)
-int resolution  = 8;   // Resolució (8 bits → 0–255)
+int pwmChannel  = 0;
+int pwmChannel2 = 1;
 
 #ifndef HARDCODED_CONFIG
 Preferences prefs;
 
+#ifdef CLEAR_CONFIG
+void clearConfig() {
+  prefs.begin("blau", false);
+  prefs.putInt("ct", PIN_UNUSED);
+  prefs.putInt("p1", PIN_UNUSED);
+  prefs.putInt("p2", PIN_UNUSED);
+  prefs.end();
+  Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
+}
+#endif
+
 void loadConfig() {
   prefs.begin("blau", true);
-  control_type = prefs.getInt("ct", HW_CONTROL_TYPE);
-  pin1         = prefs.getInt("p1", HW_PIN1);
-  pin2         = prefs.getInt("p2", HW_PIN2);
+  control_type = prefs.getInt("ct", PIN_UNUSED);
+  pin1         = prefs.getInt("p1", PIN_UNUSED);
+  pin2         = prefs.getInt("p2", PIN_UNUSED);
+  if (pin1 == 99) pin1 = PIN_UNUSED;
+  if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
   Serial.printf("Config carregada: ct=%d p1=%d p2=%d\n", control_type, pin1, pin2);
 }
@@ -156,9 +123,11 @@ void stopWebServer() {
 }
 
 void serveixWifiManager(AsyncWebServerRequest *request) {
-  String path = "/wifimanager_" + String(idioma) + ".html";
+  String path = "/wifimanager_" + String(IDIOMA) + ".html";
   request->send(LittleFS, path, "text/html");
 }
+
+void configuracioLlum();
 
 void webServerSetup(){
   // accedeix aquí just conectar-se a la wifi des de l'ordinador
@@ -209,7 +178,9 @@ void webServerSetup(){
   });
 
   server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String json = "{\"pin1\":" + String(pin1) + ",\"pin2\":" + String(pin2) + "}";
+    String p1 = (pin1 == PIN_UNUSED) ? "null" : String(pin1);
+    String p2 = (pin2 == PIN_UNUSED) ? "null" : String(pin2);
+    String json = "{\"pin1\":" + p1 + ",\"pin2\":" + p2 + "}";
     request->send(200, "application/json", json);
     Serial.println(json);
   });
@@ -222,14 +193,14 @@ void webServerSetup(){
         const AsyncWebParameter* p = request->getParam(i);
         if (p->isPost()) {
           if      (p->name() == "control_type") control_type = p->value().toInt();
-          else if (p->name() == "pin1")         pin1         = p->value().toInt();
-          else if (p->name() == "pin2")         pin2         = p->value().toInt();
+          else if (p->name() == "pin1")         pin1 = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "pin2")         pin2 = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
         }
       }
       saveConfig();
+      configuracioLlum();
     #endif
-    request->send(200, "text/plain", "Configurat!");
-    ESP.restart();
+    request->send(200, "text/plain", "OK");
   });
 
   server.on("/color", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -288,15 +259,12 @@ void getMyMacAddress() {
   myAddresssEnd = myAddresss.substring(myAddresss.length() - 4);
 }
 
-/**
- * @brief Configura l'equip en mode Wifi Access Point
- */
-
 void noWifi(){
   // ✅ Solo WiFi para ESP-NOW, sin AP
   WiFi.mode(WIFI_STA);  // Modo Station sin conectar
   // WiFi.disconnect();
 }
+
 void configDeviceAP() {
   WiFi.mode(WIFI_AP);
 
@@ -315,6 +283,7 @@ void configDeviceAP() {
 }
 
 void configuracioLlum() {
+  if (pin1 == PIN_UNUSED) return;
   switch (control_type) {
     case 0:  // On/Off
       pinMode(pin1, OUTPUT);    // rele
@@ -329,14 +298,14 @@ void configuracioLlum() {
       break;
 
     case 2:  // Led Dimmer [PWM]
-      ledcSetup(pwmChannel, freq, resolution);
+      ledcSetup(pwmChannel, PWM_FREQ, PWM_RESOLUTION);
       ledcAttachPin(pin1, pwmChannel);
       ledcWrite(pwmChannel, map(brightness, 0, 100, 0, 255));
       break;
 
     case 3:  // Leds WW/CW [2×PWM]
-      ledcSetup(pwmChannel,  freq, resolution);
-      ledcSetup(pwmChannel2, freq, resolution);
+      ledcSetup(pwmChannel,  PWM_FREQ, PWM_RESOLUTION);
+      ledcSetup(pwmChannel2, PWM_FREQ, PWM_RESOLUTION);
       ledcAttachPin(pin1, pwmChannel);
       ledcAttachPin(pin2, pwmChannel2);
       break;
@@ -363,10 +332,10 @@ void controlLlum(String trigger) {
 
     case 1:  // Digital led
       strip.setBrightness(map(brightness, 0, 100, 0, 255));
-      if (trigger == "boto")   strip.setPixelColor(0, state ? strip.Color(0,0,0) : strip.Color(0,0,255));
-      if (trigger == "espnow") strip.setPixelColor(0, state ? strip.Color(0,0,0) : strip.Color(255,0,0));
+      if (trigger == "boto")   strip.setPixelColor(0, state ? 0 : COLOR_BOTO);
+      if (trigger == "espnow") strip.setPixelColor(0, state ? 0 : COLOR_ESPNOW);
       if (trigger == "inici") {
-        strip.setPixelColor(0, strip.Color(255,255,0));
+        strip.setPixelColor(0, COLOR_INICI);
         strip.show();
         delay(500);
         strip.clear();
@@ -403,7 +372,7 @@ void controlLlum(String trigger) {
       Serial.println("Mode desconegut");
       break;
   }
-  state = !state;
+  if (trigger != "inici") state = !state;
 }
 
 uint8_t handleAction(uint8_t pkt_type, uint8_t cmd,
@@ -459,7 +428,10 @@ void setup() {
   Serial.begin(115200);
 
   #ifndef HARDCODED_CONFIG
-  loadConfig();
+  #ifdef CLEAR_CONFIG
+    clearConfig();
+  #endif
+    loadConfig();
   #endif
 
   configuracioLlum();     // configuració el control de la llum
@@ -498,7 +470,7 @@ void loop() {
 
     while(digitalRead(Boto)){
       if(startTime + 3000 < millis()){
-        strip.setPixelColor(0, strip.Color(0,255,0));
+        strip.setPixelColor(0, COLOR_WIFI_AP);
         strip.show();
 
         configDeviceAP();       // Configuració de l'equip en mode Wifi Acces Point
@@ -513,12 +485,7 @@ void loop() {
 
           if(startTime + 60000 < millis()){         // s'apaga l'equip després de 60 segons
             Serial.println("Temps excedit");
-
-            // stopWebServer();
-            // delay(200);
-            // leds[0] = CRGB::Black;
-            // FastLED.show();
-            // break;
+            
             ESP.restart();
           }
 
@@ -535,12 +502,7 @@ void loop() {
           if (buttonState == HIGH && lastButtonState == LOW && buttonReleased) {
               Serial.println("Botó premut després d'alliberar");
               buttonReleased = false;                 // Reiniciem per detectar una nova seqüència
-              
-              // stopWebServer();
-              // delay(200);
-              // leds[0] = CRGB::Black;
-              // FastLED.show();
-              // break;
+
               ESP.restart();
 
           }

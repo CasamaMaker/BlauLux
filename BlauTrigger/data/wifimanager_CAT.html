@@ -64,8 +64,8 @@
 
     function fetchPins() {
       fetch('/pins').then(r => r.json()).then(data => {
-        document.getElementById('pin1').value = data.pin1;
-        document.getElementById('pin2').value = data.pin2;
+        document.getElementById('pin1').value = data.pin1 !== null ? data.pin1 : '';
+        document.getElementById('pin2').value = data.pin2 !== null ? data.pin2 : '';
       }).catch(() => {});
     }
 
@@ -121,26 +121,34 @@
         testToggle.style.display = 'none';
         testDigital.style.display = 'none';
         testDuty.style.display = 'none';
+        document.getElementById('testCard').style.display = 'none';
         return;
       }
+      document.getElementById('testCard').style.display = '';
 
       pinLabelTop.style.display = 'flex';
       pinsContainer.style.display = 'flex';
 
       switch (selected) {
-        case '0': // On/Off
-          pin1Label.textContent = 'On/Off';
+        case '0': // Relé On/Off
+          pin1Label.textContent = 'Relé';
+          pin2Label.textContent = 'Led';
           pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'none';
-          pinSeparator.style.display = 'none';
-          document.getElementById('pin2').value = '';
+          pin2Group.style.display = 'flex';
+          pin2Group.style.opacity = '0';
+          pin2Group.style.transform = 'scale(0.8)';
+          setTimeout(() => {
+            pin2Group.style.opacity = '1';
+            pin2Group.style.transform = 'scale(1)';
+          }, 50);
+          pinSeparator.style.display = 'flex';
           testToggle.style.display = 'flex';
           testDigital.style.display = 'none';
           testDuty.style.display = 'none';
           break;
 
-        case '1': // Digital led
-          pin1Label.textContent = 'Digital led';
+        case '1': // Led digital WS2812
+          pin1Label.textContent = 'WS2812';
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'none';
           pinSeparator.style.display = 'none';
@@ -161,11 +169,12 @@
           testDuty.style.display = 'flex';
           break;
 
-        case '3': // Leds WW/CW
+        case '3': // Leds WW/CW [2×PWM]
           pin1Label.textContent = 'WW';
           pin2Label.textContent = 'CW';
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'flex';
+          pinSeparator.style.display = 'flex';
           pin2Group.style.opacity = '0';
           pin2Group.style.transform = 'scale(0.8)';
           setTimeout(() => {
@@ -188,10 +197,25 @@
       document.getElementById('testDutySection').style.display = 'none';
     });
 
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
     window.onload = function() {
       fetchMyMac();
       fetchConfigMode();
       fetchDriveMode();
+
+      document.querySelector('form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = new URLSearchParams(new FormData(this));
+        fetch('/', { method: 'POST', body: data })
+          .then(() => showToast('Configuració guardada!'))
+          .catch(() => showToast('Error en guardar'));
+      });
     }
   </script>
 </head>
@@ -203,7 +227,7 @@
       </div>
       <a href="https://github.com/CasamaMaker/BlauTrigger" class="github-link" id="githubLink" target="_blank">
         <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
         </svg>
       </a>
     </header>
@@ -233,17 +257,22 @@
               <label class="radio-option">
                 <input type="radio" name="control_type" value="0" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">On/Off</span>
+                <span class="radio-text">Relé On/Off</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="1" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Digital led</span>
+                <span class="radio-text">Led digital WS2812</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="2" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
                 <span class="radio-text">Led Dimmer [PWM]</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="control_type" value="3" class="radio-input" onchange="updateControlTypeUI()"/>
+                <span class="radio-custom"></span>
+                <span class="radio-text">Leds WW/CW [2×PWM]</span>
               </label>
             </div>
           </div>
@@ -268,8 +297,8 @@
     </div>
 
     <!-- TEST Card -->
-    <div class="card">
-      <h2>Test</h2>
+    <div class="card" id="testCard" style="display: none;">
+      <label class="section-label">Test</label>
       <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
 
         <!-- Toggle ON/OFF (per a On/Off i Digital led) -->
@@ -319,5 +348,12 @@
       CasamaMaker/BlauTrigger
     </p>
   </footer>
+  <div id="toast"></div>
 </body>
-</html>
+<!-- </html>
+      </svg>
+      CasamaMaker/BlauTrigger
+    </p>
+  </footer>
+</body>
+</html> -->
