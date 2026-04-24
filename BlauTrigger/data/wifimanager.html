@@ -7,6 +7,166 @@
   <title>Configurador BlauTrigger</title>
   <script>
 
+    const i18n = {
+      ca: {
+        pageTitle: 'Configurador BlauTrigger',
+        h1: 'Configurador BlauTrigger',
+        labelMyMac: 'La meva adreça MAC',
+        loading: 'Carregant...',
+        modeInfo: 'Configuració hardcodejada al codi. Per canviar-la, modifica el firmware.',
+        initialSetup: 'El pin del botó no està configurat. Defineix-lo per continuar.',
+        labelBoto: 'Botó',
+        labelPin: 'Pin',
+        labelControlType: 'Tipus de control',
+        radio0: 'Relé On/Off',
+        radio1: 'Led digital WS2812',
+        radio2: 'Led Dimmer [PWM]',
+        radio3: 'Leds WW/CW [2×PWM]',
+        radio4: 'Triac control de fase [ZCD]',
+        labelPinTop: 'Pin de control de la llum',
+        labelNumLeds: 'Nombre de LEDs',
+        labelBrightnessDefault: 'Brillantor per defecte',
+        labelBrightnessWW: 'Brillantor WW per defecte',
+        labelBrightnessCW: 'Brillantor CW per defecte',
+        labelTriacPower: 'Potència del triac per defecte',
+        labelBrightnessLED: 'Brillantor LED per defecte',
+        labelPwmFreq: 'Freqüència PWM',
+        submitBtn: 'Guardar',
+        labelTest: 'Test',
+        labelOnOff: 'ON/OFF',
+        labelColor: 'Color',
+        labelBrightness: 'Brillantor',
+        labelBrightnessWWTest: 'Brillantor WW',
+        labelBrightnessCWTest: 'Brillantor CW',
+        labelTriacTest: 'Potència triac',
+        labelBrightnessLEDTest: 'Brillantor LED',
+        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812',
+        pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
+        pinZCD: 'ZCD', pinTriac: 'Triac',
+        toastSaved: 'Configuració guardada!',
+        toastSavedRestart: 'Configuració guardada! Reiniciant...',
+        toastError: 'Error en guardar',
+        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+      },
+      en: {
+        pageTitle: 'BlauTrigger Configurator',
+        h1: 'BlauTrigger Configurator',
+        labelMyMac: 'My MAC address',
+        loading: 'Loading...',
+        modeInfo: 'Hardcoded configuration. To change it, modify the firmware.',
+        initialSetup: 'Button pin is not configured. Set it to continue.',
+        labelBoto: 'Button',
+        labelPin: 'Pin',
+        labelControlType: 'Control type',
+        radio0: 'Relay On/Off',
+        radio1: 'Digital LED WS2812',
+        radio2: 'LED Dimmer [PWM]',
+        radio3: 'WW/CW LEDs [2×PWM]',
+        radio4: 'Triac phase control [ZCD]',
+        labelPinTop: 'Light control pin',
+        labelNumLeds: 'Number of LEDs',
+        labelBrightnessDefault: 'Default brightness',
+        labelBrightnessWW: 'Default WW brightness',
+        labelBrightnessCW: 'Default CW brightness',
+        labelTriacPower: 'Default triac power',
+        labelBrightnessLED: 'Default LED brightness',
+        labelPwmFreq: 'PWM frequency',
+        submitBtn: 'Save',
+        labelTest: 'Test',
+        labelOnOff: 'ON/OFF',
+        labelColor: 'Color',
+        labelBrightness: 'Brightness',
+        labelBrightnessWWTest: 'WW brightness',
+        labelBrightnessCWTest: 'CW brightness',
+        labelTriacTest: 'Triac power',
+        labelBrightnessLEDTest: 'LED brightness',
+        pinRele: 'Relay', pinLed: 'LED', pinWS2812: 'WS2812',
+        pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
+        pinZCD: 'ZCD', pinTriac: 'Triac',
+        toastSaved: 'Configuration saved!',
+        toastSavedRestart: 'Configuration saved! Restarting...',
+        toastError: 'Error saving',
+        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+      },
+      es: {
+        pageTitle: 'Configurador BlauTrigger',
+        h1: 'Configurador BlauTrigger',
+        labelMyMac: 'Mi dirección MAC',
+        loading: 'Cargando...',
+        modeInfo: 'Configuración fija en el código. Para cambiarla, modifica el firmware.',
+        initialSetup: 'El pin del botón no está configurado. Defínelo para continuar.',
+        labelBoto: 'Botón',
+        labelPin: 'Pin',
+        labelControlType: 'Tipo de control',
+        radio0: 'Relé On/Off',
+        radio1: 'Led digital WS2812',
+        radio2: 'Led Dimmer [PWM]',
+        radio3: 'Leds WW/CW [2×PWM]',
+        radio4: 'Triac control de fase [ZCD]',
+        labelPinTop: 'Pin de control de la luz',
+        labelNumLeds: 'Número de LEDs',
+        labelBrightnessDefault: 'Brillo por defecto',
+        labelBrightnessWW: 'Brillo WW por defecto',
+        labelBrightnessCW: 'Brillo CW por defecto',
+        labelTriacPower: 'Potencia del triac por defecto',
+        labelBrightnessLED: 'Brillo LED por defecto',
+        labelPwmFreq: 'Frecuencia PWM',
+        submitBtn: 'Guardar',
+        labelTest: 'Test',
+        labelOnOff: 'ON/OFF',
+        labelColor: 'Color',
+        labelBrightness: 'Brillo',
+        labelBrightnessWWTest: 'Brillo WW',
+        labelBrightnessCWTest: 'Brillo CW',
+        labelTriacTest: 'Potencia triac',
+        labelBrightnessLEDTest: 'Brillo LED',
+        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812',
+        pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
+        pinZCD: 'ZCD', pinTriac: 'Triac',
+        toastSaved: '¡Configuración guardada!',
+        toastSavedRestart: '¡Configuración guardada! Reiniciando...',
+        toastError: 'Error al guardar',
+        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+      },
+    };
+
+    let currentLang = 'ca';
+
+    function t(key) {
+      return (i18n[currentLang] || i18n.ca)[key] || key;
+    }
+
+    function applyTranslations(lang) {
+      const tr = i18n[lang] || i18n.ca;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if (tr[k] !== undefined) el.textContent = tr[k];
+      });
+      document.querySelectorAll('[data-i18n-value]').forEach(el => {
+        const k = el.getAttribute('data-i18n-value');
+        if (tr[k] !== undefined) el.value = tr[k];
+      });
+      document.title = tr.pageTitle || document.title;
+      document.documentElement.lang = lang;
+    }
+
+    function setLanguage(lang) {
+      if (!i18n[lang]) lang = 'ca';
+      currentLang = lang;
+      try { localStorage.setItem('blau_lang', lang); } catch(e) {}
+      applyTranslations(lang);
+      updateControlTypeUI();
+    }
+
+    function detectLang() {
+      try { const s = localStorage.getItem('blau_lang'); if (s && i18n[s]) return s; } catch(e) {}
+      const nav = (navigator.language || 'ca').toLowerCase();
+      if (nav.startsWith('ca')) return 'ca';
+      if (nav.startsWith('es')) return 'es';
+      if (nav.startsWith('en')) return 'en';
+      return 'ca';
+    }
+
     function sendDutyToServer(value) {
       fetch('/dutty', {
         method: 'POST',
@@ -104,8 +264,8 @@
     }
 
     function fetchMyMac() {
-      fetch('/mymac', {method: 'POST'}).then(r => r.text()).then(t => {
-        document.getElementById("myMac").innerHTML = t;
+      fetch('/mymac', {method: 'POST'}).then(r => r.text()).then(data => {
+        document.getElementById("myMac").innerHTML = data;
       }).catch(() => {});
     }
 
@@ -118,8 +278,8 @@
     }
 
     function fetchNumLeds() {
-      fetch('/numLeds', {method: 'POST'}).then(r => r.text()).then(t => {
-        document.getElementById('numLedsInput').value = parseInt(t.trim()) || 1;
+      fetch('/numLeds', {method: 'POST'}).then(r => r.text()).then(data => {
+        document.getElementById('numLedsInput').value = parseInt(data.trim()) || 1;
       }).catch(() => {});
     }
 
@@ -225,18 +385,17 @@
       pinLabelTop.style.display = 'flex';
       pinsContainer.style.display = 'flex';
 
-      // Amaga elements exclusius del mode 4 i freqüència PWM
       pin3Group.style.display = 'none';
       pinSeparator2.style.display = 'none';
       document.getElementById('pin3').value = '';
       document.getElementById('testTriacLEDSlider').style.display = 'none';
-      document.getElementById('brightnessCWConfigLabel').textContent = 'Brillantor CW per defecte';
+      document.getElementById('brightnessCWConfigLabel').textContent = t('labelBrightnessCW');
       freqConfig.style.display = 'none';
 
       switch (selected) {
-        case '0': // Relé On/Off
-          pin1Label.textContent = 'Relé';
-          pin2Label.textContent = 'Led';
+        case '0': // Relay On/Off
+          pin1Label.textContent = t('pinRele');
+          pin2Label.textContent = t('pinLed');
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'flex';
           pin2Group.style.opacity = '0';
@@ -254,8 +413,8 @@
           numLedsSection.style.display = 'none';
           break;
 
-        case '1': // Led digital WS2812
-          pin1Label.textContent = 'WS2812';
+        case '1': // Digital LED WS2812
+          pin1Label.textContent = t('pinWS2812');
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'none';
           pinSeparator.style.display = 'none';
@@ -263,7 +422,7 @@
           testToggle.style.display = 'flex';
           testDigital.style.display = 'flex';
           testDuty.style.display = 'none';
-          brightnessLabel.textContent = 'Brillantor per defecte';
+          brightnessLabel.textContent = t('labelBrightnessDefault');
           brightnessConfig.style.display = 'flex';
           brightnessCWConfig.style.display = 'none';
           numLedsSection.style.display = 'flex';
@@ -271,8 +430,8 @@
           fetchNumLeds();
           break;
 
-        case '2': // Led Dimmer [PWM]
-          pin1Label.textContent = 'PWM';
+        case '2': // LED Dimmer [PWM]
+          pin1Label.textContent = t('pinPWM');
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'none';
           pinSeparator.style.display = 'none';
@@ -284,7 +443,7 @@
           testWW.style.display = 'none';
           testCW.style.display = 'none';
           testTriac.style.display = 'none';
-          brightnessLabel.textContent = 'Brillantor per defecte';
+          brightnessLabel.textContent = t('labelBrightnessDefault');
           brightnessConfig.style.display = 'flex';
           brightnessCWConfig.style.display = 'none';
           freqConfig.style.display = 'flex';
@@ -292,9 +451,9 @@
           fetchBrightnessConfig();
           break;
 
-        case '3': // Leds WW/CW [2×PWM]
-          pin1Label.textContent = 'WW';
-          pin2Label.textContent = 'CW';
+        case '3': // WW/CW LEDs [2×PWM]
+          pin1Label.textContent = t('pinWW');
+          pin2Label.textContent = t('pinCW');
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'flex';
           pinSeparator.style.display = 'flex';
@@ -311,7 +470,7 @@
           testWW.style.display = 'flex';
           testCW.style.display = 'flex';
           testTriac.style.display = 'none';
-          brightnessLabel.textContent = 'Brillantor WW per defecte';
+          brightnessLabel.textContent = t('labelBrightnessWW');
           brightnessConfig.style.display = 'flex';
           brightnessCWConfig.style.display = 'flex';
           freqConfig.style.display = 'flex';
@@ -319,10 +478,10 @@
           fetchBrightnessConfig();
           break;
 
-        case '4': // Triac control de fase [ZCD + MOC3021S]
-          pin1Label.textContent = 'ZCD';
-          pin2Label.textContent = 'Triac';
-          pin3Label.textContent = 'WS2812';
+        case '4': // Triac phase control [ZCD + MOC3021S]
+          pin1Label.textContent = t('pinZCD');
+          pin2Label.textContent = t('pinTriac');
+          pin3Label.textContent = t('pinWS2812');
           pin1Group.style.display = 'flex';
           pin2Group.style.display = 'flex';
           pin2Group.style.opacity = '0';
@@ -348,9 +507,9 @@
           testCW.style.display = 'none';
           testTriac.style.display = 'flex';
           document.getElementById('testTriacLEDSlider').style.display = 'flex';
-          brightnessLabel.textContent = 'Potència del triac per defecte';
+          brightnessLabel.textContent = t('labelTriacPower');
           brightnessConfig.style.display = 'flex';
-          document.getElementById('brightnessCWConfigLabel').textContent = 'Brillantor LED per defecte';
+          document.getElementById('brightnessCWConfigLabel').textContent = t('labelBrightnessLED');
           brightnessCWConfig.style.display = 'flex';
           numLedsSection.style.display = 'none';
           fetchBrightnessConfig();
@@ -384,8 +543,8 @@
     }
 
     function fetchInitialSetup() {
-      fetch('/initialSetup', {method: 'POST'}).then(r => r.text()).then(t => {
-        isInitialSetup = t.trim() === 'true';
+      fetch('/initialSetup', {method: 'POST'}).then(r => r.text()).then(data => {
+        isInitialSetup = data.trim() === 'true';
         if (isInitialSetup) {
           document.getElementById('initialSetupBanner').style.display = 'block';
         }
@@ -393,13 +552,17 @@
     }
 
     function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
     window.onload = function() {
+      currentLang = detectLang();
+      document.getElementById('langSelector').value = currentLang;
+      applyTranslations(currentLang);
+
       fetchMyMac();
       fetchConfigMode();
       fetchDriveMode();
@@ -411,13 +574,9 @@
         const data = new URLSearchParams(new FormData(this));
         fetch('/', { method: 'POST', body: data })
           .then(() => {
-            if (isInitialSetup) {
-              showToast('Configuració guardada! Reiniciant...');
-            } else {
-              showToast('Configuració guardada!');
-            }
+            showToast(t(isInitialSetup ? 'toastSavedRestart' : 'toastSaved'));
           })
-          .catch(() => showToast('Error en guardar'));
+          .catch(() => showToast(t('toastError')));
       });
     }
   </script>
@@ -426,20 +585,29 @@
   <div class="container">
     <header>
       <div class="header-title">
-        <h1>Configurador BlauTrigger</h1>
+        <h1 data-i18n="h1">Configurador BlauTrigger</h1>
       </div>
-      <a href="https://github.com/CasamaMaker/BlauTrigger" class="github-link" id="githubLink" target="_blank">
-        <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-        </svg>
-      </a>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <select id="langSelector" onchange="setLanguage(this.value)"
+                style="font-size:13px; border:1px solid var(--primary-color); border-radius:6px;
+                       padding:3px 6px; color:var(--primary-color); background:white; cursor:pointer;">
+          <option value="ca">CA</option>
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
+        <a href="https://github.com/CasamaMaker/BlauTrigger" class="github-link" id="githubLink" target="_blank">
+          <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+          </svg>
+        </a>
+      </div>
     </header>
 
     <!-- myMAC Card -->
     <div class="card">
-      <label for="myMac">La meva adreça MAC</label>
+      <label for="myMac" data-i18n="labelMyMac">La meva adreça MAC</label>
       <div class="values">
-        <p><span id="myMac">Carregant...</span></p>
+        <p><span id="myMac" data-i18n="loading">Carregant...</span></p>
       </div>
     </div>
 
@@ -448,58 +616,58 @@
     <!-- CONFIGURACIÓ Card -->
     <div class="card">
 
-        <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;">
+        <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;" data-i18n="modeInfo">
           Configuració hardcodejada al codi. Per canviar-la, modifica el firmware.
         </p>
 
-        <div id="initialSetupBanner" style="display:none; background: rgba(255,180,0,0.15); border: 1px solid rgba(255,160,0,0.4); padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em;">
+        <div id="initialSetupBanner" style="display:none; background: rgba(255,180,0,0.15); border: 1px solid rgba(255,160,0,0.4); padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em;" data-i18n="initialSetup">
           El pin del botó no està configurat. Defineix-lo per continuar.
         </div>
 
         <div id="configFields" class="disabled-section">
 
           <div class="control-types-section">
-            <label class="section-label">Botó</label>
+            <label class="section-label" data-i18n="labelBoto">Botó</label>
             <div class="pins-container" style="margin-bottom: 20px;">
               <div class="pin-group">
-                <label for="boto_pin_input" class="pin-label">Pin</label>
+                <label for="boto_pin_input" class="pin-label" data-i18n="labelPin">Pin</label>
                 <input type="tel" id="boto_pin_input" name="boto_pin" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
               </div>
             </div>
           </div>
 
           <div class="control-types-section">
-            <label class="section-label">Tipus de control</label>
+            <label class="section-label" data-i18n="labelControlType">Tipus de control</label>
             <div class="radio-group">
               <label class="radio-option">
                 <input type="radio" name="control_type" value="0" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Relé On/Off</span>
+                <span class="radio-text" data-i18n="radio0">Relé On/Off</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="1" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Led digital WS2812</span>
+                <span class="radio-text" data-i18n="radio1">Led digital WS2812</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="2" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Led Dimmer [PWM]</span>
+                <span class="radio-text" data-i18n="radio2">Led Dimmer [PWM]</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="3" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Leds WW/CW [2×PWM]</span>
+                <span class="radio-text" data-i18n="radio3">Leds WW/CW [2×PWM]</span>
               </label>
               <label class="radio-option">
                 <input type="radio" name="control_type" value="4" class="radio-input" onchange="updateControlTypeUI()"/>
                 <span class="radio-custom"></span>
-                <span class="radio-text">Triac control de fase [ZCD]</span>
+                <span class="radio-text" data-i18n="radio4">Triac control de fase [ZCD]</span>
               </label>
             </div>
           </div>
 
-          <label style="margin: 0;" id="pinLabelTop">Pin de control de la llum</label>
+          <label style="margin: 0;" id="pinLabelTop" data-i18n="labelPinTop">Pin de control de la llum</label>
           <div class="pins-container" id="pinsContainer" style="display: none;">
             <div class="pin-group" id="pin1Group">
               <label for="pin1" class="pin-label" id="pin1Label">Pin 1</label>
@@ -520,7 +688,7 @@
           <!-- Nombre de LEDs (només mode 1) -->
           <div id="numLedsSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;">Nombre de LEDs</label>
+              <label style="margin: 0;" data-i18n="labelNumLeds">Nombre de LEDs</label>
               <input type="number" id="numLedsInput" name="num_leds" min="1" max="100" value="1"
                      style="width: 60px; text-align: center;" class="pin-input">
             </div>
@@ -531,7 +699,7 @@
           <!-- Brillantor per defecte (WW per al mode 3) -->
           <div id="brightnessConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;" id="brightnessConfigLabel">Brillantor per defecte</label>
+              <label style="margin: 0;" id="brightnessConfigLabel" data-i18n="labelBrightnessDefault">Brillantor per defecte</label>
               <span id="brightnessConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessConfigSlider" name="brightness" min="0" max="100" value="100" class="duty-slider"
@@ -541,7 +709,7 @@
           <!-- Brillantor CW per defecte (només mode 3) -->
           <div id="brightnessCWConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;" id="brightnessCWConfigLabel">Brillantor CW per defecte</label>
+              <label style="margin: 0;" id="brightnessCWConfigLabel" data-i18n="labelBrightnessCW">Brillantor CW per defecte</label>
               <span id="brightnessCWConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessCWConfigSlider" name="brightness_cw" min="0" max="100" value="100" class="duty-slider"
@@ -551,7 +719,7 @@
           <!-- Freqüència PWM (modes 2 i 3) -->
           <div id="freqConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              <label style="margin: 0;">Freqüència PWM</label>
+              <label style="margin: 0;" data-i18n="labelPwmFreq">Freqüència PWM</label>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <input type="number" id="pwmFreqInput" name="pwm_freq" min="100" max="40000" value="5000" step="100" class="pin-input" style="width: 6ch; min-width: 10ch; text-align: center;">
                 <span style="font-weight: 600; color: var(--primary-color);">Hz</span>
@@ -559,19 +727,19 @@
             </div>
           </div>
 
-        <input type="submit" id="submitBtn" value="Guardar" />
+        <input type="submit" id="submitBtn" data-i18n-value="submitBtn" value="Guardar" />
     </div>
 
   </form>
 
     <!-- TEST Card -->
     <div class="card" id="testCard" style="display: none;">
-      <label class="section-label">Test</label>
+      <label class="section-label" data-i18n="labelTest">Test</label>
       <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
 
         <!-- Toggle ON/OFF (per a Relé i Led digital) -->
         <div id="testToggleSection" style="display: none; justify-content: space-between; align-items: center;">
-          <label for="testSwitch" style="margin: 0;">ON/OFF</label>
+          <label for="testSwitch" style="margin: 0;" data-i18n="labelOnOff">ON/OFF</label>
           <label class="toggle-switch">
             <input type="checkbox" id="testSwitch" onchange="handleTestSwitch(this)">
             <span class="toggle-slider"></span>
@@ -581,12 +749,12 @@
         <!-- Color i Brillantor (per a Led digital) -->
         <div id="testDigitalSection" style="display: none; flex-direction: column; gap: 15px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label for="colorPicker" style="margin: 0;">Color</label>
+            <label for="colorPicker" style="margin: 0;" data-i18n="labelColor">Color</label>
             <input type="color" id="colorPicker" value="#0000ff" oninput="handleColorChange(this)" class="color-picker">
           </div>
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="brightnessSlider" style="margin: 0;">Brillantor</label>
+              <label for="brightnessSlider" style="margin: 0;" data-i18n="labelBrightness">Brillantor</label>
               <span id="brightnessValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessSlider" min="0" max="100" value="100" class="duty-slider" oninput="handleBrightnessChange(this)">
@@ -598,7 +766,7 @@
 
           <!-- Toggle ON/OFF -->
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="margin: 0;">ON/OFF</label>
+            <label style="margin: 0;" data-i18n="labelOnOff">ON/OFF</label>
             <label class="toggle-switch">
               <input type="checkbox" id="testDutySwitch" onchange="handleDutySwitch(this)">
               <span class="toggle-slider"></span>
@@ -608,7 +776,7 @@
           <!-- Slider únic (mode 2: Led Dimmer) -->
           <div id="testDimmerSlider" style="display: none; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="dutySlider" style="margin: 0;">Brillantor</label>
+              <label for="dutySlider" style="margin: 0;" data-i18n="labelBrightness">Brillantor</label>
               <span id="dutyValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
             </div>
             <input type="range" id="dutySlider" min="0" max="100" value="0" class="duty-slider" oninput="handleDutyChange(this)">
@@ -617,7 +785,7 @@
           <!-- Slider WW (mode 3) -->
           <div id="testWWSlider" style="display: none; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="wwSlider" style="margin: 0;">Brillantor WW</label>
+              <label for="wwSlider" style="margin: 0;" data-i18n="labelBrightnessWWTest">Brillantor WW</label>
               <span id="wwValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
             </div>
             <input type="range" id="wwSlider" min="0" max="100" value="0" class="duty-slider" oninput="handleWWChange(this)">
@@ -626,7 +794,7 @@
           <!-- Slider CW (mode 3) -->
           <div id="testCWSlider" style="display: none; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="cwSlider" style="margin: 0;">Brillantor CW</label>
+              <label for="cwSlider" style="margin: 0;" data-i18n="labelBrightnessCWTest">Brillantor CW</label>
               <span id="cwValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
             </div>
             <input type="range" id="cwSlider" min="0" max="100" value="0" class="duty-slider" oninput="handleCWChange(this)">
@@ -635,7 +803,7 @@
           <!-- Slider potència Triac (mode 4) -->
           <div id="testTriacSlider" style="display: none; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="triacSlider" style="margin: 0;">Potència triac</label>
+              <label for="triacSlider" style="margin: 0;" data-i18n="labelTriacTest">Potència triac</label>
               <span id="triacValue" style="font-weight: 600; color: var(--primary-color);">50%</span>
             </div>
             <input type="range" id="triacSlider" min="1" max="100" value="50" class="duty-slider" oninput="handleTriacChange(this)">
@@ -644,7 +812,7 @@
           <!-- Slider brillantor LED (mode 4) -->
           <div id="testTriacLEDSlider" style="display: none; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="triacLEDSlider" style="margin: 0;">Brillantor LED</label>
+              <label for="triacLEDSlider" style="margin: 0;" data-i18n="labelBrightnessLEDTest">Brillantor LED</label>
               <span id="triacLEDValue" style="font-weight: 600; color: var(--primary-color);">50%</span>
             </div>
             <input type="range" id="triacLEDSlider" min="0" max="100" value="50" class="duty-slider" oninput="handleTriacLEDChange(this)">
@@ -658,7 +826,7 @@
   </div>
 
   <footer>
-    <p>BlauTrigger 1.0 | Martí Casamayor</p>
+    <p data-i18n="footer">BlauTrigger 1.0 | Martí Casamayor</p>
     <p style="display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 5px;">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>

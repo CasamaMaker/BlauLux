@@ -247,8 +247,7 @@ void stopWebServer() {
 
 // Serveix la pàgina principal del gestor WiFi des de LittleFS
 void serveixWifiManager(AsyncWebServerRequest *request) {
-  String path = "/wifimanager_" + String(IDIOMA) + ".html";
-  request->send(LittleFS, path, "text/html");
+  request->send(LittleFS, "/wifimanager.html", "text/html");
 }
 
 // Declaració anticipada necessària per al POST de configuració
