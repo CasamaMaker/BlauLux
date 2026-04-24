@@ -11,25 +11,26 @@
 //  PINOUT I CONFIGURACIÓ DE HARDWARE
 // ════════════════════════════════════════════════════════════════
 #define PIN_UNUSED  -1   // pin no connectat / no utilitzat
+
 #if defined(SONOFF_BASIC_R4)
-  #define Boto        9   // GPIO0 (boot button)
-  #define enBoto      PIN_UNUSED
-  #define rele        4   // relé que activa la càrrega AC
-  #define led         6   // led que segueix el relé
-  #define digitalLed  PIN_UNUSED
-  #define HW_CONTROL_TYPE  0   // 0=On/Off
-  #define HW_PIN1          rele
-  #define HW_PIN2          led
+  #define PIN_BOTO        9   // GPIO0 (boot button)
+  #define PIN_EN_BOTO     PIN_UNUSED
+  #define PIN_RELE        4   // relé que activa la càrrega AC
+  #define PIN_LED         6   // led que segueix el relé
+  #define PIN_DIGITAL_LED PIN_UNUSED
+  #define HW_CONTROL_TYPE 0   // 0=On/Off
+  #define HW_PIN1         PIN_RELE
+  #define HW_PIN2         PIN_LED
 
 #elif defined(PICO_CLICK)
-  #define Boto        5
-  #define enBoto      3
-  #define digitalLed  6
-  #define rele        PIN_UNUSED
-  #define led         PIN_UNUSED
-  #define HW_CONTROL_TYPE  1   // 1=Digital led
-  #define HW_PIN1          digitalLed
-  #define HW_PIN2          PIN_UNUSED
+  #define PIN_BOTO        5
+  #define PIN_EN_BOTO     3
+  #define PIN_DIGITAL_LED 6
+  #define PIN_RELE        PIN_UNUSED
+  #define PIN_LED         PIN_UNUSED
+  #define HW_CONTROL_TYPE 1   // 1=Digital led
+  #define HW_PIN1         PIN_DIGITAL_LED
+  #define HW_PIN2         PIN_UNUSED
 
 #else
   #error "Defineix una versió del dispositiu a config.h"

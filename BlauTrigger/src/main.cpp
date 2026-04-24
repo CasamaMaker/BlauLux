@@ -28,7 +28,7 @@
   #define control_type HW_CONTROL_TYPE
   #define pin1         HW_PIN1
   #define pin2         HW_PIN2
-  #define boto_pin     Boto
+  #define boto_pin     PIN_BOTO
 #else
   int control_type;
   int pin1;
@@ -46,7 +46,7 @@ const char* password = WIFI_PASSWORD;
 AsyncWebServer server(HTTP_PORT);   // servidor web asíncron (portal captiu)
 DNSServer      dnsServer;           // servidor DNS per redirigir qualsevol domini al portal
 
-String myAddresss, myAddresssEnd;   // MAC del AP (completa i últims 4 caràcters)
+String macAP, macAPSuffix;          // MAC del AP (completa i últims 4 caràcters)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -59,16 +59,16 @@ int brightness[4] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};  // ín
 // ════════════════════════════════════════════════════════════════
 //  ESTAT GLOBAL
 // ════════════════════════════════════════════════════════════════
-unsigned long startTime;                    // instant en què es comença a prémer el botó
-bool state      = false;                    // estat actual de la llum (ON/OFF)
-bool webTesting = false;                    // actiu quan la web envia color/duty directament
+unsigned long startTime;                   // instant en què es comença a prémer el botó
+bool state      = false;                   // estat actual de la llum (ON/OFF)
+bool webTesting = false;                   // actiu quan la web envia color/duty directament
 
-static volatile bool _ack_pending = false;  // hi ha un ACK pendent d'enviar per ESP-NOW
-static uint8_t       _ack_mac[6];           // MAC destinatari de l'ACK
-static BlauPacket_t  _ack_pkt;              // paquet ACK preparat
+static volatile bool _ack_pending = false; // hi ha un ACK pendent d'enviar per ESP-NOW
+static uint8_t       _ack_mac[6];          // MAC destinatari de l'ACK
+static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
 
-int pwmChannel  = 0;                        // canal LEDC per pin1
-int pwmChannel2 = 1;                        // canal LEDC per pin2 (mode WW/CW)
+int pwmCh1 = 0;                            // canal LEDC per pin1
+int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -133,12 +133,12 @@ void saveConfig() {
 // ════════════════════════════════════════════════════════════════
 
 // Callback quan s'ha enviat un ACK per ESP-NOW
-void OnDataSent_TRG(const uint8_t *mac_addr, esp_now_send_status_t status) {
+void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ACK TX: OK" : "ACK TX: FAIL");
 }
 
 // Inicialitza ESP-NOW; reinicia el dispositiu si falla
-void InitESPNow() {
+void initEspNow() {
   WiFi.disconnect();
   if (esp_now_init() == ESP_OK) {
     Serial.println("ESPNow Init Success");
@@ -223,14 +223,14 @@ void webServerSetup() {
   // Retorna la MAC del AP
   server.on("/mymac", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", WiFi.softAPmacAddress());
-    Serial.println(myAddresss);
+    Serial.println(macAP);
   });
 
   // Retorna els pins configurats en format JSON
   server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String p1   = (pin1 == PIN_UNUSED) ? "null" : String(pin1);
-    String p2   = (pin2 == PIN_UNUSED) ? "null" : String(pin2);
-    String json = "{\"pin1\":" + p1 + ",\"pin2\":" + p2 + "}";
+    String sPin1 = (pin1 == PIN_UNUSED) ? "null" : String(pin1);
+    String sPin2 = (pin2 == PIN_UNUSED) ? "null" : String(pin2);
+    String json  = "{\"pin1\":" + sPin1 + ",\"pin2\":" + sPin2 + "}";
     request->send(200, "application/json", json);
     Serial.println(json);
   });
@@ -257,20 +257,20 @@ void webServerSetup() {
   // Rep i desa la configuració enviada per la web
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
     #ifndef HARDCODED_CONFIG
-      int new_brightness = -1;
+      int newBrightness = -1;
       int params = request->params();
       for (int i = 0; i < params; i++) {
         const AsyncWebParameter* p = request->getParam(i);
         if (p->isPost()) {
-          if      (p->name() == "control_type") control_type   = p->value().toInt();
-          else if (p->name() == "pin1")         pin1           = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "pin2")         pin2           = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "boto_pin")     boto_pin       = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "brightness")   new_brightness = p->value().toInt();
+          if      (p->name() == "control_type") control_type  = p->value().toInt();
+          else if (p->name() == "pin1")         pin1          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "pin2")         pin2          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "boto_pin")     boto_pin      = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "brightness")   newBrightness = p->value().toInt();
         }
       }
-      if (new_brightness >= 0 && control_type >= 1 && control_type <= 3)
-        brightness[control_type] = new_brightness;
+      if (newBrightness >= 0 && control_type >= 1 && control_type <= 3)
+        brightness[control_type] = newBrightness;
       saveConfig();
       configuracioLlum();
     #endif
@@ -293,12 +293,12 @@ void webServerSetup() {
 
   // Rep un valor de duty cycle (0–100) per previsualitzar la brillantor des de la web
   server.on("/dutty", HTTP_POST, [](AsyncWebServerRequest *request) {
-    String dutyValue = "";
+    String dutyStr = "";
     if (request->hasParam("value", true)) {
-      dutyValue = request->getParam("value", true)->value();
+      dutyStr = request->getParam("value", true)->value();
     }
     webTesting = true;
-    int duty = dutyValue.toInt();
+    int duty = dutyStr.toInt();
     Serial.print("Duty recibido: ");
     Serial.println(duty);
     if (control_type >= 1 && control_type <= 3) brightness[control_type] = duty;
@@ -322,28 +322,28 @@ void webServerSetup() {
 // Llegeix i formata la MAC del AP; guarda els últims 4 caràcters per al SSID
 void getMyMacAddress() {
   Serial.print("MAC del microcontrolador: ");
-  myAddresss = WiFi.softAPmacAddress();
-  myAddresss.replace(":", "");
-  Serial.print("La meva adreça MAC (ap)"); Serial.println(myAddresss);
-  myAddresssEnd = myAddresss.substring(myAddresss.length() - 4);
+  macAP = WiFi.softAPmacAddress();
+  macAP.replace(":", "");
+  Serial.print("La meva adreça MAC (ap)"); Serial.println(macAP);
+  macAPSuffix = macAP.substring(macAP.length() - 4);
 }
 
 // Configura el dispositiu com a Access Point obert amb SSID = "BlauTrigger_XXXX"
 void configDeviceAP() {
   WiFi.mode(WIFI_AP);
   getMyMacAddress();
-  String fullSSID = String(ssid) + "_" + myAddresssEnd;
-  bool result = WiFi.softAP(fullSSID, "");
-  if (!result) {
+  String apSsid = String(ssid) + "_" + macAPSuffix;
+  bool apOk = WiFi.softAP(apSsid, "");
+  if (!apOk) {
     Serial.println("AP Config failed.");
   } else {
-    Serial.println("AP Config Success. Broadcasting with AP: " + String(fullSSID));
+    Serial.println("AP Config Success. Broadcasting with AP: " + String(apSsid));
     Serial.print("AP CHANNEL "); Serial.println(WiFi.channel());
     Serial.print("AP MAC: ");    Serial.println(WiFi.softAPmacAddress());
   }
 }
 
-// Munta LittleFS, inicia el DNS i arrencat el servidor web del portal captiu
+// Munta LittleFS, inicia el DNS i arrenca el servidor web del portal captiu
 void wifiApModeServer() {
   if (!LittleFS.begin()) return Serial.println("Error muntant LittleFS"), void();
   Serial.println("Wifi initialized");
@@ -375,16 +375,16 @@ void configuracioLlum() {
       break;
 
     case 2:  // LED dimmer (1× PWM)
-      ledcSetup(pwmChannel, PWM_FREQ, PWM_RESOLUTION);
-      ledcAttachPin(pin1, pwmChannel);
-      ledcWrite(pwmChannel, map(brightness[2], 0, 100, 0, 255));
+      ledcSetup(pwmCh1, PWM_FREQ, PWM_RESOLUTION);
+      ledcAttachPin(pin1, pwmCh1);
+      ledcWrite(pwmCh1, map(brightness[2], 0, 100, 0, 255));
       break;
 
     case 3:  // LEDs WW/CW (2× PWM)
-      ledcSetup(pwmChannel,  PWM_FREQ, PWM_RESOLUTION);
-      ledcSetup(pwmChannel2, PWM_FREQ, PWM_RESOLUTION);
-      ledcAttachPin(pin1, pwmChannel);
-      ledcAttachPin(pin2, pwmChannel2);
+      ledcSetup(pwmCh1, PWM_FREQ, PWM_RESOLUTION);
+      ledcSetup(pwmCh2, PWM_FREQ, PWM_RESOLUTION);
+      ledcAttachPin(pin1, pwmCh1);
+      ledcAttachPin(pin2, pwmCh2);
       break;
 
     default:
@@ -423,8 +423,8 @@ void controlLlum(String trigger) {
       }
       if (trigger == "wifiAP") {
         // pols sinusoïdal aproximat amb triangle 0→255→0 cada ~1 s
-        uint16_t osc = (millis() / 2) % 510;
-        uint8_t bright = (osc < 255) ? osc : 510 - osc;
+        uint16_t osc   = (millis() / 2) % 510;
+        uint8_t  bright = (osc < 255) ? osc : 510 - osc;
         strip.setBrightness(bright);
         strip.setPixelColor(0, COLOR_WIFI_AP);
       }
@@ -433,37 +433,37 @@ void controlLlum(String trigger) {
 
     case 2:  // LED dimmer (1× PWM)
       if (trigger == "boto" || trigger == "espnow") {
-        ledcWrite(pwmChannel, state ? map(brightness[2], 0, 100, 0, 255) : 0);
+        ledcWrite(pwmCh1, state ? map(brightness[2], 0, 100, 0, 255) : 0);
       }
       if (trigger == "inici") {
-        ledcWrite(pwmChannel, map(brightness[2], 0, 100, 0, 255));
+        ledcWrite(pwmCh1, map(brightness[2], 0, 100, 0, 255));
         delay(INICI_BLINK_MS);
-        ledcWrite(pwmChannel, 0);
+        ledcWrite(pwmCh1, 0);
       }
       if (trigger == "wifiAP") {
-        uint16_t osc = (millis() / 2) % 510;
-        uint8_t bright = (osc < 255) ? osc : 510 - osc;
-        ledcWrite(pwmChannel, bright);
+        uint16_t osc   = (millis() / 2) % 510;
+        uint8_t  bright = (osc < 255) ? osc : 510 - osc;
+        ledcWrite(pwmCh1, bright);
       }
       break;
 
     case 3:  // LEDs WW/CW (2× PWM)
       if (trigger == "boto" || trigger == "espnow") {
-        ledcWrite(pwmChannel,  state ? map(brightness[3], 0, 100, 0, 255) : 0);
-        ledcWrite(pwmChannel2, state ? map(brightness[3], 0, 100, 0, 255) : 0);
+        ledcWrite(pwmCh1, state ? map(brightness[3], 0, 100, 0, 255) : 0);
+        ledcWrite(pwmCh2, state ? map(brightness[3], 0, 100, 0, 255) : 0);
       }
       if (trigger == "inici") {
-        ledcWrite(pwmChannel,  map(brightness[3], 0, 100, 0, 255));
-        ledcWrite(pwmChannel2, map(brightness[3], 0, 100, 0, 255));
+        ledcWrite(pwmCh1, map(brightness[3], 0, 100, 0, 255));
+        ledcWrite(pwmCh2, map(brightness[3], 0, 100, 0, 255));
         delay(INICI_BLINK_MS);
-        ledcWrite(pwmChannel,  0);
-        ledcWrite(pwmChannel2, 0);
+        ledcWrite(pwmCh1, 0);
+        ledcWrite(pwmCh2, 0);
       }
       if (trigger == "wifiAP") {
-        uint16_t osc = (millis() / 2) % 510;
-        uint8_t bright = (osc < 255) ? osc : 510 - osc;
-        ledcWrite(pwmChannel,  bright);
-        ledcWrite(pwmChannel2, bright);
+        uint16_t osc   = (millis() / 2) % 510;
+        uint8_t  bright = (osc < 255) ? osc : 510 - osc;
+        ledcWrite(pwmCh1, bright);
+        ledcWrite(pwmCh2, bright);
       }
       break;
 
@@ -482,11 +482,11 @@ void controlLlum(String trigger) {
 // ════════════════════════════════════════════════════════════════
 
 // Processa un paquet rebut i retorna el codi ACK corresponent
-uint8_t handleAction(uint8_t pkt_type, uint8_t cmd,
+uint8_t handleAction(uint8_t pktType, uint8_t cmd,
                      uint8_t p1, uint8_t p2, uint8_t p3) {
   (void)p1; (void)p2; (void)p3;
 
-  if (pkt_type == TYPE_EVENT) {
+  if (pktType == TYPE_EVENT) {
     switch (cmd) {
       case EVT_CLICK_1:
       case EVT_CLICK_2:
@@ -499,11 +499,11 @@ uint8_t handleAction(uint8_t pkt_type, uint8_t cmd,
     }
   }
 
-  if (pkt_type == TYPE_CMD) {
+  if (pktType == TYPE_CMD) {
     switch (cmd) {
-      case CMD_TOGGLE:               controlLlum("espnow"); return ACK_OK;
-      case CMD_ON:   if (!state)     controlLlum("espnow"); return ACK_OK;
-      case CMD_OFF:  if ( state)     controlLlum("espnow"); return ACK_OK;
+      case CMD_TOGGLE:             controlLlum("espnow"); return ACK_OK;
+      case CMD_ON:   if (!state)   controlLlum("espnow"); return ACK_OK;
+      case CMD_OFF:  if ( state)   controlLlum("espnow"); return ACK_OK;
       default:
         Serial.print("CMD no implementat: 0x"); Serial.println(cmd, HEX);
         return ACK_ERROR;
@@ -514,7 +514,7 @@ uint8_t handleAction(uint8_t pkt_type, uint8_t cmd,
 }
 
 // Callback ESP-NOW: rep un paquet i prepara l'ACK si cal
-void OnDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
   blau_trg_on_data_recv(mac, data, len,
                         &_ack_pending, _ack_mac, &_ack_pkt,
                         handleAction,
@@ -562,9 +562,9 @@ void setup() {
 
   pinMode(boto_pin, INPUT);
 
-  InitESPNow();
-  esp_now_register_send_cb(OnDataSent_TRG);
-  esp_now_register_recv_cb(OnDataRecv);
+  initEspNow();
+  esp_now_register_send_cb(onDataSent);
+  esp_now_register_recv_cb(onDataRecv);
 }
 
 
