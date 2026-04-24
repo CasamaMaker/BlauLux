@@ -40,6 +40,7 @@
   int boto_pin;
   int num_leds      = NUM_LEDS;
   int brightness_cw = BRIGHTNESS_DEF;
+  int pwm_freq      = PWM_FREQ;
 #endif
 
 const char* ssid     = WIFI_SSID;
@@ -160,6 +161,7 @@ void clearConfig() {
   prefs.putInt("b4",  BRIGHTNESS_DEF);
   prefs.putInt("bcw", BRIGHTNESS_DEF);
   prefs.putInt("nl",  NUM_LEDS);
+  prefs.putInt("pf",  PWM_FREQ);
   prefs.end();
   Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
 }
@@ -179,11 +181,12 @@ void loadConfig() {
   brightness[4] = prefs.getInt("b4",  BRIGHTNESS_DEF);
   brightness_cw = prefs.getInt("bcw", BRIGHTNESS_DEF);
   num_leds      = prefs.getInt("nl",  NUM_LEDS);
+  pwm_freq      = prefs.getInt("pf",  PWM_FREQ);
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
-  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds);
+  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
 }
 
 // Desa la configuració actual a NVS
@@ -200,9 +203,10 @@ void saveConfig() {
   prefs.putInt("b4",  brightness[4]);
   prefs.putInt("bcw", brightness_cw);
   prefs.putInt("nl",  num_leds);
+  prefs.putInt("pf",  pwm_freq);
   prefs.end();
-  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds);
+  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
 }
 #endif
 
@@ -317,7 +321,7 @@ void webServerSetup() {
 
   // Retorna la brillantor de cada mode en format JSON
   server.on("/brightness", HTTP_POST, [](AsyncWebServerRequest *request) {
-    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4]) + ",\"bcw\":" + String(brightness_cw) + "}";
+    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4]) + ",\"bcw\":" + String(brightness_cw) + ",\"pf\":" + String(pwm_freq) + "}";
     request->send(200, "application/json", json);
   });
 
@@ -355,6 +359,7 @@ void webServerSetup() {
           else if (p->name() == "brightness")   newBrightness = p->value().toInt();
           else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
           else if (p->name() == "num_leds")     { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
+          else if (p->name() == "pwm_freq")     { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
         }
       }
       if (newBrightness >= 0 && control_type >= 1 && control_type <= 4)
@@ -481,14 +486,14 @@ void configuracioLlum() {
       break;
 
     case 2:  // LED dimmer (1× PWM)
-      ledcSetup(pwmCh1, PWM_FREQ, PWM_RESOLUTION);
+      ledcSetup(pwmCh1, pwm_freq, PWM_RESOLUTION);
       ledcAttachPin(pin1, pwmCh1);
       ledcWrite(pwmCh1, map(brightness[2], 0, 100, 0, 255));
       break;
 
     case 3:  // LEDs WW/CW (2× PWM)
-      ledcSetup(pwmCh1, PWM_FREQ, PWM_RESOLUTION);
-      ledcSetup(pwmCh2, PWM_FREQ, PWM_RESOLUTION);
+      ledcSetup(pwmCh1, pwm_freq, PWM_RESOLUTION);
+      ledcSetup(pwmCh2, pwm_freq, PWM_RESOLUTION);
       ledcAttachPin(pin1, pwmCh1);
       ledcAttachPin(pin2, pwmCh2);
       break;

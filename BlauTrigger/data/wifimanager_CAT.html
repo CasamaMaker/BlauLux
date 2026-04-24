@@ -136,6 +136,14 @@
           document.getElementById('brightnessCWConfigSlider').value = cwVal;
           document.getElementById('brightnessCWConfigValue').textContent = cwVal + '%';
         }
+        if (selected === '4') {
+          const cwVal = data.bcw ?? 100;
+          document.getElementById('brightnessCWConfigSlider').value = cwVal;
+          document.getElementById('brightnessCWConfigValue').textContent = cwVal + '%';
+        }
+        if (selected === '2' || selected === '3') {
+          document.getElementById('pwmFreqInput').value = data.pf ?? 5000;
+        }
       }).catch(() => {});
     }
 
@@ -193,6 +201,7 @@
       const testTriac      = document.getElementById('testTriacSlider');
       const brightnessConfig    = document.getElementById('brightnessConfigSection');
       const brightnessCWConfig  = document.getElementById('brightnessCWConfigSection');
+      const freqConfig          = document.getElementById('freqConfigSection');
       const numLedsSection      = document.getElementById('numLedsSection');
       const brightnessLabel     = document.getElementById('brightnessConfigLabel');
 
@@ -216,12 +225,13 @@
       pinLabelTop.style.display = 'flex';
       pinsContainer.style.display = 'flex';
 
-      // Amaga elements exclusius del mode 4
+      // Amaga elements exclusius del mode 4 i freqüència PWM
       pin3Group.style.display = 'none';
       pinSeparator2.style.display = 'none';
       document.getElementById('pin3').value = '';
       document.getElementById('testTriacLEDSlider').style.display = 'none';
       document.getElementById('brightnessCWConfigLabel').textContent = 'Brillantor CW per defecte';
+      freqConfig.style.display = 'none';
 
       switch (selected) {
         case '0': // Relé On/Off
@@ -277,6 +287,7 @@
           brightnessLabel.textContent = 'Brillantor per defecte';
           brightnessConfig.style.display = 'flex';
           brightnessCWConfig.style.display = 'none';
+          freqConfig.style.display = 'flex';
           numLedsSection.style.display = 'none';
           fetchBrightnessConfig();
           break;
@@ -303,6 +314,7 @@
           brightnessLabel.textContent = 'Brillantor WW per defecte';
           brightnessConfig.style.display = 'flex';
           brightnessCWConfig.style.display = 'flex';
+          freqConfig.style.display = 'flex';
           numLedsSection.style.display = 'none';
           fetchBrightnessConfig();
           break;
@@ -359,6 +371,7 @@
       document.getElementById('testTriacLEDSlider').style.display = 'none';
       document.getElementById('brightnessConfigSection').style.display = 'none';
       document.getElementById('brightnessCWConfigSection').style.display = 'none';
+      document.getElementById('freqConfigSection').style.display = 'none';
       document.getElementById('numLedsSection').style.display = 'none';
     });
 
@@ -526,13 +539,24 @@
           </div>
 
           <!-- Brillantor CW per defecte (només mode 3) -->
-          <div id="brightnessCWConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 20px;">
+          <div id="brightnessCWConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <label style="margin: 0;" id="brightnessCWConfigLabel">Brillantor CW per defecte</label>
               <span id="brightnessCWConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessCWConfigSlider" name="brightness_cw" min="0" max="100" value="100" class="duty-slider"
               oninput="document.getElementById('brightnessCWConfigValue').textContent = this.value + '%'">
+          </div>
+
+          <!-- Freqüència PWM (modes 2 i 3) -->
+          <div id="freqConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <label style="margin: 0;">Freqüència PWM</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="number" id="pwmFreqInput" name="pwm_freq" min="100" max="40000" value="5000" step="100" class="pin-input" style="width: 6ch; min-width: 10ch; text-align: center;">
+                <span style="font-weight: 600; color: var(--primary-color);">Hz</span>
+              </div>
+            </div>
           </div>
 
         <input type="submit" id="submitBtn" value="Guardar" />
