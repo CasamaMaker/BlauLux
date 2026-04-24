@@ -14,23 +14,23 @@
 
 #if defined(SONOFF_BASIC_R4)
   #define PIN_BOTO        9   // GPIO0 (boot button)
-  #define PIN_EN_BOTO     PIN_UNUSED
   #define PIN_RELE        4   // relé que activa la càrrega AC
   #define PIN_LED         6   // led que segueix el relé
   #define PIN_DIGITAL_LED PIN_UNUSED
   #define HW_CONTROL_TYPE 0   // 0=On/Off
   #define HW_PIN1         PIN_RELE
   #define HW_PIN2         PIN_LED
+  #define HW_PIN3         PIN_UNUSED
 
 #elif defined(PICO_CLICK)
   #define PIN_BOTO        5
-  #define PIN_EN_BOTO     3
   #define PIN_DIGITAL_LED 6
   #define PIN_RELE        PIN_UNUSED
   #define PIN_LED         PIN_UNUSED
   #define HW_CONTROL_TYPE 1   // 1=Digital led
   #define HW_PIN1         PIN_DIGITAL_LED
   #define HW_PIN2         PIN_UNUSED
+  #define HW_PIN3         PIN_UNUSED
 
 #else
   #error "Defineix una versió del dispositiu a config.h"
@@ -98,6 +98,14 @@
 // ════════════════════════════════════════════════════════════════
 #define PWM_FREQ        5000   // freqüència Hz
 #define PWM_RESOLUTION  8      // bits (8 → rang 0–255)
+
+
+// ════════════════════════════════════════════════════════════════
+//  CONTROL DE FASE (Triac + ZCD)
+// ════════════════════════════════════════════════════════════════
+#define TRIAC_PULSE_US       100   // durada del pols de dispar del triac (µs)
+#define AC_HALF_CYCLE_US   10000   // semiperíode de 50 Hz (µs)
+#define TRIAC_MIN_DELAY_US   500   // retard mínim de dispar després del ZCD (µs)
 
 
 // ════════════════════════════════════════════════════════════════

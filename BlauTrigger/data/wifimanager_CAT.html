@@ -6,21 +6,32 @@
   <link rel="stylesheet" type="text/css" href="style.css" />
   <title>Configurador BlauTrigger</title>
   <script>
-    let lastDutyValue = 100;
 
     function sendDutyToServer(value) {
-      var xhttp = new XMLHttpRequest();
-      xhttp.open("POST", "/dutty", true);
-      xhttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-      xhttp.send("value=" + value);
+      fetch('/dutty', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'value=' + value
+      });
     }
 
-    function handleDutyChange(slider) {
-      document.getElementById('dutyValue').textContent = slider.value + '%';
-      lastDutyValue = slider.value;
-      sendDutyToServer(slider.value);
+    function sendDutyCWToServer(value) {
+      fetch('/duttyCW', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'value=' + value
+      });
     }
 
+    function sendColorToServer(r, g, b) {
+      fetch('/color', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `r=${r}&g=${g}&b=${b}`
+      });
+    }
+
+    // Toggle ON/OFF per a mode 1 (Led digital)
     function handleTestSwitch(checkbox) {
       const selected = document.querySelector('input[name="control_type"]:checked')?.value;
       if (selected === '1') {
@@ -32,12 +43,33 @@
       }
     }
 
-    function sendColorToServer(r, g, b) {
-      fetch('/color', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: `r=${r}&g=${g}&b=${b}`
-      });
+    // Toggle ON/OFF per a modes 2, 3 i 4 (PWM, WW/CW, Triac)
+    function handleDutySwitch(checkbox) {
+      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
+      if (!checkbox.checked) {
+        sendDutyToServer(0);
+        if (selected === '3') sendDutyCWToServer(0);
+      } else {
+        if (selected === '2') {
+          sendDutyToServer(document.getElementById('dutySlider').value);
+        } else if (selected === '3') {
+          sendDutyToServer(document.getElementById('wwSlider').value);
+          sendDutyCWToServer(document.getElementById('cwSlider').value);
+        } else if (selected === '4') {
+          sendDutyToServer(document.getElementById('triacSlider').value);
+          sendDutyCWToServer(document.getElementById('triacLEDSlider').value);
+        }
+      }
+    }
+
+    function handleTriacChange(slider) {
+      document.getElementById('triacValue').textContent = slider.value + '%';
+      sendDutyToServer(slider.value);
+    }
+
+    function handleTriacLEDChange(slider) {
+      document.getElementById('triacLEDValue').textContent = slider.value + '%';
+      sendDutyCWToServer(slider.value);
     }
 
     function handleColorChange(picker) {
@@ -56,33 +88,59 @@
       sendDutyToServer(slider.value);
     }
 
+    function handleDutyChange(slider) {
+      document.getElementById('dutyValue').textContent = slider.value + '%';
+      sendDutyToServer(slider.value);
+    }
+
+    function handleWWChange(slider) {
+      document.getElementById('wwValue').textContent = slider.value + '%';
+      sendDutyToServer(slider.value);
+    }
+
+    function handleCWChange(slider) {
+      document.getElementById('cwValue').textContent = slider.value + '%';
+      sendDutyCWToServer(slider.value);
+    }
+
     function fetchMyMac() {
-      fetch('/mymac').then(r => r.text()).then(t => {
+      fetch('/mymac', {method: 'POST'}).then(r => r.text()).then(t => {
         document.getElementById("myMac").innerHTML = t;
       }).catch(() => {});
     }
 
     function fetchPins() {
-      fetch('/pins').then(r => r.json()).then(data => {
+      fetch('/pins', {method: 'POST'}).then(r => r.json()).then(data => {
         document.getElementById('pin1').value = data.pin1 !== null ? data.pin1 : '';
         document.getElementById('pin2').value = data.pin2 !== null ? data.pin2 : '';
+        document.getElementById('pin3').value = data.pin3 !== null ? data.pin3 : '';
+      }).catch(() => {});
+    }
+
+    function fetchNumLeds() {
+      fetch('/numLeds', {method: 'POST'}).then(r => r.text()).then(t => {
+        document.getElementById('numLedsInput').value = parseInt(t.trim()) || 1;
       }).catch(() => {});
     }
 
     function fetchBrightnessConfig() {
       const selected = document.querySelector('input[name="control_type"]:checked')?.value;
       if (!selected || selected === '0') return;
-      fetch('/brightness').then(r => r.json()).then(data => {
-        const map = {'1': data.b1, '2': data.b2, '3': data.b3};
+      fetch('/brightness', {method: 'POST'}).then(r => r.json()).then(data => {
+        const map = {'1': data.b1, '2': data.b2, '3': data.b3, '4': data.b4};
         const val = map[selected] ?? 100;
-        const slider = document.getElementById('brightnessConfigSlider');
-        slider.value = val;
+        document.getElementById('brightnessConfigSlider').value = val;
         document.getElementById('brightnessConfigValue').textContent = val + '%';
+        if (selected === '3') {
+          const cwVal = data.bcw ?? 100;
+          document.getElementById('brightnessCWConfigSlider').value = cwVal;
+          document.getElementById('brightnessCWConfigValue').textContent = cwVal + '%';
+        }
       }).catch(() => {});
     }
 
     function fetchDriveMode() {
-      fetch('/driverMode').then(r => r.text()).then(mode => {
+      fetch('/driverMode', {method: 'POST'}).then(r => r.text()).then(mode => {
         const radio = document.querySelector(`input[name="control_type"][value="${mode.trim()}"]`);
         if (radio) { radio.checked = true; updateControlTypeUI(); }
       }).catch(() => {
@@ -91,7 +149,7 @@
     }
 
     function fetchConfigMode() {
-      fetch('/configMode').then(r => r.text()).then(mode => {
+      fetch('/configMode', {method: 'POST'}).then(r => r.text()).then(mode => {
         applyConfigMode(mode.trim());
       }).catch(() => {
         applyConfigMode('web');
@@ -116,17 +174,30 @@
 
     function updateControlTypeUI() {
       const selected = document.querySelector('input[name="control_type"]:checked')?.value;
-      const pinLabelTop = document.getElementById('pinLabelTop');
-      const pinsContainer = document.getElementById('pinsContainer');
-      const pin1Group = document.getElementById('pin1Group');
-      const pin2Group = document.getElementById('pin2Group');
-      const pinSeparator = document.getElementById('pinSeparator');
-      const pin1Label = document.getElementById('pin1Label');
-      const pin2Label = document.getElementById('pin2Label');
-      const testToggle = document.getElementById('testToggleSection');
-      const testDigital = document.getElementById('testDigitalSection');
-      const testDuty = document.getElementById('testDutySection');
-      const brightnessConfig = document.getElementById('brightnessConfigSection');
+      const pinLabelTop    = document.getElementById('pinLabelTop');
+      const pinsContainer  = document.getElementById('pinsContainer');
+      const pin1Group      = document.getElementById('pin1Group');
+      const pin2Group      = document.getElementById('pin2Group');
+      const pin3Group      = document.getElementById('pin3Group');
+      const pinSeparator   = document.getElementById('pinSeparator');
+      const pinSeparator2  = document.getElementById('pinSeparator2');
+      const pin1Label      = document.getElementById('pin1Label');
+      const pin2Label      = document.getElementById('pin2Label');
+      const pin3Label      = document.getElementById('pin3Label');
+      const testToggle     = document.getElementById('testToggleSection');
+      const testDigital    = document.getElementById('testDigitalSection');
+      const testDuty       = document.getElementById('testDutySection');
+      const testDimmer     = document.getElementById('testDimmerSlider');
+      const testWW         = document.getElementById('testWWSlider');
+      const testCW         = document.getElementById('testCWSlider');
+      const testTriac      = document.getElementById('testTriacSlider');
+      const brightnessConfig    = document.getElementById('brightnessConfigSection');
+      const brightnessCWConfig  = document.getElementById('brightnessCWConfigSection');
+      const numLedsSection      = document.getElementById('numLedsSection');
+      const brightnessLabel     = document.getElementById('brightnessConfigLabel');
+
+      // Reset duty switch on mode change
+      document.getElementById('testDutySwitch').checked = false;
 
       if (!selected) {
         pinLabelTop.style.display = 'none';
@@ -135,6 +206,8 @@
         testDigital.style.display = 'none';
         testDuty.style.display = 'none';
         brightnessConfig.style.display = 'none';
+        brightnessCWConfig.style.display = 'none';
+        numLedsSection.style.display = 'none';
         document.getElementById('testCard').style.display = 'none';
         return;
       }
@@ -142,6 +215,13 @@
 
       pinLabelTop.style.display = 'flex';
       pinsContainer.style.display = 'flex';
+
+      // Amaga elements exclusius del mode 4
+      pin3Group.style.display = 'none';
+      pinSeparator2.style.display = 'none';
+      document.getElementById('pin3').value = '';
+      document.getElementById('testTriacLEDSlider').style.display = 'none';
+      document.getElementById('brightnessCWConfigLabel').textContent = 'Brillantor CW per defecte';
 
       switch (selected) {
         case '0': // Relé On/Off
@@ -160,6 +240,8 @@
           testDigital.style.display = 'none';
           testDuty.style.display = 'none';
           brightnessConfig.style.display = 'none';
+          brightnessCWConfig.style.display = 'none';
+          numLedsSection.style.display = 'none';
           break;
 
         case '1': // Led digital WS2812
@@ -171,8 +253,12 @@
           testToggle.style.display = 'flex';
           testDigital.style.display = 'flex';
           testDuty.style.display = 'none';
+          brightnessLabel.textContent = 'Brillantor per defecte';
           brightnessConfig.style.display = 'flex';
+          brightnessCWConfig.style.display = 'none';
+          numLedsSection.style.display = 'flex';
           fetchBrightnessConfig();
+          fetchNumLeds();
           break;
 
         case '2': // Led Dimmer [PWM]
@@ -184,7 +270,14 @@
           testToggle.style.display = 'none';
           testDigital.style.display = 'none';
           testDuty.style.display = 'flex';
+          testDimmer.style.display = 'flex';
+          testWW.style.display = 'none';
+          testCW.style.display = 'none';
+          testTriac.style.display = 'none';
+          brightnessLabel.textContent = 'Brillantor per defecte';
           brightnessConfig.style.display = 'flex';
+          brightnessCWConfig.style.display = 'none';
+          numLedsSection.style.display = 'none';
           fetchBrightnessConfig();
           break;
 
@@ -203,7 +296,51 @@
           testToggle.style.display = 'none';
           testDigital.style.display = 'none';
           testDuty.style.display = 'flex';
+          testDimmer.style.display = 'none';
+          testWW.style.display = 'flex';
+          testCW.style.display = 'flex';
+          testTriac.style.display = 'none';
+          brightnessLabel.textContent = 'Brillantor WW per defecte';
           brightnessConfig.style.display = 'flex';
+          brightnessCWConfig.style.display = 'flex';
+          numLedsSection.style.display = 'none';
+          fetchBrightnessConfig();
+          break;
+
+        case '4': // Triac control de fase [ZCD + MOC3021S]
+          pin1Label.textContent = 'ZCD';
+          pin2Label.textContent = 'Triac';
+          pin3Label.textContent = 'WS2812';
+          pin1Group.style.display = 'flex';
+          pin2Group.style.display = 'flex';
+          pin2Group.style.opacity = '0';
+          pin2Group.style.transform = 'scale(0.8)';
+          setTimeout(() => {
+            pin2Group.style.opacity = '1';
+            pin2Group.style.transform = 'scale(1)';
+          }, 50);
+          pin3Group.style.display = 'flex';
+          pin3Group.style.opacity = '0';
+          pin3Group.style.transform = 'scale(0.8)';
+          setTimeout(() => {
+            pin3Group.style.opacity = '1';
+            pin3Group.style.transform = 'scale(1)';
+          }, 100);
+          pinSeparator.style.display = 'flex';
+          pinSeparator2.style.display = 'flex';
+          testToggle.style.display = 'none';
+          testDigital.style.display = 'none';
+          testDuty.style.display = 'flex';
+          testDimmer.style.display = 'none';
+          testWW.style.display = 'none';
+          testCW.style.display = 'none';
+          testTriac.style.display = 'flex';
+          document.getElementById('testTriacLEDSlider').style.display = 'flex';
+          brightnessLabel.textContent = 'Potència del triac per defecte';
+          brightnessConfig.style.display = 'flex';
+          document.getElementById('brightnessCWConfigLabel').textContent = 'Brillantor LED per defecte';
+          brightnessCWConfig.style.display = 'flex';
+          numLedsSection.style.display = 'none';
           fetchBrightnessConfig();
           break;
       }
@@ -213,22 +350,28 @@
     document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('pinLabelTop').style.display = 'none';
       document.getElementById('pinsContainer').style.display = 'none';
+      document.getElementById('pin3Group').style.display = 'none';
+      document.getElementById('pinSeparator2').style.display = 'none';
       document.getElementById('testToggleSection').style.display = 'none';
       document.getElementById('testDigitalSection').style.display = 'none';
       document.getElementById('testDutySection').style.display = 'none';
+      document.getElementById('testTriacSlider').style.display = 'none';
+      document.getElementById('testTriacLEDSlider').style.display = 'none';
       document.getElementById('brightnessConfigSection').style.display = 'none';
+      document.getElementById('brightnessCWConfigSection').style.display = 'none';
+      document.getElementById('numLedsSection').style.display = 'none';
     });
 
     let isInitialSetup = false;
 
     function fetchBoto() {
-      fetch('/boto').then(r => r.json()).then(data => {
+      fetch('/boto', {method: 'POST'}).then(r => r.json()).then(data => {
         if (data.boto !== null) document.getElementById('boto_pin_input').value = data.boto;
       }).catch(() => {});
     }
 
     function fetchInitialSetup() {
-      fetch('/initialSetup').then(r => r.text()).then(t => {
+      fetch('/initialSetup', {method: 'POST'}).then(r => r.text()).then(t => {
         isInitialSetup = t.trim() === 'true';
         if (isInitialSetup) {
           document.getElementById('initialSetupBanner').style.display = 'block';
@@ -289,7 +432,7 @@
 
   <form action="/" method="POST">
 
-    <!-- CONFIGURACIÓ Card (boto + tipus de control) -->
+    <!-- CONFIGURACIÓ Card -->
     <div class="card">
 
         <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;">
@@ -300,7 +443,6 @@
           El pin del botó no està configurat. Defineix-lo per continuar.
         </div>
 
-        <!-- Config fields (desactivats en mode hardcoded) -->
         <div id="configFields" class="disabled-section">
 
           <div class="control-types-section">
@@ -336,6 +478,11 @@
                 <span class="radio-custom"></span>
                 <span class="radio-text">Leds WW/CW [2×PWM]</span>
               </label>
+              <label class="radio-option">
+                <input type="radio" name="control_type" value="4" class="radio-input" onchange="updateControlTypeUI()"/>
+                <span class="radio-custom"></span>
+                <span class="radio-text">Triac control de fase [ZCD]</span>
+              </label>
             </div>
           </div>
 
@@ -350,17 +497,42 @@
               <label for="pin2" class="pin-label" id="pin2Label">Pin 2</label>
               <input type="tel" id="pin2" name="pin2" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
             </div>
+            <div class="pin-separator" id="pinSeparator2" style="display: none;">-</div>
+            <div class="pin-group" id="pin3Group" style="display: none;">
+              <label for="pin3" class="pin-label" id="pin3Label">WS2812</label>
+              <input type="tel" id="pin3" name="pin3" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
+            </div>
+          </div>
+
+          <!-- Nombre de LEDs (només mode 1) -->
+          <div id="numLedsSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin: 0;">Nombre de LEDs</label>
+              <input type="number" id="numLedsInput" name="num_leds" min="1" max="100" value="1"
+                     style="width: 60px; text-align: center;" class="pin-input">
+            </div>
           </div>
 
         </div>
 
-          <div id="brightnessConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 20px;">
+          <!-- Brillantor per defecte (WW per al mode 3) -->
+          <div id="brightnessConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;">Brillantor per defecte</label>
+              <label style="margin: 0;" id="brightnessConfigLabel">Brillantor per defecte</label>
               <span id="brightnessConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessConfigSlider" name="brightness" min="0" max="100" value="100" class="duty-slider"
               oninput="document.getElementById('brightnessConfigValue').textContent = this.value + '%'">
+          </div>
+
+          <!-- Brillantor CW per defecte (només mode 3) -->
+          <div id="brightnessCWConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin: 0;" id="brightnessCWConfigLabel">Brillantor CW per defecte</label>
+              <span id="brightnessCWConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
+            </div>
+            <input type="range" id="brightnessCWConfigSlider" name="brightness_cw" min="0" max="100" value="100" class="duty-slider"
+              oninput="document.getElementById('brightnessCWConfigValue').textContent = this.value + '%'">
           </div>
 
         <input type="submit" id="submitBtn" value="Guardar" />
@@ -373,7 +545,7 @@
       <label class="section-label">Test</label>
       <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
 
-        <!-- Toggle ON/OFF (per a On/Off i Digital led) -->
+        <!-- Toggle ON/OFF (per a Relé i Led digital) -->
         <div id="testToggleSection" style="display: none; justify-content: space-between; align-items: center;">
           <label for="testSwitch" style="margin: 0;">ON/OFF</label>
           <label class="toggle-switch">
@@ -382,7 +554,7 @@
           </label>
         </div>
 
-        <!-- Color i Brillantor (per a Digital led) -->
+        <!-- Color i Brillantor (per a Led digital) -->
         <div id="testDigitalSection" style="display: none; flex-direction: column; gap: 15px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label for="colorPicker" style="margin: 0;">Color</label>
@@ -397,13 +569,63 @@
           </div>
         </div>
 
-        <!-- Duty Cycle (per a PWM i WW/CW) -->
-        <div id="testDutySection" style="display: none; flex-direction: column; gap: 10px;">
+        <!-- Brillantor PWM i WW/CW (per a modes 2 i 3) -->
+        <div id="testDutySection" style="display: none; flex-direction: column; gap: 15px;">
+
+          <!-- Toggle ON/OFF -->
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label for="dutySlider" style="margin: 0;">Duty Cycle</label>
-            <span id="dutyValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
+            <label style="margin: 0;">ON/OFF</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="testDutySwitch" onchange="handleDutySwitch(this)">
+              <span class="toggle-slider"></span>
+            </label>
           </div>
-          <input type="range" id="dutySlider" min="0" max="100" value="0" class="duty-slider" oninput="handleDutyChange(this)">
+
+          <!-- Slider únic (mode 2: Led Dimmer) -->
+          <div id="testDimmerSlider" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="dutySlider" style="margin: 0;">Brillantor</label>
+              <span id="dutyValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
+            </div>
+            <input type="range" id="dutySlider" min="0" max="100" value="0" class="duty-slider" oninput="handleDutyChange(this)">
+          </div>
+
+          <!-- Slider WW (mode 3) -->
+          <div id="testWWSlider" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="wwSlider" style="margin: 0;">Brillantor WW</label>
+              <span id="wwValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
+            </div>
+            <input type="range" id="wwSlider" min="0" max="100" value="0" class="duty-slider" oninput="handleWWChange(this)">
+          </div>
+
+          <!-- Slider CW (mode 3) -->
+          <div id="testCWSlider" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="cwSlider" style="margin: 0;">Brillantor CW</label>
+              <span id="cwValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
+            </div>
+            <input type="range" id="cwSlider" min="0" max="100" value="0" class="duty-slider" oninput="handleCWChange(this)">
+          </div>
+
+          <!-- Slider potència Triac (mode 4) -->
+          <div id="testTriacSlider" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="triacSlider" style="margin: 0;">Potència triac</label>
+              <span id="triacValue" style="font-weight: 600; color: var(--primary-color);">50%</span>
+            </div>
+            <input type="range" id="triacSlider" min="1" max="100" value="50" class="duty-slider" oninput="handleTriacChange(this)">
+          </div>
+
+          <!-- Slider brillantor LED (mode 4) -->
+          <div id="testTriacLEDSlider" style="display: none; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="triacLEDSlider" style="margin: 0;">Brillantor LED</label>
+              <span id="triacLEDValue" style="font-weight: 600; color: var(--primary-color);">50%</span>
+            </div>
+            <input type="range" id="triacLEDSlider" min="0" max="100" value="50" class="duty-slider" oninput="handleTriacLEDChange(this)">
+          </div>
+
         </div>
 
       </div>
@@ -422,10 +644,4 @@
   </footer>
   <div id="toast"></div>
 </body>
-<!-- </html>
-      </svg>
-      CasamaMaker/BlauTrigger
-    </p>
-  </footer>
-</body>
-</html> -->
+</html>

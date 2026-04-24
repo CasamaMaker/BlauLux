@@ -1,4 +1,4 @@
-// BlauTrigger — firmware per controlar càrregues AC (bombeta, tira PWM, CW/WW, RGB, relé)
+// BlauTrigger — firmware per controlar càrregues AC (bombeta, tira PWM, CW/WW, RGB, relé, triac)
 // Plataformes suportades: ESP32-C3
 
 #include <Arduino.h>
@@ -25,15 +25,21 @@
 //  són constants de compilació. En mode web es llegeixen de NVS.
 // ════════════════════════════════════════════════════════════════
 #ifdef HARDCODED_CONFIG
-  #define control_type HW_CONTROL_TYPE
-  #define pin1         HW_PIN1
-  #define pin2         HW_PIN2
-  #define boto_pin     PIN_BOTO
+  #define control_type  HW_CONTROL_TYPE
+  #define pin1          HW_PIN1
+  #define pin2          HW_PIN2
+  #define pin3          HW_PIN3
+  #define boto_pin      PIN_BOTO
+  #define num_leds      NUM_LEDS
+  #define brightness_cw BRIGHTNESS_DEF
 #else
   int control_type;
   int pin1;
   int pin2;
+  int pin3;
   int boto_pin;
+  int num_leds      = NUM_LEDS;
+  int brightness_cw = BRIGHTNESS_DEF;
 #endif
 
 const char* ssid     = WIFI_SSID;
@@ -53,7 +59,7 @@ String macAP, macAPSuffix;          // MAC del AP (completa i últims 4 caràcte
 //  LED DIGITAL (NeoPixel)
 // ════════════════════════════════════════════════════════════════
 Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
-int brightness[4] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};  // índex = control_type
+int brightness[5] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};  // índex = control_type
 
 
 // ════════════════════════════════════════════════════════════════
@@ -72,6 +78,67 @@ int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
 
 // ════════════════════════════════════════════════════════════════
+//  CONTROL DE FASE — variables globals (mode 4)
+// ════════════════════════════════════════════════════════════════
+static SemaphoreHandle_t _zcdSemaphore    = NULL;
+static TaskHandle_t      _triacTaskHandle = NULL;
+static int               _zcdPin          = PIN_UNUSED;
+static volatile uint32_t _zcdMicros       = 0;
+
+void IRAM_ATTR zcdISR() {
+  _zcdMicros = (uint32_t)micros();
+  BaseType_t woken = pdFALSE;
+  xSemaphoreGiveFromISR(_zcdSemaphore, &woken);
+  if (woken) portYIELD_FROM_ISR();
+}
+
+void triacTask(void* pvParameters) {
+  (void)pvParameters;
+  while (1) {
+    if (xSemaphoreTake(_zcdSemaphore, pdMS_TO_TICKS(100)) != pdTRUE) continue;
+    if (!state || pin2 == PIN_UNUSED) continue;
+    int power = brightness[4];
+    if (power <= 0) continue;
+
+    // Retard de fase: potència alta → retard curt; potència baixa → retard llarg
+    uint32_t delay_us = (uint32_t)((100 - power) * (AC_HALF_CYCLE_US - TRIAC_MIN_DELAY_US) / 100
+                                    + TRIAC_MIN_DELAY_US);
+    uint32_t target = _zcdMicros + delay_us;
+
+    // Espera gruixuda (allibera CPU)
+    int32_t remaining = (int32_t)(target - (uint32_t)micros());
+    if (remaining > 3000) vTaskDelay(pdMS_TO_TICKS((remaining - 3000) / 1000));
+
+    // Espera fina (spin precís)
+    while ((int32_t)(target - (uint32_t)micros()) > 0);
+
+    if (state && pin2 != PIN_UNUSED) {
+      digitalWrite(pin2, HIGH);
+      delayMicroseconds(TRIAC_PULSE_US);
+      digitalWrite(pin2, LOW);
+    }
+  }
+}
+
+// Neteja interrupció ZCD i la tasca de triac
+void cleanupTriac() {
+  if (_zcdPin != PIN_UNUSED) {
+    detachInterrupt(digitalPinToInterrupt(_zcdPin));
+    _zcdPin = PIN_UNUSED;
+  }
+  if (_triacTaskHandle != NULL) {
+    vTaskDelete(_triacTaskHandle);
+    _triacTaskHandle = NULL;
+  }
+  if (_zcdSemaphore != NULL) {
+    vSemaphoreDelete(_zcdSemaphore);
+    _zcdSemaphore = NULL;
+  }
+  if (pin2 != PIN_UNUSED) digitalWrite(pin2, LOW);
+}
+
+
+// ════════════════════════════════════════════════════════════════
 //  GESTIÓ DE CONFIGURACIÓ (NVS / Preferences)
 //  Només disponible quan HARDCODED_CONFIG no està definit.
 // ════════════════════════════════════════════════════════════════
@@ -82,13 +149,17 @@ Preferences prefs;
 // Esborra tota la configuració guardada i reseteja els pins a PIN_UNUSED
 void clearConfig() {
   prefs.begin("blau", false);
-  prefs.putInt("ct", PIN_UNUSED);
-  prefs.putInt("p1", PIN_UNUSED);
-  prefs.putInt("p2", PIN_UNUSED);
-  prefs.putInt("bp", PIN_UNUSED);
-  prefs.putInt("b1", BRIGHTNESS_DEF);
-  prefs.putInt("b2", BRIGHTNESS_DEF);
-  prefs.putInt("b3", BRIGHTNESS_DEF);
+  prefs.putInt("ct",  PIN_UNUSED);
+  prefs.putInt("p1",  PIN_UNUSED);
+  prefs.putInt("p2",  PIN_UNUSED);
+  prefs.putInt("p3",  PIN_UNUSED);
+  prefs.putInt("bp",  PIN_UNUSED);
+  prefs.putInt("b1",  BRIGHTNESS_DEF);
+  prefs.putInt("b2",  BRIGHTNESS_DEF);
+  prefs.putInt("b3",  BRIGHTNESS_DEF);
+  prefs.putInt("b4",  BRIGHTNESS_DEF);
+  prefs.putInt("bcw", BRIGHTNESS_DEF);
+  prefs.putInt("nl",  NUM_LEDS);
   prefs.end();
   Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
 }
@@ -97,33 +168,41 @@ void clearConfig() {
 // Llegeix la configuració des de NVS
 void loadConfig() {
   prefs.begin("blau", true);
-  control_type  = prefs.getInt("ct", PIN_UNUSED);
-  pin1          = prefs.getInt("p1", PIN_UNUSED);
-  pin2          = prefs.getInt("p2", PIN_UNUSED);
-  boto_pin      = prefs.getInt("bp", PIN_UNUSED);
-  brightness[1] = prefs.getInt("b1", BRIGHTNESS_DEF);
-  brightness[2] = prefs.getInt("b2", BRIGHTNESS_DEF);
-  brightness[3] = prefs.getInt("b3", BRIGHTNESS_DEF);
+  control_type  = prefs.getInt("ct",  PIN_UNUSED);
+  pin1          = prefs.getInt("p1",  PIN_UNUSED);
+  pin2          = prefs.getInt("p2",  PIN_UNUSED);
+  pin3          = prefs.getInt("p3",  PIN_UNUSED);
+  boto_pin      = prefs.getInt("bp",  PIN_UNUSED);
+  brightness[1] = prefs.getInt("b1",  BRIGHTNESS_DEF);
+  brightness[2] = prefs.getInt("b2",  BRIGHTNESS_DEF);
+  brightness[3] = prefs.getInt("b3",  BRIGHTNESS_DEF);
+  brightness[4] = prefs.getInt("b4",  BRIGHTNESS_DEF);
+  brightness_cw = prefs.getInt("bcw", BRIGHTNESS_DEF);
+  num_leds      = prefs.getInt("nl",  NUM_LEDS);
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
-  Serial.printf("Config carregada: ct=%d p1=%d p2=%d bp=%d b1=%d b2=%d b3=%d\n",
-    control_type, pin1, pin2, boto_pin, brightness[1], brightness[2], brightness[3]);
+  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds);
 }
 
 // Desa la configuració actual a NVS
 void saveConfig() {
   prefs.begin("blau", false);
-  prefs.putInt("ct", control_type);
-  prefs.putInt("p1", pin1);
-  prefs.putInt("p2", pin2);
-  prefs.putInt("bp", boto_pin);
-  prefs.putInt("b1", brightness[1]);
-  prefs.putInt("b2", brightness[2]);
-  prefs.putInt("b3", brightness[3]);
+  prefs.putInt("ct",  control_type);
+  prefs.putInt("p1",  pin1);
+  prefs.putInt("p2",  pin2);
+  prefs.putInt("p3",  pin3);
+  prefs.putInt("bp",  boto_pin);
+  prefs.putInt("b1",  brightness[1]);
+  prefs.putInt("b2",  brightness[2]);
+  prefs.putInt("b3",  brightness[3]);
+  prefs.putInt("b4",  brightness[4]);
+  prefs.putInt("bcw", brightness_cw);
+  prefs.putInt("nl",  num_leds);
   prefs.end();
-  Serial.printf("Config guardada: ct=%d p1=%d p2=%d bp=%d b1=%d b2=%d b3=%d\n",
-    control_type, pin1, pin2, boto_pin, brightness[1], brightness[2], brightness[3]);
+  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds);
 }
 #endif
 
@@ -206,13 +285,13 @@ void webServerSetup() {
   // ── Endpoints d'estat (GET) ──────────────────────────────────
 
   // Retorna el mode de control actiu (0=On/Off, 1=NeoPixel, 2=PWM, 3=WW/CW)
-  server.on("/driverMode", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/driverMode", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", String(control_type));
     Serial.println(control_type);
   });
 
   // Retorna "hardcoded" o "web" segons el mode de configuració compilat
-  server.on("/configMode", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/configMode", HTTP_POST, [](AsyncWebServerRequest *request) {
     #ifdef HARDCODED_CONFIG
       request->send(200, "text/plain", "hardcoded");
     #else
@@ -221,34 +300,40 @@ void webServerSetup() {
   });
 
   // Retorna la MAC del AP
-  server.on("/mymac", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/mymac", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", WiFi.softAPmacAddress());
     Serial.println(macAP);
   });
 
   // Retorna els pins configurats en format JSON
-  server.on("/pins", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/pins", HTTP_POST, [](AsyncWebServerRequest *request) {
     String sPin1 = (pin1 == PIN_UNUSED) ? "null" : String(pin1);
     String sPin2 = (pin2 == PIN_UNUSED) ? "null" : String(pin2);
-    String json  = "{\"pin1\":" + sPin1 + ",\"pin2\":" + sPin2 + "}";
+    String sPin3 = (pin3 == PIN_UNUSED) ? "null" : String(pin3);
+    String json  = "{\"pin1\":" + sPin1 + ",\"pin2\":" + sPin2 + ",\"pin3\":" + sPin3 + "}";
     request->send(200, "application/json", json);
     Serial.println(json);
   });
 
   // Retorna la brillantor de cada mode en format JSON
-  server.on("/brightness", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + "}";
+  server.on("/brightness", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4]) + ",\"bcw\":" + String(brightness_cw) + "}";
     request->send(200, "application/json", json);
   });
 
+  // Retorna el nombre de LEDs configurats
+  server.on("/numLeds", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", String(num_leds));
+  });
+
   // Retorna el pin del botó en format JSON
-  server.on("/boto", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/boto", HTTP_POST, [](AsyncWebServerRequest *request) {
     String b = (boto_pin == PIN_UNUSED) ? "null" : String(boto_pin);
     request->send(200, "application/json", "{\"boto\":" + b + "}");
   });
 
   // Retorna "true" si encara no s'ha configurat el botó (first-run)
-  server.on("/initialSetup", HTTP_GET, [](AsyncWebServerRequest *request) {
+  server.on("/initialSetup", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", boto_pin == PIN_UNUSED ? "true" : "false");
   });
 
@@ -265,11 +350,14 @@ void webServerSetup() {
           if      (p->name() == "control_type") control_type  = p->value().toInt();
           else if (p->name() == "pin1")         pin1          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
           else if (p->name() == "pin2")         pin2          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "pin3")         pin3          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
           else if (p->name() == "boto_pin")     boto_pin      = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
           else if (p->name() == "brightness")   newBrightness = p->value().toInt();
+          else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
+          else if (p->name() == "num_leds")     { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
         }
       }
-      if (newBrightness >= 0 && control_type >= 1 && control_type <= 3)
+      if (newBrightness >= 0 && control_type >= 1 && control_type <= 4)
         brightness[control_type] = newBrightness;
       saveConfig();
       configuracioLlum();
@@ -291,19 +379,36 @@ void webServerSetup() {
     request->send(200, "text/plain", "OK");
   });
 
-  // Rep un valor de duty cycle (0–100) per previsualitzar la brillantor des de la web
+  // Rep un valor de brillantor WW (0–100) per previsualitzar des de la web
   server.on("/dutty", HTTP_POST, [](AsyncWebServerRequest *request) {
-    String dutyStr = "";
     if (request->hasParam("value", true)) {
-      dutyStr = request->getParam("value", true)->value();
+      webTesting = true;
+      int duty = request->getParam("value", true)->value().toInt();
+      if (control_type >= 1 && control_type <= 4) brightness[control_type] = duty;
+      switch (control_type) {
+        case 1: strip.setBrightness(map(duty, 0, 100, 0, 255)); strip.show(); break;
+        case 2: ledcWrite(pwmCh1, map(duty, 0, 100, 0, 255)); break;
+        case 3: ledcWrite(pwmCh1, map(duty, 0, 100, 0, 255)); break;
+        case 4: break;  // la tasca triac llegeix brightness[4] automàticament
+      }
     }
-    webTesting = true;
-    int duty = dutyStr.toInt();
-    Serial.print("Duty recibido: ");
-    Serial.println(duty);
-    if (control_type >= 1 && control_type <= 3) brightness[control_type] = duty;
-    strip.setBrightness(map(duty, 0, 100, 0, 255));
-    strip.show();
+    request->send(200, "text/plain", "OK");
+  });
+
+  // Rep un valor de brillantor CW (0–100) per al canal 2 (mode WW/CW)
+  server.on("/duttyCW", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("value", true)) {
+      webTesting = true;
+      int duty = request->getParam("value", true)->value().toInt();
+      brightness_cw = duty;
+      if (control_type == 3 && pin2 != PIN_UNUSED) {
+        ledcWrite(pwmCh2, map(duty, 0, 100, 0, 255));
+      } else if (control_type == 4 && pin3 != PIN_UNUSED) {
+        uint8_t ledBr = (uint8_t)map((long)duty * brightness[4] / 100, 0, 100, 0, 255);
+        strip.setBrightness(max((uint8_t)5, ledBr));
+        strip.show();
+      }
+    }
     request->send(200, "text/plain", "OK");
   });
 
@@ -360,6 +465,7 @@ void wifiApModeServer() {
 
 // Inicialitza els perifèrics (GPIO, LEDC, NeoPixel) segons el tipus de control
 void configuracioLlum() {
+  cleanupTriac();  // atura ZCD ISR i tasca de triac si estaven actius
   if (pin1 == PIN_UNUSED) return;
   switch (control_type) {
     case 0:  // On/Off — relé + led indicador
@@ -368,7 +474,7 @@ void configuracioLlum() {
       break;
 
     case 1:  // LED digital (NeoPixel / WS2812)
-      strip = Adafruit_NeoPixel(NUM_LEDS, pin1, NEO_GRB + NEO_KHZ800);
+      strip = Adafruit_NeoPixel(num_leds, pin1, NEO_GRB + NEO_KHZ800);
       strip.begin();
       strip.clear();
       strip.show();
@@ -385,6 +491,23 @@ void configuracioLlum() {
       ledcSetup(pwmCh2, PWM_FREQ, PWM_RESOLUTION);
       ledcAttachPin(pin1, pwmCh1);
       ledcAttachPin(pin2, pwmCh2);
+      break;
+
+    case 4:  // Triac control de fase (ZCD + MOC3021S) + WS2812 indicador
+      // pin1 = ZCD entrada (H11AA4), pin2 = sortida triac (MOC3021S), pin3 = WS2812
+      pinMode(pin2, OUTPUT);
+      digitalWrite(pin2, LOW);
+      if (pin3 != PIN_UNUSED) {
+        strip = Adafruit_NeoPixel(1, pin3, NEO_GRB + NEO_KHZ800);
+        strip.begin();
+        strip.clear();
+        strip.show();
+      }
+      _zcdSemaphore = xSemaphoreCreateBinary();
+      _zcdPin = pin1;
+      pinMode(pin1, INPUT);
+      attachInterrupt(digitalPinToInterrupt(pin1), zcdISR, RISING);
+      xTaskCreate(triacTask, "triac", 3072, NULL, 5, &_triacTaskHandle);
       break;
 
     default:
@@ -449,12 +572,12 @@ void controlLlum(String trigger) {
 
     case 3:  // LEDs WW/CW (2× PWM)
       if (trigger == "boto" || trigger == "espnow") {
-        ledcWrite(pwmCh1, state ? map(brightness[3], 0, 100, 0, 255) : 0);
-        ledcWrite(pwmCh2, state ? map(brightness[3], 0, 100, 0, 255) : 0);
+        ledcWrite(pwmCh1, state ? map(brightness[3],   0, 100, 0, 255) : 0);
+        ledcWrite(pwmCh2, state ? map(brightness_cw,   0, 100, 0, 255) : 0);
       }
       if (trigger == "inici") {
-        ledcWrite(pwmCh1, map(brightness[3], 0, 100, 0, 255));
-        ledcWrite(pwmCh2, map(brightness[3], 0, 100, 0, 255));
+        ledcWrite(pwmCh1, map(brightness[3],   0, 100, 0, 255));
+        ledcWrite(pwmCh2, map(brightness_cw,   0, 100, 0, 255));
         delay(INICI_BLINK_MS);
         ledcWrite(pwmCh1, 0);
         ledcWrite(pwmCh2, 0);
@@ -464,6 +587,36 @@ void controlLlum(String trigger) {
         uint8_t  bright = (osc < 255) ? osc : 510 - osc;
         ledcWrite(pwmCh1, bright);
         ledcWrite(pwmCh2, bright);
+      }
+      break;
+
+    case 4:  // Triac control de fase — WS2812 actua com mode 1, brillantor escalada per potència
+      if (pin3 == PIN_UNUSED) break;
+      if (trigger == "boto" || trigger == "espnow") {
+        if (!state) {
+          // brillantor = brightness_cw (LED) × potència triac / 100
+          uint8_t ledBr = (uint8_t)map((long)brightness_cw * brightness[4] / 100, 0, 100, 0, 255);
+          strip.setBrightness(max((uint8_t)5, ledBr));
+          strip.setPixelColor(0, trigger == "boto" ? COLOR_BOTO : COLOR_ESPNOW);
+        } else {
+          strip.clear();
+        }
+        strip.show();
+      }
+      if (trigger == "inici") {
+        strip.setBrightness(map(brightness_cw, 0, 100, 0, 255));
+        strip.setPixelColor(0, COLOR_INICI);
+        strip.show();
+        delay(INICI_BLINK_MS);
+        strip.clear();
+        strip.show();
+      }
+      if (trigger == "wifiAP") {
+        uint16_t osc   = (millis() / 2) % 510;
+        uint8_t  bright = (osc < 255) ? osc : 510 - osc;
+        strip.setBrightness(bright);
+        strip.setPixelColor(0, COLOR_WIFI_AP);
+        strip.show();
       }
       break;
 
