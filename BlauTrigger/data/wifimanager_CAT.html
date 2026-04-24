@@ -69,6 +69,18 @@
       }).catch(() => {});
     }
 
+    function fetchBrightnessConfig() {
+      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
+      if (!selected || selected === '0') return;
+      fetch('/brightness').then(r => r.json()).then(data => {
+        const map = {'1': data.b1, '2': data.b2, '3': data.b3};
+        const val = map[selected] ?? 100;
+        const slider = document.getElementById('brightnessConfigSlider');
+        slider.value = val;
+        document.getElementById('brightnessConfigValue').textContent = val + '%';
+      }).catch(() => {});
+    }
+
     function fetchDriveMode() {
       fetch('/driverMode').then(r => r.text()).then(mode => {
         const radio = document.querySelector(`input[name="control_type"][value="${mode.trim()}"]`);
@@ -114,6 +126,7 @@
       const testToggle = document.getElementById('testToggleSection');
       const testDigital = document.getElementById('testDigitalSection');
       const testDuty = document.getElementById('testDutySection');
+      const brightnessConfig = document.getElementById('brightnessConfigSection');
 
       if (!selected) {
         pinLabelTop.style.display = 'none';
@@ -121,6 +134,7 @@
         testToggle.style.display = 'none';
         testDigital.style.display = 'none';
         testDuty.style.display = 'none';
+        brightnessConfig.style.display = 'none';
         document.getElementById('testCard').style.display = 'none';
         return;
       }
@@ -145,6 +159,7 @@
           testToggle.style.display = 'flex';
           testDigital.style.display = 'none';
           testDuty.style.display = 'none';
+          brightnessConfig.style.display = 'none';
           break;
 
         case '1': // Led digital WS2812
@@ -156,6 +171,8 @@
           testToggle.style.display = 'flex';
           testDigital.style.display = 'flex';
           testDuty.style.display = 'none';
+          brightnessConfig.style.display = 'flex';
+          fetchBrightnessConfig();
           break;
 
         case '2': // Led Dimmer [PWM]
@@ -167,6 +184,8 @@
           testToggle.style.display = 'none';
           testDigital.style.display = 'none';
           testDuty.style.display = 'flex';
+          brightnessConfig.style.display = 'flex';
+          fetchBrightnessConfig();
           break;
 
         case '3': // Leds WW/CW [2×PWM]
@@ -184,6 +203,8 @@
           testToggle.style.display = 'none';
           testDigital.style.display = 'none';
           testDuty.style.display = 'flex';
+          brightnessConfig.style.display = 'flex';
+          fetchBrightnessConfig();
           break;
       }
       fetchPins();
@@ -195,7 +216,25 @@
       document.getElementById('testToggleSection').style.display = 'none';
       document.getElementById('testDigitalSection').style.display = 'none';
       document.getElementById('testDutySection').style.display = 'none';
+      document.getElementById('brightnessConfigSection').style.display = 'none';
     });
+
+    let isInitialSetup = false;
+
+    function fetchBoto() {
+      fetch('/boto').then(r => r.json()).then(data => {
+        if (data.boto !== null) document.getElementById('boto_pin_input').value = data.boto;
+      }).catch(() => {});
+    }
+
+    function fetchInitialSetup() {
+      fetch('/initialSetup').then(r => r.text()).then(t => {
+        isInitialSetup = t.trim() === 'true';
+        if (isInitialSetup) {
+          document.getElementById('initialSetupBanner').style.display = 'block';
+        }
+      }).catch(() => {});
+    }
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -208,12 +247,20 @@
       fetchMyMac();
       fetchConfigMode();
       fetchDriveMode();
+      fetchBoto();
+      fetchInitialSetup();
 
       document.querySelector('form').addEventListener('submit', function(e) {
         e.preventDefault();
         const data = new URLSearchParams(new FormData(this));
         fetch('/', { method: 'POST', body: data })
-          .then(() => showToast('Configuració guardada!'))
+          .then(() => {
+            if (isInitialSetup) {
+              showToast('Configuració guardada! Reiniciant...');
+            } else {
+              showToast('Configuració guardada!');
+            }
+          })
           .catch(() => showToast('Error en guardar'));
       });
     }
@@ -240,16 +287,31 @@
       </div>
     </div>
 
-    <!-- CONTROL Card -->
+  <form action="/" method="POST">
+
+    <!-- CONFIGURACIÓ Card (boto + tipus de control) -->
     <div class="card">
-      <form action="/" method="POST">
 
         <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;">
           Configuració hardcodejada al codi. Per canviar-la, modifica el firmware.
         </p>
 
+        <div id="initialSetupBanner" style="display:none; background: rgba(255,180,0,0.15); border: 1px solid rgba(255,160,0,0.4); padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em;">
+          El pin del botó no està configurat. Defineix-lo per continuar.
+        </div>
+
         <!-- Config fields (desactivats en mode hardcoded) -->
         <div id="configFields" class="disabled-section">
+
+          <div class="control-types-section">
+            <label class="section-label">Botó</label>
+            <div class="pins-container" style="margin-bottom: 20px;">
+              <div class="pin-group">
+                <label for="boto_pin_input" class="pin-label">Pin</label>
+                <input type="tel" id="boto_pin_input" name="boto_pin" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
+              </div>
+            </div>
+          </div>
 
           <div class="control-types-section">
             <label class="section-label">Tipus de control</label>
@@ -292,9 +354,19 @@
 
         </div>
 
+          <div id="brightnessConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label style="margin: 0;">Brillantor per defecte</label>
+              <span id="brightnessConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
+            </div>
+            <input type="range" id="brightnessConfigSlider" name="brightness" min="0" max="100" value="100" class="duty-slider"
+              oninput="document.getElementById('brightnessConfigValue').textContent = this.value + '%'">
+          </div>
+
         <input type="submit" id="submitBtn" value="Guardar" />
-      </form>
     </div>
+
+  </form>
 
     <!-- TEST Card -->
     <div class="card" id="testCard" style="display: none;">

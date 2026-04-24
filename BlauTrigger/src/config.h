@@ -88,8 +88,8 @@
 //  Colors de cada acció
 #define COLOR_BOTO      blau
 #define COLOR_ESPNOW    vermell
-#define COLOR_INICI     groc
-#define COLOR_WIFI_AP   verd
+#define COLOR_INICI     verd
+#define COLOR_WIFI_AP   lila
 
 
 // ════════════════════════════════════════════════════════════════
@@ -104,7 +104,7 @@
 // ════════════════════════════════════════════════════════════════
 #define SERIAL_BAUD            115200  // velocitat del port sèrie
 #define WIFI_AP_HOLD_MS          3000  // ms prement el botó per entrar al mode AP
-#define WIFI_AP_TIMEOUT_MS      60000  // ms màxims en mode AP abans de reiniciar
+#define WIFI_AP_TIMEOUT_MS     120000  // ms màxims en mode AP abans de reiniciar
 #define HTTP_PORT                  80  // port del servidor web
 #define DNS_PORT                   53  // port del servidor DNS
 #define DNS_POLL_MS               100  // interval de polling DNS al bucle AP
