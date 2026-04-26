@@ -21,6 +21,7 @@
   #define HW_PIN1         PIN_RELE
   #define HW_PIN2         PIN_LED
   #define HW_PIN3         PIN_UNUSED
+  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
 
 #elif defined(PICO_CLICK)
   #define PIN_BOTO        5
@@ -31,6 +32,7 @@
   #define HW_PIN1         PIN_DIGITAL_LED
   #define HW_PIN2         PIN_UNUSED
   #define HW_PIN3         PIN_UNUSED
+  #define BUTTON_PULLUP   0   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
 
 #else
   #error "Defineix una versió del dispositiu a config.h"

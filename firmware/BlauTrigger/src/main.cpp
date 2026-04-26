@@ -32,6 +32,7 @@
   #define boto_pin      PIN_BOTO
   #define num_leds      NUM_LEDS
   #define brightness_cw BRIGHTNESS_DEF
+  #define button_pullup BUTTON_PULLUP
 #else
   int control_type;
   int pin1;
@@ -41,6 +42,7 @@
   int num_leds      = NUM_LEDS;
   int brightness_cw = BRIGHTNESS_DEF;
   int pwm_freq      = PWM_FREQ;
+  int button_pullup = BUTTON_PULLUP;
 #endif
 
 const char* ssid     = WIFI_SSID;
@@ -155,6 +157,7 @@ void clearConfig() {
   prefs.putInt("p2",  PIN_UNUSED);
   prefs.putInt("p3",  PIN_UNUSED);
   prefs.putInt("bp",  PIN_UNUSED);
+  prefs.putInt("bpu", BUTTON_PULLUP);
   prefs.putInt("b1",  BRIGHTNESS_DEF);
   prefs.putInt("b2",  BRIGHTNESS_DEF);
   prefs.putInt("b3",  BRIGHTNESS_DEF);
@@ -175,6 +178,7 @@ void loadConfig() {
   pin2          = prefs.getInt("p2",  PIN_UNUSED);
   pin3          = prefs.getInt("p3",  PIN_UNUSED);
   boto_pin      = prefs.getInt("bp",  PIN_UNUSED);
+  button_pullup = prefs.getInt("bpu", BUTTON_PULLUP);
   brightness[1] = prefs.getInt("b1",  BRIGHTNESS_DEF);
   brightness[2] = prefs.getInt("b2",  BRIGHTNESS_DEF);
   brightness[3] = prefs.getInt("b3",  BRIGHTNESS_DEF);
@@ -185,8 +189,8 @@ void loadConfig() {
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
-  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
 }
 
 // Desa la configuració actual a NVS
@@ -197,6 +201,7 @@ void saveConfig() {
   prefs.putInt("p2",  pin2);
   prefs.putInt("p3",  pin3);
   prefs.putInt("bp",  boto_pin);
+  prefs.putInt("bpu", button_pullup);
   prefs.putInt("b1",  brightness[1]);
   prefs.putInt("b2",  brightness[2]);
   prefs.putInt("b3",  brightness[3]);
@@ -205,8 +210,8 @@ void saveConfig() {
   prefs.putInt("nl",  num_leds);
   prefs.putInt("pf",  pwm_freq);
   prefs.end();
-  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
+    control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
 }
 #endif
 
@@ -230,6 +235,12 @@ void initEspNow() {
     Serial.println("ESPNow Init Failed");
     ESP.restart();
   }
+}
+
+
+// Returns true when button is pressed, accounting for pull-up or pull-down config
+bool buttonPressed() {
+  return digitalRead(boto_pin) == (button_pullup ? LOW : HIGH);
 }
 
 
@@ -329,10 +340,10 @@ void webServerSetup() {
     request->send(200, "text/plain", String(num_leds));
   });
 
-  // Retorna el pin del botó en format JSON
+  // Retorna el pin del botó i el mode pull-up/pull-down en format JSON
   server.on("/boto", HTTP_POST, [](AsyncWebServerRequest *request) {
     String b = (boto_pin == PIN_UNUSED) ? "null" : String(boto_pin);
-    request->send(200, "application/json", "{\"boto\":" + b + "}");
+    request->send(200, "application/json", "{\"boto\":" + b + ",\"bpu\":" + String(button_pullup) + "}");
   });
 
   // Retorna "true" si encara no s'ha configurat el botó (first-run)
@@ -355,6 +366,7 @@ void webServerSetup() {
           else if (p->name() == "pin2")         pin2          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
           else if (p->name() == "pin3")         pin3          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
           else if (p->name() == "boto_pin")     boto_pin      = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
+          else if (p->name() == "button_pullup") button_pullup = p->value().toInt();
           else if (p->name() == "brightness")   newBrightness = p->value().toInt();
           else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
           else if (p->name() == "num_leds")     { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
@@ -717,7 +729,7 @@ void setup() {
 
   configDeviceAP();     // activa el WiFi en mode Access Point
 
-  pinMode(boto_pin, INPUT);
+  pinMode(boto_pin, button_pullup ? INPUT_PULLUP : INPUT_PULLDOWN);
 
   initEspNow();
   esp_now_register_send_cb(onDataSent);
@@ -732,13 +744,13 @@ void loop() {
   // Envia l'ACK pendent si n'hi ha un de preparat per ESP-NOW
   blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
 
-  if (digitalRead(boto_pin)) {
+  if (buttonPressed()) {
     startTime = millis();
     Serial.println("Boto presionat");
     controlLlum("boto");
 
     // Espera que el botó s'alliberi o que es superi el temps per entrar al mode AP
-    while (digitalRead(boto_pin)) {
+    while (buttonPressed()) {
       if (startTime + WIFI_AP_HOLD_MS < millis()) {
         // ── Mode AP de configuració (botó mantingut > WIFI_AP_HOLD_MS) ──
         configDeviceAP();
@@ -746,7 +758,7 @@ void loop() {
         controlLlum("wifiAP");
 
         bool buttonReleased = false;
-        static bool lastButtonState = HIGH;
+        static bool lastButtonPressed = false;
 
         while (1) {
           dnsServer.processNextRequest();
@@ -760,21 +772,21 @@ void loop() {
           }
 
           // Detecció de la seqüència: alliberar i tornar a prémer → reinicia el dispositiu
-          bool buttonState = digitalRead(boto_pin);
+          bool pressed = buttonPressed();
 
-          if (buttonState == LOW && lastButtonState == HIGH && !buttonReleased) {
+          if (!pressed && lastButtonPressed && !buttonReleased) {
             buttonReleased = true;
             Serial.println("Botó alliberat");
             delay(BUTTON_RELEASE_DEBOUNCE_MS);
           }
 
-          if (buttonState == HIGH && lastButtonState == LOW && buttonReleased) {
+          if (pressed && !lastButtonPressed && buttonReleased) {
             Serial.println("Botó premut després d'alliberar");
             buttonReleased = false;
             ESP.restart();
           }
 
-          lastButtonState = buttonState;
+          lastButtonPressed = pressed;
         }
       }
     }

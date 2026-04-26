@@ -17,6 +17,7 @@
         initialSetup: 'El pin del botó no està configurat. Defineix-lo per continuar.',
         labelBoto: 'Botó',
         labelPin: 'Pin',
+        labelButtonPullup: 'Mode',
         labelControlType: 'Tipus de control',
         radio0: 'Relé On/Off',
         radio1: 'Led digital WS2812',
@@ -57,6 +58,7 @@
         initialSetup: 'Button pin is not configured. Set it to continue.',
         labelBoto: 'Button',
         labelPin: 'Pin',
+        labelButtonPullup: 'Mode',
         labelControlType: 'Control type',
         radio0: 'Relay On/Off',
         radio1: 'Digital LED WS2812',
@@ -97,6 +99,7 @@
         initialSetup: 'El pin del botón no está configurado. Defínelo para continuar.',
         labelBoto: 'Botón',
         labelPin: 'Pin',
+        labelButtonPullup: 'Modo',
         labelControlType: 'Tipo de control',
         radio0: 'Relé On/Off',
         radio1: 'Led digital WS2812',
@@ -539,6 +542,10 @@
     function fetchBoto() {
       fetch('/boto', {method: 'POST'}).then(r => r.json()).then(data => {
         if (data.boto !== null) document.getElementById('boto_pin_input').value = data.boto;
+        const bpu = data.bpu !== undefined ? data.bpu : 1;
+        document.getElementById('buttonPullupToggle').checked = bpu == 1;
+        document.getElementById('buttonPullupVal').value = bpu;
+        document.getElementById('buttonPullupLabel').textContent = bpu == 1 ? 'Pull-up' : 'Pull-down';
       }).catch(() => {});
     }
 
@@ -632,6 +639,21 @@
               <div class="pin-group">
                 <label for="boto_pin_input" class="pin-label" data-i18n="labelPin">Pin</label>
                 <input type="tel" id="boto_pin_input" name="boto_pin" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
+              </div>
+              <div class="pin-group" style="align-items: center;">
+                <label class="pin-label" data-i18n="labelButtonPullup">Mode</label>
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
+                  <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                    <span style="font-size: 0.8em; color: #888;">↓</span>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="buttonPullupToggle" checked onchange="document.getElementById('buttonPullupVal').value = this.checked ? 1 : 0; document.getElementById('buttonPullupLabel').textContent = this.checked ? 'Pull-up' : 'Pull-down';">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 0.8em; color: #888;">↑</span>
+                  </div>
+                  <span id="buttonPullupLabel" style="font-size: 0.78em; color: var(--primary-color); font-weight: 600;">Pull-up</span>
+                </div>
+                <input type="hidden" id="buttonPullupVal" name="button_pullup" value="1">
               </div>
             </div>
           </div>
