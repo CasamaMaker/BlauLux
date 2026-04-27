@@ -81,7 +81,9 @@ static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
 int pwmCh1 = 0;                            // canal LEDC per pin1
 int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
-uint8_t mqttR = 255, mqttG = 255, mqttB = 255;  // color actual per a MQTT mode 1
+uint8_t mqttR = (COLOR_MQTT >> 16) & 0xFF;  // color per defecte MQTT mode 1
+uint8_t mqttG = (COLOR_MQTT >> 8)  & 0xFF;
+uint8_t mqttB = (COLOR_MQTT)       & 0xFF;
 
 
 // ════════════════════════════════════════════════════════════════
@@ -156,6 +158,9 @@ String         mqtt_host;
 uint16_t       mqtt_port            = 1883;
 String         mqtt_user;
 String         mqtt_pass;
+String         mqtt_client;          // plantilla client ID  (ex: "BlauTrigger_%id%")
+String         mqtt_topic;           // plantilla topic curt (ex: "%id%")
+String         mqtt_fulltopic;       // plantilla full topic (ex: "blautrigger/%topic%")
 String         mqttClientId;         // persistent: AsyncMqttClient guarda const char*, no copia
 String         mqttWillTopic;        // persistent: idem
 AsyncMqttClient   mqttClient;
@@ -188,10 +193,13 @@ void clearConfig() {
   prefs.putInt("pf",  PWM_FREQ);
   prefs.putString("sta_ssid", "");
   prefs.putString("sta_pass", "");
-  prefs.putString("mqtt_host", "");
-  prefs.putInt("mqtt_port", 1883);
-  prefs.putString("mqtt_user", "");
-  prefs.putString("mqtt_pass", "");
+  prefs.putString("mqtt_host",      "");
+  prefs.putInt("mqtt_port",         1883);
+  prefs.putString("mqtt_user",      "");
+  prefs.putString("mqtt_pass",      "");
+  prefs.putString("mqtt_client",    HC_MQTT_CLIENT);
+  prefs.putString("mqtt_topic",     HC_MQTT_TOPIC);
+  prefs.putString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
   prefs.end();
   Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
 }
@@ -215,17 +223,22 @@ void loadConfig() {
   pwm_freq      = prefs.getInt("pf",  PWM_FREQ);
   sta_ssid      = prefs.getString("sta_ssid", "");
   sta_pass      = prefs.getString("sta_pass", "");
-  mqtt_host     = prefs.getString("mqtt_host", "");
-  mqtt_port     = (uint16_t)prefs.getInt("mqtt_port", 1883);
-  mqtt_user     = prefs.getString("mqtt_user", "");
-  mqtt_pass     = prefs.getString("mqtt_pass", "");
+  mqtt_host      = prefs.getString("mqtt_host",      "");
+  mqtt_port      = (uint16_t)prefs.getInt("mqtt_port", 1883);
+  mqtt_user      = prefs.getString("mqtt_user",      "");
+  mqtt_pass      = prefs.getString("mqtt_pass",      "");
+  mqtt_client    = prefs.getString("mqtt_client",    HC_MQTT_CLIENT);
+  mqtt_topic     = prefs.getString("mqtt_topic",     HC_MQTT_TOPIC);
+  mqtt_fulltopic = prefs.getString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
   Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
     control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
   Serial.printf("WiFi STA: ssid='%s' pass=%s\n", sta_ssid.c_str(), sta_pass.length() > 0 ? "***" : "(buit)");
-  Serial.printf("MQTT: host='%s' port=%d user='%s'\n", mqtt_host.c_str(), mqtt_port, mqtt_user.c_str());
+  Serial.printf("MQTT: host='%s' port=%d user='%s' client='%s' topic='%s' fulltopic='%s'\n",
+    mqtt_host.c_str(), mqtt_port, mqtt_user.c_str(),
+    mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
 }
 
 // Desa la configuració actual a NVS
@@ -304,8 +317,27 @@ void controlLlum(String trigger);
 //  MQTT
 // ════════════════════════════════════════════════════════════════
 
+// Resol la plantilla substituint %id% → últims 4 caràcters de la MAC
+String mqttResolvedTopic() {
+  String t = mqtt_topic;
+  t.replace("%id%", macAPSuffix);
+  return t;
+}
+
+// Resol el full topic substituint %id% i %topic%
 String mqttBaseTopic() {
-  return "blautrigger/" + macAPSuffix;
+  String ft = mqtt_fulltopic;
+  ft.replace("%id%",    macAPSuffix);
+  ft.replace("%topic%", mqttResolvedTopic());
+  return ft;
+}
+
+// Resol el client ID substituint %id% i %topic%
+String mqttResolvedClientId() {
+  String c = mqtt_client;
+  c.replace("%id%",    macAPSuffix);
+  c.replace("%topic%", mqttResolvedTopic());
+  return c;
 }
 
 void publishState() {
@@ -651,6 +683,9 @@ void webServerSetup() {
                   ",\"port\":" + String(mqtt_port) +
                   ",\"user\":\"" + mqtt_user + "\"" +
                   ",\"pass\":\"" + mqtt_pass + "\"" +
+                  ",\"client\":\"" + mqtt_client + "\"" +
+                  ",\"mqtt_topic\":\"" + mqtt_topic + "\"" +
+                  ",\"fulltopic\":\"" + mqtt_fulltopic + "\"" +
                   ",\"topic\":\"" + (mqConnected ? mqttBaseTopic() : "") + "\"}";
     request->send(200, "application/json", json);
   });
@@ -659,19 +694,29 @@ void webServerSetup() {
   server.on("/mqtt", HTTP_POST, [](AsyncWebServerRequest *request) {
     #ifndef HARDCODED_CONFIG
       if (request->hasParam("mqtt_host", true)) {
-        mqtt_host = request->getParam("mqtt_host", true)->value();
-        mqtt_port = request->hasParam("mqtt_port", true) ?
-                    (uint16_t)request->getParam("mqtt_port", true)->value().toInt() : 1883;
-        mqtt_user = request->hasParam("mqtt_user", true) ? request->getParam("mqtt_user", true)->value() : "";
-        mqtt_pass = request->hasParam("mqtt_pass", true) ? request->getParam("mqtt_pass", true)->value() : "";
+        mqtt_host      = request->getParam("mqtt_host", true)->value();
+        mqtt_port      = request->hasParam("mqtt_port", true) ?
+                         (uint16_t)request->getParam("mqtt_port", true)->value().toInt() : 1883;
+        mqtt_user      = request->hasParam("mqtt_user", true)      ? request->getParam("mqtt_user",      true)->value() : "";
+        mqtt_pass      = request->hasParam("mqtt_pass", true)      ? request->getParam("mqtt_pass",      true)->value() : "";
+        mqtt_client    = request->hasParam("mqtt_client", true)    ? request->getParam("mqtt_client",    true)->value() : HC_MQTT_CLIENT;
+        mqtt_topic     = request->hasParam("mqtt_topic", true)     ? request->getParam("mqtt_topic",     true)->value() : HC_MQTT_TOPIC;
+        mqtt_fulltopic = request->hasParam("mqtt_fulltopic", true) ? request->getParam("mqtt_fulltopic", true)->value() : HC_MQTT_FULLTOPIC;
+        if (mqtt_client.length()    == 0) mqtt_client    = HC_MQTT_CLIENT;
+        if (mqtt_topic.length()     == 0) mqtt_topic     = HC_MQTT_TOPIC;
+        if (mqtt_fulltopic.length() == 0) mqtt_fulltopic = HC_MQTT_FULLTOPIC;
         prefs.begin("blau", false);
-        prefs.putString("mqtt_host", mqtt_host);
-        prefs.putInt("mqtt_port", (int)mqtt_port);
-        prefs.putString("mqtt_user", mqtt_user);
-        prefs.putString("mqtt_pass", mqtt_pass);
+        prefs.putString("mqtt_host",      mqtt_host);
+        prefs.putInt("mqtt_port",         (int)mqtt_port);
+        prefs.putString("mqtt_user",      mqtt_user);
+        prefs.putString("mqtt_pass",      mqtt_pass);
+        prefs.putString("mqtt_client",    mqtt_client);
+        prefs.putString("mqtt_topic",     mqtt_topic);
+        prefs.putString("mqtt_fulltopic", mqtt_fulltopic);
         prefs.end();
-        Serial.println("MQTT config saved: " + mqtt_host + ":" + String(mqtt_port));
-        mqttClientId  = "BlauTrigger_" + macAPSuffix;
+        Serial.printf("MQTT config saved: %s:%d client='%s' topic='%s' fulltopic='%s'\n",
+          mqtt_host.c_str(), mqtt_port, mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
+        mqttClientId  = mqttResolvedClientId();
         mqttWillTopic = mqttBaseTopic() + "/available";
         mqttClient.setClientId(mqttClientId.c_str());
         mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
@@ -996,12 +1041,15 @@ void setup() {
   esp_now_register_recv_cb(onDataRecv);
 
   #ifdef HARDCODED_CONFIG
-    sta_ssid  = HC_STA_SSID;
-    sta_pass  = HC_STA_PASS;
-    mqtt_host = HC_MQTT_HOST;
-    mqtt_port = HC_MQTT_PORT;
-    mqtt_user = HC_MQTT_USER;
-    mqtt_pass = HC_MQTT_PASS;
+    sta_ssid       = HC_STA_SSID;
+    sta_pass       = HC_STA_PASS;
+    mqtt_host      = HC_MQTT_HOST;
+    mqtt_port      = HC_MQTT_PORT;
+    mqtt_user      = HC_MQTT_USER;
+    mqtt_pass      = HC_MQTT_PASS;
+    mqtt_client    = HC_MQTT_CLIENT;
+    mqtt_topic     = HC_MQTT_TOPIC;
+    mqtt_fulltopic = HC_MQTT_FULLTOPIC;
   #endif
 
 #ifdef ENABLE_WIFI_STA
@@ -1018,7 +1066,7 @@ void setup() {
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onMessage(onMqttMessage);
   if (mqtt_host.length() > 0) {
-    mqttClientId  = "BlauTrigger_" + macAPSuffix;
+    mqttClientId  = mqttResolvedClientId();
     mqttWillTopic = mqttBaseTopic() + "/available";
     mqttClient.setClientId(mqttClientId.c_str());
     mqttClient.setServer(mqtt_host.c_str(), mqtt_port);

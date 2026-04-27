@@ -70,6 +70,10 @@
         mqttTopic: 'Topic base',
         mqttConnected: 'Connectat',
         mqttDisconnected: 'Desconnectat',
+        mqttClient: 'Client ID',
+        mqttTopicField: 'Topic del dispositiu',
+        mqttFulltopic: 'Full topic',
+        mqttPlaceholderHint: '%id% = últims 4 caràcters de la MAC  ·  %topic% = topic resolt',
       },
       en: {
         pageTitle: 'BlauTrigger Configurator',
@@ -133,6 +137,10 @@
         mqttTopic: 'Base topic',
         mqttConnected: 'Connected',
         mqttDisconnected: 'Disconnected',
+        mqttClient: 'Client ID',
+        mqttTopicField: 'Device topic',
+        mqttFulltopic: 'Full topic',
+        mqttPlaceholderHint: '%id% = last 4 chars of MAC  ·  %topic% = resolved topic',
       },
       es: {
         pageTitle: 'Configurador BlauTrigger',
@@ -196,6 +204,10 @@
         mqttTopic: 'Topic base',
         mqttConnected: 'Conectado',
         mqttDisconnected: 'Desconectado',
+        mqttClient: 'Client ID',
+        mqttTopicField: 'Topic del dispositivo',
+        mqttFulltopic: 'Full topic',
+        mqttPlaceholderHint: '%id% = últimos 4 caracteres de la MAC  ·  %topic% = topic resuelto',
       },
     };
 
@@ -686,26 +698,35 @@
         }
         if (data.broker !== undefined && !mqttConfigLoaded) {
           mqttConfigLoaded = true;
-          document.getElementById('mqttHostInput').value = data.broker;
-          document.getElementById('mqttPortInput').value = data.port || 1883;
-          document.getElementById('mqttUserInput').value = data.user || '';
-          document.getElementById('mqttPassInput').value = data.pass || '';
+          document.getElementById('mqttHostInput').value      = data.broker;
+          document.getElementById('mqttPortInput').value      = data.port || 1883;
+          document.getElementById('mqttClientInput').value    = data.client    || '';
+          document.getElementById('mqttTopicInput').value     = data.mqtt_topic || '';
+          document.getElementById('mqttFulltopicInput').value = data.fulltopic || '';
+          document.getElementById('mqttUserInput').value      = data.user || '';
+          document.getElementById('mqttPassInput').value      = data.pass || '';
         }
       }).catch(() => {});
     }
 
     function saveMqttConfig() {
-      const host = document.getElementById('mqttHostInput').value.trim();
-      const port = document.getElementById('mqttPortInput').value.trim() || '1883';
-      const user = document.getElementById('mqttUserInput').value.trim();
-      const pass = document.getElementById('mqttPassInput').value;
+      const host      = document.getElementById('mqttHostInput').value.trim();
+      const port      = document.getElementById('mqttPortInput').value.trim() || '1883';
+      const client    = document.getElementById('mqttClientInput').value.trim();
+      const topic     = document.getElementById('mqttTopicInput').value.trim();
+      const fulltopic = document.getElementById('mqttFulltopicInput').value.trim();
+      const user      = document.getElementById('mqttUserInput').value.trim();
+      const pass      = document.getElementById('mqttPassInput').value;
       fetch('/mqtt', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'mqtt_host=' + encodeURIComponent(host) +
-              '&mqtt_port=' + encodeURIComponent(port) +
-              '&mqtt_user=' + encodeURIComponent(user) +
-              '&mqtt_pass=' + encodeURIComponent(pass)
+        body: 'mqtt_host='      + encodeURIComponent(host) +
+              '&mqtt_port='     + encodeURIComponent(port) +
+              '&mqtt_client='   + encodeURIComponent(client) +
+              '&mqtt_topic='    + encodeURIComponent(topic) +
+              '&mqtt_fulltopic='+ encodeURIComponent(fulltopic) +
+              '&mqtt_user='     + encodeURIComponent(user) +
+              '&mqtt_pass='     + encodeURIComponent(pass)
       }).then(() => {
         showToast(t('mqttSaved'));
         mqttConfigLoaded = false;
@@ -833,6 +854,19 @@
       <div>
         <label for="mqttPortInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttPort">Port</label>
         <input type="number" id="mqttPortInput" placeholder="1883" min="1" max="65535" value="1883" style="margin-bottom: 0; width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: var(--border-radius); font-size: 16px;">
+      </div>
+      <div>
+        <label for="mqttClientInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttClient">Client ID</label>
+        <input type="text" id="mqttClientInput" placeholder="BlauTrigger_%id%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+      </div>
+      <div>
+        <label for="mqttTopicInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttTopicField">Topic del dispositiu</label>
+        <input type="text" id="mqttTopicInput" placeholder="%id%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+      </div>
+      <div>
+        <label for="mqttFulltopicInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttFulltopic">Full topic</label>
+        <input type="text" id="mqttFulltopicInput" placeholder="blautrigger/%topic%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+        <span style="font-size: 0.78em; color: #888; margin-top: 3px; display: block;" data-i18n="mqttPlaceholderHint">%id% = últims 4 caràcters de la MAC  ·  %topic% = topic resolt</span>
       </div>
       <div>
         <label for="mqttUserInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttUser">Usuari (opcional)</label>

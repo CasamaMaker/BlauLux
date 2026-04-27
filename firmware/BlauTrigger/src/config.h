@@ -83,11 +83,15 @@
 // ════════════════════════════════════════════════════════════════
 //  MQTT  (broker — actiu quan HARDCODED_CONFIG)
 //  En mode web, la configuració es guarda via el portal (NVS).
+//  Wildcards: %id% → últims 4 caràcters de la MAC  |  %topic% → valor resolt de HC_MQTT_TOPIC
 // ════════════════════════════════════════════════════════════════
-#define HC_MQTT_HOST  ""     // adreça del broker (ex: "192.168.1.100")
-#define HC_MQTT_PORT  1883   // port MQTT
-#define HC_MQTT_USER  ""     // usuari (buit = sense autenticació)
-#define HC_MQTT_PASS  ""     // contrasenya
+#define HC_MQTT_HOST      ""                     // adreça del broker (ex: "192.168.1.100")
+#define HC_MQTT_PORT      1883                   // port MQTT
+#define HC_MQTT_USER      ""                     // usuari (buit = sense autenticació)
+#define HC_MQTT_PASS      ""                     // contrasenya
+#define HC_MQTT_CLIENT    "BlauTrigger_%id%"     // client ID  (ex: BlauTrigger_A1B2)
+#define HC_MQTT_TOPIC     "%id%"                 // topic curt del dispositiu  (ex: A1B2)
+#define HC_MQTT_FULLTOPIC "blautrigger/%topic%"  // prefix complet dels topics (ex: blautrigger/A1B2)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -114,6 +118,7 @@
 #define COLOR_ESPNOW    vermell
 #define COLOR_INICI     verd
 #define COLOR_WIFI_AP   lila
+#define COLOR_MQTT      groc
 
 
 // ════════════════════════════════════════════════════════════════
