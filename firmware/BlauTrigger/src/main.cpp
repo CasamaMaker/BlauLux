@@ -11,12 +11,14 @@
 #include "DNSServer.h"
 
 #include <esp_sleep.h>
+#include <esp_wifi.h>
 #include <Preferences.h>
 #include <esp_now.h>
 #include <Adafruit_NeoPixel.h>
 #include <blauprotocol.h>
 #include <blauprotocol_trg.h>
 #include "config.h"
+#include <AsyncMqttClient.h>
 
 
 // ════════════════════════════════════════════════════════════════
@@ -78,6 +80,8 @@ static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
 
 int pwmCh1 = 0;                            // canal LEDC per pin1
 int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
+
+uint8_t mqttR = 255, mqttG = 255, mqttB = 255;  // color actual per a MQTT mode 1
 
 
 // ════════════════════════════════════════════════════════════════
@@ -142,6 +146,23 @@ void cleanupTriac() {
 
 
 // ════════════════════════════════════════════════════════════════
+//  WIFI STA + MQTT — variables globals (sempre presents)
+//  En mode web: loadConfig() les omple des de NVS.
+//  En mode HARDCODED: setup() les omple des de config.h (HC_*).
+// ════════════════════════════════════════════════════════════════
+String sta_ssid;        // SSID de la xarxa domèstica (WiFi STA)
+String sta_pass;        // contrasenya de la xarxa domèstica
+String         mqtt_host;
+uint16_t       mqtt_port            = 1883;
+String         mqtt_user;
+String         mqtt_pass;
+String         mqttClientId;         // persistent: AsyncMqttClient guarda const char*, no copia
+String         mqttWillTopic;        // persistent: idem
+AsyncMqttClient   mqttClient;
+TimerHandle_t  mqttReconnectTimer   = nullptr;
+
+
+// ════════════════════════════════════════════════════════════════
 //  GESTIÓ DE CONFIGURACIÓ (NVS / Preferences)
 //  Només disponible quan HARDCODED_CONFIG no està definit.
 // ════════════════════════════════════════════════════════════════
@@ -165,6 +186,12 @@ void clearConfig() {
   prefs.putInt("bcw", BRIGHTNESS_DEF);
   prefs.putInt("nl",  NUM_LEDS);
   prefs.putInt("pf",  PWM_FREQ);
+  prefs.putString("sta_ssid", "");
+  prefs.putString("sta_pass", "");
+  prefs.putString("mqtt_host", "");
+  prefs.putInt("mqtt_port", 1883);
+  prefs.putString("mqtt_user", "");
+  prefs.putString("mqtt_pass", "");
   prefs.end();
   Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
 }
@@ -186,11 +213,19 @@ void loadConfig() {
   brightness_cw = prefs.getInt("bcw", BRIGHTNESS_DEF);
   num_leds      = prefs.getInt("nl",  NUM_LEDS);
   pwm_freq      = prefs.getInt("pf",  PWM_FREQ);
+  sta_ssid      = prefs.getString("sta_ssid", "");
+  sta_pass      = prefs.getString("sta_pass", "");
+  mqtt_host     = prefs.getString("mqtt_host", "");
+  mqtt_port     = (uint16_t)prefs.getInt("mqtt_port", 1883);
+  mqtt_user     = prefs.getString("mqtt_user", "");
+  mqtt_pass     = prefs.getString("mqtt_pass", "");
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
   Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
     control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  Serial.printf("WiFi STA: ssid='%s' pass=%s\n", sta_ssid.c_str(), sta_pass.length() > 0 ? "***" : "(buit)");
+  Serial.printf("MQTT: host='%s' port=%d user='%s'\n", mqtt_host.c_str(), mqtt_port, mqtt_user.c_str());
 }
 
 // Desa la configuració actual a NVS
@@ -227,7 +262,6 @@ void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 // Inicialitza ESP-NOW; reinicia el dispositiu si falla
 void initEspNow() {
-  WiFi.disconnect();
   if (esp_now_init() == ESP_OK) {
     Serial.println("ESPNow Init Success");
   }
@@ -263,6 +297,156 @@ void serveixWifiManager(AsyncWebServerRequest *request) {
 
 // Declaració anticipada necessària per al POST de configuració
 void configuracioLlum();
+void controlLlum(String trigger);
+
+
+// ════════════════════════════════════════════════════════════════
+//  MQTT
+// ════════════════════════════════════════════════════════════════
+
+String mqttBaseTopic() {
+  return "blautrigger/" + macAPSuffix;
+}
+
+void publishState() {
+  if (!mqttClient.connected()) return;
+  String base = mqttBaseTopic();
+  Serial.printf("[MQTT] publish %s/state = %s\n", base.c_str(), state ? "ON" : "OFF");
+  mqttClient.publish((base + "/state").c_str(), 1, true, state ? "ON" : "OFF");
+  if (control_type >= 1 && control_type <= 4) {
+    Serial.printf("[MQTT] publish %s/brightness = %d\n", base.c_str(), brightness[control_type]);
+    mqttClient.publish((base + "/brightness").c_str(), 1, true, String(brightness[control_type]).c_str());
+  }
+  if (control_type == 1) {
+    String rgb = String(mqttR) + "," + String(mqttG) + "," + String(mqttB);
+    Serial.printf("[MQTT] publish %s/rgb = %s\n", base.c_str(), rgb.c_str());
+    mqttClient.publish((base + "/rgb").c_str(), 1, true, rgb.c_str());
+  }
+}
+
+void publishHADiscovery() {
+  if (!mqttClient.connected()) return;
+  String id   = macAPSuffix;
+  String base = mqttBaseTopic();
+  String name = "BlauTrigger " + id;
+  String uid  = "blautrigger_" + id;
+  String dev  = "\"device\":{\"identifiers\":[\"" + uid + "\"],"
+                "\"name\":\"" + name + "\","
+                "\"model\":\"BlauTrigger v1\","
+                "\"manufacturer\":\"Blau\"}";
+
+  String topic, payload;
+  if (control_type == 0) {
+    topic   = "homeassistant/switch/" + uid + "/config";
+    payload = "{\"name\":\"" + name + "\","
+              "\"unique_id\":\"" + uid + "\","
+              "\"state_topic\":\"" + base + "/state\","
+              "\"command_topic\":\"" + base + "/set\","
+              "\"payload_on\":\"ON\","
+              "\"payload_off\":\"OFF\","
+              "\"availability_topic\":\"" + base + "/available\","
+              + dev + "}";
+  } else {
+    topic   = "homeassistant/light/" + uid + "/config";
+    payload = "{\"name\":\"" + name + "\","
+              "\"unique_id\":\"" + uid + "\","
+              "\"state_topic\":\"" + base + "/state\","
+              "\"command_topic\":\"" + base + "/set\","
+              "\"brightness_state_topic\":\"" + base + "/brightness\","
+              "\"brightness_command_topic\":\"" + base + "/brightness/set\","
+              "\"brightness_scale\":100,";
+    if (control_type == 1)
+      payload += "\"rgb_state_topic\":\"" + base + "/rgb\","
+                 "\"rgb_command_topic\":\"" + base + "/rgb/set\",";
+    payload += "\"availability_topic\":\"" + base + "/available\","
+               + dev + "}";
+  }
+  Serial.printf("[MQTT] HA discovery → %s\n", topic.c_str());
+  mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
+}
+
+void connectMqtt() {
+  if (mqtt_host.length() == 0 || !WiFi.isConnected()) {
+    Serial.printf("[MQTT] connect skipped (host='%s' wifi=%d)\n",
+      mqtt_host.c_str(), (int)WiFi.isConnected());
+    return;
+  }
+  Serial.printf("[MQTT] connecting to %s:%d  (IP: %s)\n",
+    mqtt_host.c_str(), mqtt_port, WiFi.localIP().toString().c_str());
+  mqttClient.connect();
+}
+
+void onMqttConnect(bool sessionPresent) {
+  Serial.printf("[MQTT] connected! session=%s  base=%s\n",
+    sessionPresent ? "yes" : "no", mqttBaseTopic().c_str());
+  String base = mqttBaseTopic();
+  mqttClient.subscribe((base + "/set").c_str(), 1);
+  Serial.println("[MQTT] subscribed: " + base + "/set");
+  mqttClient.subscribe((base + "/brightness/set").c_str(), 1);
+  Serial.println("[MQTT] subscribed: " + base + "/brightness/set");
+  if (control_type == 1) {
+    mqttClient.subscribe((base + "/rgb/set").c_str(), 1);
+    Serial.println("[MQTT] subscribed: " + base + "/rgb/set");
+  }
+  mqttClient.publish((base + "/available").c_str(), 1, true, "online");
+  Serial.println("[MQTT] published:  " + base + "/available = online");
+  publishHADiscovery();
+  publishState();
+}
+
+void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
+  Serial.printf("[MQTT] disconnected (reason: %d)\n", (int)reason);
+  if (WiFi.isConnected() && mqttReconnectTimer != nullptr)
+    xTimerStart(mqttReconnectTimer, 0);
+}
+
+
+void onMqttMessage(char* topic, char* payload,
+                   AsyncMqttClientMessageProperties properties,
+                   size_t len, size_t index, size_t total) {
+  String topicStr(topic);
+  String payloadStr;
+  for (size_t i = 0; i < len; i++) payloadStr += (char)payload[i];
+  Serial.printf("[MQTT] recv [%s] = [%s]\n", topicStr.c_str(), payloadStr.c_str());
+
+  String base = mqttBaseTopic();
+
+  if (topicStr == base + "/set") {
+    if (payloadStr == "ON"  && !state) controlLlum("mqtt");
+    if (payloadStr == "OFF" &&  state) controlLlum("mqtt");
+    publishState();
+
+  } else if (topicStr == base + "/brightness/set") {
+    int br = constrain(payloadStr.toInt(), 0, 100);
+    if (control_type >= 1 && control_type <= 4) {
+      brightness[control_type] = br;
+      if (state) {
+        switch (control_type) {
+          case 1: strip.setBrightness(map(br, 0, 100, 0, 255)); strip.show(); break;
+          case 2: ledcWrite(pwmCh1, map(br, 0, 100, 0, 255)); break;
+          case 3: ledcWrite(pwmCh1, map(br, 0, 100, 0, 255)); break;
+          case 4: break;
+        }
+      }
+    }
+    publishState();
+
+  } else if (topicStr == base + "/rgb/set") {
+    int c1 = payloadStr.indexOf(',');
+    int c2 = payloadStr.indexOf(',', c1 + 1);
+    if (c1 > 0 && c2 > c1) {
+      mqttR = (uint8_t)payloadStr.substring(0, c1).toInt();
+      mqttG = (uint8_t)payloadStr.substring(c1 + 1, c2).toInt();
+      mqttB = (uint8_t)payloadStr.substring(c2 + 1).toInt();
+      if (control_type == 1 && state) {
+        strip.setPixelColor(0, strip.Color(mqttR, mqttG, mqttB));
+        strip.show();
+      }
+      publishState();
+    }
+  }
+}
+
 
 void webServerSetup() {
   // Pàgina principal (ordinador)
@@ -428,6 +612,79 @@ void webServerSetup() {
     request->send(200, "text/plain", "OK");
   });
 
+  // Retorna l'estat de la connexió WiFi STA en format JSON
+  server.on("/wifiStatus", HTTP_POST, [](AsyncWebServerRequest *request) {
+    bool connected = WiFi.status() == WL_CONNECTED;
+    String ip   = connected ? WiFi.localIP().toString() : "";
+    int    rssi = connected ? WiFi.RSSI() : 0;
+    String json = "{\"connected\":" + String(connected ? "true" : "false") +
+                  ",\"ip\":\"" + ip + "\"" +
+                  ",\"ssid\":\"" + sta_ssid + "\"" +
+                  ",\"pass\":\"" + sta_pass + "\"" +
+                  ",\"rssi\":" + String(rssi) + "}";
+    request->send(200, "application/json", json);
+  });
+
+  // Desa les credencials WiFi STA a NVS i reconnecta
+  server.on("/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      if (request->hasParam("sta_ssid", true)) {
+        sta_ssid = request->getParam("sta_ssid", true)->value();
+        sta_pass = request->hasParam("sta_pass", true) ? request->getParam("sta_pass", true)->value() : "";
+        prefs.begin("blau", false);
+        prefs.putString("sta_ssid", sta_ssid);
+        prefs.putString("sta_pass", sta_pass);
+        prefs.end();
+        Serial.println("WiFi STA credentials saved: " + sta_ssid);
+        WiFi.disconnect();
+        if (sta_ssid.length() > 0) WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
+      }
+    #endif
+    request->send(200, "text/plain", "OK");
+  });
+
+  // Retorna l'estat de la connexió MQTT en format JSON
+  server.on("/mqttStatus", HTTP_POST, [](AsyncWebServerRequest *request) {
+    bool mqConnected = mqttClient.connected();
+    String json = "{\"connected\":" + String(mqConnected ? "true" : "false") +
+                  ",\"broker\":\"" + mqtt_host + "\"" +
+                  ",\"port\":" + String(mqtt_port) +
+                  ",\"user\":\"" + mqtt_user + "\"" +
+                  ",\"pass\":\"" + mqtt_pass + "\"" +
+                  ",\"topic\":\"" + (mqConnected ? mqttBaseTopic() : "") + "\"}";
+    request->send(200, "application/json", json);
+  });
+
+  // Desa la configuració MQTT a NVS i reconnecta
+  server.on("/mqtt", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      if (request->hasParam("mqtt_host", true)) {
+        mqtt_host = request->getParam("mqtt_host", true)->value();
+        mqtt_port = request->hasParam("mqtt_port", true) ?
+                    (uint16_t)request->getParam("mqtt_port", true)->value().toInt() : 1883;
+        mqtt_user = request->hasParam("mqtt_user", true) ? request->getParam("mqtt_user", true)->value() : "";
+        mqtt_pass = request->hasParam("mqtt_pass", true) ? request->getParam("mqtt_pass", true)->value() : "";
+        prefs.begin("blau", false);
+        prefs.putString("mqtt_host", mqtt_host);
+        prefs.putInt("mqtt_port", (int)mqtt_port);
+        prefs.putString("mqtt_user", mqtt_user);
+        prefs.putString("mqtt_pass", mqtt_pass);
+        prefs.end();
+        Serial.println("MQTT config saved: " + mqtt_host + ":" + String(mqtt_port));
+        mqttClientId  = "BlauTrigger_" + macAPSuffix;
+        mqttWillTopic = mqttBaseTopic() + "/available";
+        mqttClient.setClientId(mqttClientId.c_str());
+        mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
+        if (mqtt_user.length() > 0) mqttClient.setCredentials(mqtt_user.c_str(), mqtt_pass.c_str());
+        else mqttClient.setCredentials("", "");
+        mqttClient.setWill(mqttWillTopic.c_str(), 1, true, "offline");
+        if (mqttClient.connected()) mqttClient.disconnect();
+        else if (WiFi.isConnected() && mqtt_host.length() > 0 && mqttReconnectTimer != nullptr) connectMqtt();
+      }
+    #endif
+    request->send(200, "text/plain", "OK");
+  });
+
   // Qualsevol URL no reconeguda → portal captiu
   server.onNotFound(serveixWifiManager);
 
@@ -449,12 +706,14 @@ void getMyMacAddress() {
   macAPSuffix = macAP.substring(macAP.length() - 4);
 }
 
-// Configura el dispositiu com a Access Point obert amb SSID = "BlauTrigger_XXXX"
+// Configura el dispositiu en mode AP+STA. L'AP obre al canal ESPNOW_CHANNEL
+// per mantenir la compatibilitat amb ESP-NOW (BlauLink). La connexió STA
+// es gestiona separadament des de setup().
 void configDeviceAP() {
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_AP_STA);
   getMyMacAddress();
   String apSsid = String(ssid) + "_" + macAPSuffix;
-  bool apOk = WiFi.softAP(apSsid, "");
+  bool apOk = WiFi.softAP(apSsid, "", ESPNOW_CHANNEL);
   if (!apOk) {
     Serial.println("AP Config failed.");
   } else {
@@ -538,7 +797,7 @@ void controlLlum(String trigger) {
   if (pin1 == PIN_UNUSED) return;
   switch (control_type) {
     case 0:  // On/Off
-      if (trigger == "boto" || trigger == "espnow") {
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         digitalWrite(pin1, state ? HIGH : LOW);                           // relé
         if (pin2 != PIN_UNUSED) digitalWrite(pin2, state ? HIGH : LOW);  // led indicador
       }
@@ -554,6 +813,7 @@ void controlLlum(String trigger) {
       strip.setBrightness(map(brightness[1], 0, 100, 0, 255));
       if (trigger == "boto")   strip.setPixelColor(0, state ? 0 : COLOR_BOTO);
       if (trigger == "espnow") strip.setPixelColor(0, state ? 0 : COLOR_ESPNOW);
+      if (trigger == "mqtt")   strip.setPixelColor(0, state ? 0 : strip.Color(mqttR, mqttG, mqttB));
       if (trigger == "inici") {
         strip.setPixelColor(0, COLOR_INICI);
         strip.show();
@@ -571,7 +831,7 @@ void controlLlum(String trigger) {
       break;
 
     case 2:  // LED dimmer (1× PWM)
-      if (trigger == "boto" || trigger == "espnow") {
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         ledcWrite(pwmCh1, state ? map(brightness[2], 0, 100, 0, 255) : 0);
       }
       if (trigger == "inici") {
@@ -587,7 +847,7 @@ void controlLlum(String trigger) {
       break;
 
     case 3:  // LEDs WW/CW (2× PWM)
-      if (trigger == "boto" || trigger == "espnow") {
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         ledcWrite(pwmCh1, state ? map(brightness[3],   0, 100, 0, 255) : 0);
         ledcWrite(pwmCh2, state ? map(brightness_cw,   0, 100, 0, 255) : 0);
       }
@@ -608,7 +868,7 @@ void controlLlum(String trigger) {
 
     case 4:  // Triac control de fase — WS2812 actua com mode 1, brillantor escalada per potència
       if (pin3 == PIN_UNUSED) break;
-      if (trigger == "boto" || trigger == "espnow") {
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         if (!state) {
           // brillantor = brightness_cw (LED) × potència triac / 100
           uint8_t ledBr = (uint8_t)map((long)brightness_cw * brightness[4] / 100, 0, 100, 0, 255);
@@ -734,6 +994,40 @@ void setup() {
   initEspNow();
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataRecv);
+
+  #ifdef HARDCODED_CONFIG
+    sta_ssid  = HC_STA_SSID;
+    sta_pass  = HC_STA_PASS;
+    mqtt_host = HC_MQTT_HOST;
+    mqtt_port = HC_MQTT_PORT;
+    mqtt_user = HC_MQTT_USER;
+    mqtt_pass = HC_MQTT_PASS;
+  #endif
+
+#ifdef ENABLE_WIFI_STA
+  if (sta_ssid.length() > 0) {
+    WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
+    Serial.println("[WiFi] STA connecting to: " + sta_ssid);
+  }
+#endif
+
+#ifdef ENABLE_MQTT
+  mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(5000), pdFALSE, (void*)0,
+                        [](TimerHandle_t){ Serial.println("[MQTT] timer → reconnect"); connectMqtt(); });
+  mqttClient.onConnect(onMqttConnect);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onMessage(onMqttMessage);
+  if (mqtt_host.length() > 0) {
+    mqttClientId  = "BlauTrigger_" + macAPSuffix;
+    mqttWillTopic = mqttBaseTopic() + "/available";
+    mqttClient.setClientId(mqttClientId.c_str());
+    mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
+    if (mqtt_user.length() > 0) mqttClient.setCredentials(mqtt_user.c_str(), mqtt_pass.c_str());
+    mqttClient.setWill(mqttWillTopic.c_str(), 1, true, "offline");
+    Serial.printf("[MQTT] configured: broker=%s:%d user=%s\n",
+      mqtt_host.c_str(), mqtt_port, mqtt_user.length() > 0 ? mqtt_user.c_str() : "(none)");
+  }
+#endif
 }
 
 
@@ -743,6 +1037,38 @@ void setup() {
 void loop() {
   // Envia l'ACK pendent si n'hi ha un de preparat per ESP-NOW
   blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
+
+  // Detecta canvis de connexió WiFi STA i dispara connectMqtt quan toca
+#if defined(ENABLE_WIFI_STA) && defined(ENABLE_MQTT)
+  {
+    static bool lastWifiConnected = false;
+    bool wifiNow = WiFi.isConnected();
+    if (wifiNow && !lastWifiConnected) {
+      int staCh = WiFi.channel();
+      Serial.printf("[WiFi] STA connected, IP: %s, canal STA: %d\n",
+        WiFi.localIP().toString().c_str(), staCh);
+      // El hardware mou l'AP al canal del STA. En ESP32-C3 (ràdio única) no es pot
+      // canviar el canal quan el STA ja és connectat — BlauLink ha de fer scan per trobar-nos.
+      esp_err_t chErr = esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+      Serial.printf("[WiFi] esp_wifi_set_channel(%d) → %s (canal actual: %d)\n",
+        ESPNOW_CHANNEL, chErr == ESP_OK ? "OK" : "FAIL (ràdio bloquejada al canal STA)", staCh);
+      if (mqtt_host.length() > 0 && !mqttClient.connected()) connectMqtt();
+    }
+    if (!wifiNow && lastWifiConnected) {
+      Serial.println("[WiFi] STA disconnected");
+      if (mqttReconnectTimer != nullptr) xTimerStop(mqttReconnectTimer, 0);
+    }
+    lastWifiConnected = wifiNow;
+  }
+#endif
+
+  // Publica l'estat per MQTT si ha canviat (per ESP-NOW o botó)
+#ifdef ENABLE_MQTT
+  {
+    static bool lastState = false;
+    if (lastState != state) { lastState = state; publishState(); }
+  }
+#endif
 
   if (buttonPressed()) {
     startTime = millis();

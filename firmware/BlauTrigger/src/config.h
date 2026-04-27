@@ -45,7 +45,7 @@
 //  · Descomentat → tots els paràmetres de hardware estan fixats
 //                  al codi i la web és de només lectura
 // ════════════════════════════════════════════════════════════════
-// #define HARDCODED_CONFIG
+// #define HARDCODED_CONFIG   // comenta per desactivar
 
 // ════════════════════════════════════════════════════════════════
 //  ESBORRA CONFIG  (descomenta per esborrar les Preferences de NVS)
@@ -53,7 +53,7 @@
 //  · Descomentat → esborra tota la config guardada a l'inici
 //                  (torna a comentar i repuja el firmware després)
 // ════════════════════════════════════════════════════════════════
-// #define CLEAR_CONFIG
+// #define CLEAR_CONFIG       // comenta per desactivar
 
 
 // ════════════════════════════════════════════════════════════════
@@ -61,6 +61,33 @@
 // ════════════════════════════════════════════════════════════════
 #define WIFI_SSID      "BlauTrigger"
 #define WIFI_PASSWORD  ""
+
+
+// ════════════════════════════════════════════════════════════════
+//  FUNCIONALITATS OPCIONALS
+//  · Descomentat (per defecte) → funcionalitat activa
+//  · Comentat                  → funcionalitat desactivada
+// ════════════════════════════════════════════════════════════════
+#define ENABLE_WIFI_STA   // connexió WiFi a xarxa domèstica; comenta per desactivar
+#define ENABLE_MQTT       // client MQTT; comenta per desactivar (requereix ENABLE_WIFI_STA)
+
+
+// ════════════════════════════════════════════════════════════════
+//  WIFI STA  (xarxa domèstica — actiu quan HARDCODED_CONFIG)
+//  En mode web, les credencials es guarden via el portal (NVS).
+// ════════════════════════════════════════════════════════════════
+#define HC_STA_SSID   ""     // SSID del router
+#define HC_STA_PASS   ""     // contrasenya del router
+
+
+// ════════════════════════════════════════════════════════════════
+//  MQTT  (broker — actiu quan HARDCODED_CONFIG)
+//  En mode web, la configuració es guarda via el portal (NVS).
+// ════════════════════════════════════════════════════════════════
+#define HC_MQTT_HOST  ""     // adreça del broker (ex: "192.168.1.100")
+#define HC_MQTT_PORT  1883   // port MQTT
+#define HC_MQTT_USER  ""     // usuari (buit = sense autenticació)
+#define HC_MQTT_PASS  ""     // contrasenya
 
 
 // ════════════════════════════════════════════════════════════════

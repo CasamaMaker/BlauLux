@@ -48,6 +48,28 @@
         toastSavedRestart: 'Configuració guardada! Reiniciant...',
         toastError: 'Error en guardar',
         footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        labelWifi: 'WiFi domèstica',
+        labelSsid: 'Nom de la xarxa (SSID)',
+        labelPassword: 'Contrasenya',
+        wifiStatus: 'Estat',
+        wifiConnected: 'Connectat',
+        wifiDisconnected: 'Desconnectat',
+        wifiSaveBtn: 'Guardar WiFi',
+        wifiSaved: 'Credencials WiFi guardades!',
+        wifiError: 'Error en guardar WiFi',
+        wifiConfigured: 'Configurat: ',
+        wifiNotConfigured: 'No configurat',
+        labelMqtt: 'MQTT',
+        mqttHost: 'Adreça del broker',
+        mqttPort: 'Port',
+        mqttUser: 'Usuari (opcional)',
+        mqttPass: 'Contrasenya (opcional)',
+        mqttSaveBtn: 'Guardar MQTT',
+        mqttSaved: 'Configuració MQTT guardada!',
+        mqttError: 'Error en guardar MQTT',
+        mqttTopic: 'Topic base',
+        mqttConnected: 'Connectat',
+        mqttDisconnected: 'Desconnectat',
       },
       en: {
         pageTitle: 'BlauTrigger Configurator',
@@ -89,6 +111,28 @@
         toastSavedRestart: 'Configuration saved! Restarting...',
         toastError: 'Error saving',
         footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        labelWifi: 'Home WiFi',
+        labelSsid: 'Network name (SSID)',
+        labelPassword: 'Password',
+        wifiStatus: 'Status',
+        wifiConnected: 'Connected',
+        wifiDisconnected: 'Disconnected',
+        wifiSaveBtn: 'Save WiFi',
+        wifiSaved: 'WiFi credentials saved!',
+        wifiError: 'Error saving WiFi',
+        wifiConfigured: 'Configured: ',
+        wifiNotConfigured: 'Not configured',
+        labelMqtt: 'MQTT',
+        mqttHost: 'Broker address',
+        mqttPort: 'Port',
+        mqttUser: 'Username (optional)',
+        mqttPass: 'Password (optional)',
+        mqttSaveBtn: 'Save MQTT',
+        mqttSaved: 'MQTT configuration saved!',
+        mqttError: 'Error saving MQTT',
+        mqttTopic: 'Base topic',
+        mqttConnected: 'Connected',
+        mqttDisconnected: 'Disconnected',
       },
       es: {
         pageTitle: 'Configurador BlauTrigger',
@@ -130,6 +174,28 @@
         toastSavedRestart: '¡Configuración guardada! Reiniciando...',
         toastError: 'Error al guardar',
         footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        labelWifi: 'WiFi doméstica',
+        labelSsid: 'Nombre de red (SSID)',
+        labelPassword: 'Contraseña',
+        wifiStatus: 'Estado',
+        wifiConnected: 'Conectado',
+        wifiDisconnected: 'Desconectado',
+        wifiSaveBtn: 'Guardar WiFi',
+        wifiSaved: '¡Credenciales WiFi guardadas!',
+        wifiError: 'Error al guardar WiFi',
+        wifiConfigured: 'Configurado: ',
+        wifiNotConfigured: 'No configurado',
+        labelMqtt: 'MQTT',
+        mqttHost: 'Dirección del broker',
+        mqttPort: 'Puerto',
+        mqttUser: 'Usuario (opcional)',
+        mqttPass: 'Contraseña (opcional)',
+        mqttSaveBtn: 'Guardar MQTT',
+        mqttSaved: '¡Configuración MQTT guardada!',
+        mqttError: 'Error al guardar MQTT',
+        mqttTopic: 'Topic base',
+        mqttConnected: 'Conectado',
+        mqttDisconnected: 'Desconectado',
       },
     };
 
@@ -565,6 +631,102 @@
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
+    function fetchWifiStatus() {
+      fetch('/wifiStatus', {method: 'POST'}).then(r => r.json()).then(data => {
+        const badge   = document.getElementById('wifiStatusBadge');
+        const ipRow   = document.getElementById('wifiIpRow');
+        const ssidRow = document.getElementById('wifiSsidRow');
+        if (data.connected) {
+          badge.textContent = t('wifiConnected') + ' (' + data.rssi + ' dBm)';
+          badge.style.color = '#27ae60';
+          document.getElementById('wifiIp').textContent = data.ip;
+          ipRow.style.display = 'block';
+          ssidRow.style.display = 'none';
+        } else if (data.ssid) {
+          badge.textContent = t('wifiDisconnected');
+          badge.style.color = '#e67e22';
+          document.getElementById('wifiSsidLabel').textContent = t('wifiConfigured') + data.ssid;
+          ipRow.style.display = 'none';
+          ssidRow.style.display = 'block';
+        } else {
+          badge.textContent = t('wifiNotConfigured');
+          badge.style.color = '#888';
+          document.getElementById('wifiSsidLabel').textContent = t('wifiNotConfigured');
+          ipRow.style.display = 'none';
+          ssidRow.style.display = 'block';
+        }
+        if (!wifiConfigLoaded) {
+          wifiConfigLoaded = true;
+          document.getElementById('wifiSsidInput').value = data.ssid || '';
+          document.getElementById('wifiPassInput').value = data.pass || '';
+        }
+      }).catch(() => {});
+    }
+
+    let wifiConfigLoaded = false;
+    let mqttConfigLoaded = false;
+
+    function fetchMqttStatus() {
+      fetch('/mqttStatus', {method: 'POST'}).then(r => r.json()).then(data => {
+        const badge    = document.getElementById('mqttStatusBadge');
+        const topicRow = document.getElementById('mqttTopicRow');
+        if (data.connected) {
+          badge.textContent = t('mqttConnected');
+          badge.style.color = '#27ae60';
+          document.getElementById('mqttTopic').textContent = data.topic;
+          topicRow.style.display = 'block';
+        } else if (data.broker) {
+          badge.textContent = t('mqttDisconnected');
+          badge.style.color = '#e67e22';
+          topicRow.style.display = 'none';
+        } else {
+          badge.textContent = t('wifiNotConfigured');
+          badge.style.color = '#888';
+          topicRow.style.display = 'none';
+        }
+        if (data.broker !== undefined && !mqttConfigLoaded) {
+          mqttConfigLoaded = true;
+          document.getElementById('mqttHostInput').value = data.broker;
+          document.getElementById('mqttPortInput').value = data.port || 1883;
+          document.getElementById('mqttUserInput').value = data.user || '';
+          document.getElementById('mqttPassInput').value = data.pass || '';
+        }
+      }).catch(() => {});
+    }
+
+    function saveMqttConfig() {
+      const host = document.getElementById('mqttHostInput').value.trim();
+      const port = document.getElementById('mqttPortInput').value.trim() || '1883';
+      const user = document.getElementById('mqttUserInput').value.trim();
+      const pass = document.getElementById('mqttPassInput').value;
+      fetch('/mqtt', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'mqtt_host=' + encodeURIComponent(host) +
+              '&mqtt_port=' + encodeURIComponent(port) +
+              '&mqtt_user=' + encodeURIComponent(user) +
+              '&mqtt_pass=' + encodeURIComponent(pass)
+      }).then(() => {
+        showToast(t('mqttSaved'));
+        mqttConfigLoaded = false;
+        setTimeout(fetchMqttStatus, 3000);
+      }).catch(() => showToast(t('mqttError')));
+    }
+
+    function saveWifiCredentials() {
+      const wifiSsid = document.getElementById('wifiSsidInput').value.trim();
+      const wifiPass = document.getElementById('wifiPassInput').value;
+      fetch('/wifi', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'sta_ssid=' + encodeURIComponent(wifiSsid) + '&sta_pass=' + encodeURIComponent(wifiPass)
+      }).then(() => {
+        showToast(t('wifiSaved'));
+        wifiConfigLoaded = false;
+        setTimeout(fetchWifiStatus, 3000);
+      }).catch(() => showToast(t('wifiError')));
+    }
+
     window.onload = function() {
       currentLang = detectLang();
       document.getElementById('langSelector').value = currentLang;
@@ -575,6 +737,11 @@
       fetchDriveMode();
       fetchBoto();
       fetchInitialSetup();
+      fetchWifiStatus();
+      setInterval(fetchWifiStatus, 5000);
+
+      fetchMqttStatus();
+      setInterval(fetchMqttStatus, 10000);
 
       document.querySelector('form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -617,6 +784,67 @@
         <p><span id="myMac" data-i18n="loading">Carregant...</span></p>
       </div>
     </div>
+
+  <!-- WiFi domèstica Card -->
+  <div class="card">
+    <label class="section-label" data-i18n="labelWifi">WiFi domèstica</label>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+      <span style="font-size: 0.9em; color: #555;" data-i18n="wifiStatus">Estat</span>
+      <span id="wifiStatusBadge" style="font-size: 0.9em; font-weight: 600; color: #888;">···</span>
+    </div>
+    <div id="wifiIpRow" style="display: none; font-size: 0.82em; color: #555; margin-bottom: 4px;">
+      IP: <span id="wifiIp" style="font-weight: 600;"></span>
+    </div>
+    <div id="wifiSsidRow" style="font-size: 0.82em; color: #777; margin-bottom: 16px;">
+      <span id="wifiSsidLabel" data-i18n="wifiNotConfigured">No configurat</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div>
+        <label for="wifiSsidInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="labelSsid">Nom de la xarxa (SSID)</label>
+        <input type="text" id="wifiSsidInput" placeholder="SSID" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+      </div>
+      <div>
+        <label for="wifiPassInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="labelPassword">Contrasenya</label>
+        <input type="text" id="wifiPassInput" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+      </div>
+      <button type="button" onclick="saveWifiCredentials()" data-i18n-value="wifiSaveBtn">Guardar WiFi</button>
+    </div>
+  </div>
+
+  <!-- MQTT Card -->
+  <div class="card">
+    <label class="section-label" data-i18n="labelMqtt">MQTT</label>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+      <span style="font-size: 0.9em; color: #555;" data-i18n="wifiStatus">Estat</span>
+      <span id="mqttStatusBadge" style="font-size: 0.9em; font-weight: 600; color: #888;">···</span>
+    </div>
+    <div id="mqttTopicRow" style="display: none; font-size: 0.82em; color: #555; margin-bottom: 16px;">
+      <span data-i18n="mqttTopic">Topic base</span>: <span id="mqttTopic" style="font-weight: 600;"></span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+      <div>
+        <label for="mqttHostInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttHost">Adreça del broker</label>
+        <input type="text" id="mqttHostInput" placeholder="192.168.1.x" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+      </div>
+      <div>
+        <label for="mqttPortInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttPort">Port</label>
+        <input type="number" id="mqttPortInput" placeholder="1883" min="1" max="65535" value="1883" style="margin-bottom: 0; width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: var(--border-radius); font-size: 16px;">
+      </div>
+      <div>
+        <label for="mqttUserInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttUser">Usuari (opcional)</label>
+        <input type="text" id="mqttUserInput" placeholder="" autocomplete="off" style="margin-bottom: 0;">
+      </div>
+      <div>
+        <label for="mqttPassInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttPass">Contrasenya (opcional)</label>
+        <input type="text" id="mqttPassInput" placeholder="" autocomplete="off" style="margin-bottom: 0;">
+      </div>
+      <button type="button" onclick="saveMqttConfig()" data-i18n-value="mqttSaveBtn">Guardar MQTT</button>
+    </div>
+  </div>
 
   <form action="/" method="POST">
 
