@@ -75,6 +75,14 @@
         mqttTopicField: 'Topic del dispositiu',
         mqttFulltopic: 'Full topic',
         mqttPlaceholderHint: '%id% = últims 4 caràcters de la MAC  ·  %topic% = topic resolt',
+        clearConfigZone:    'Zona de perill',
+        clearConfigDesc:    'Esborra tota la configuració guardada al dispositiu.',
+        clearConfigBtn:     'Esborra configuració',
+        clearConfigConfirm: '⚠ Confirma? (clica de nou)',
+        clearConfigDone:    'Config esborrada! Reiniciant...',
+        restartBtn:         'Reinicia el dispositiu',
+        restartConfirm:     '⚠ Confirma? (clica de nou)',
+        restartDone:        'Reiniciant...',
       },
       en: {
         pageTitle: 'BlauTrigger Configurator',
@@ -142,6 +150,14 @@
         mqttTopicField: 'Device topic',
         mqttFulltopic: 'Full topic',
         mqttPlaceholderHint: '%id% = last 4 chars of MAC  ·  %topic% = resolved topic',
+        clearConfigZone:    'Danger zone',
+        clearConfigDesc:    'Erases all configuration stored on the device.',
+        clearConfigBtn:     'Erase configuration',
+        clearConfigConfirm: '⚠ Confirm? (click again)',
+        clearConfigDone:    'Config erased! Restarting...',
+        restartBtn:         'Restart device',
+        restartConfirm:     '⚠ Confirm? (click again)',
+        restartDone:        'Restarting...',
       },
       es: {
         pageTitle: 'Configurador BlauTrigger',
@@ -209,6 +225,14 @@
         mqttTopicField: 'Topic del dispositivo',
         mqttFulltopic: 'Full topic',
         mqttPlaceholderHint: '%id% = últimos 4 caracteres de la MAC  ·  %topic% = topic resuelto',
+        clearConfigZone:    'Zona de peligro',
+        clearConfigDesc:    'Borra toda la configuración guardada en el dispositivo.',
+        clearConfigBtn:     'Borrar configuración',
+        clearConfigConfirm: '⚠ ¿Confirmar? (clic de nuevo)',
+        clearConfigDone:    '¡Config borrada! Reiniciando...',
+        restartBtn:         'Reiniciar dispositivo',
+        restartConfirm:     '⚠ ¿Confirmar? (clic de nuevo)',
+        restartDone:        'Reiniciando...',
       },
     };
 
@@ -428,10 +452,84 @@
         configFields.classList.add('disabled-section');
         modeInfo.style.display = 'block';
         submitBtn.style.display = 'none';
+        document.getElementById('clearConfigCard').style.display = 'none';
       } else {
         configFields.classList.remove('disabled-section');
         modeInfo.style.display = 'none';
         submitBtn.style.display = '';
+      }
+    }
+
+    let _clearPending = false;
+    let _clearTimer   = null;
+    function confirmClearConfig() {
+      const btn = document.getElementById('clearConfigBtn');
+      if (!_clearPending) {
+        _clearPending = true;
+        btn.textContent = t('clearConfigConfirm');
+        btn.style.background   = '#e74c3c';
+        btn.style.color        = '#fff';
+        btn.style.borderColor  = '#c0392b';
+        _clearTimer = setTimeout(function() {
+          _clearPending = false;
+          btn.textContent = t('clearConfigBtn');
+          btn.style.background  = '';
+          btn.style.color       = '';
+          btn.style.borderColor = '';
+        }, 5000);
+      } else {
+        clearTimeout(_clearTimer);
+        _clearPending = false;
+        fetch('/clearconfig', {method: 'POST'})
+          .then(function() {
+            showToast(t('clearConfigDone'));
+            btn.disabled    = true;
+            btn.textContent = '✓';
+            setTimeout(function() { location.reload(); }, 4000);
+          })
+          .catch(function() {
+            // El dispositiu ha reiniciat i ha tallat la connexió — és el comportament esperat
+            showToast(t('clearConfigDone'));
+            btn.disabled    = true;
+            btn.textContent = '✓';
+            setTimeout(function() { location.reload(); }, 4000);
+          });
+      }
+    }
+
+    let _restartPending = false;
+    let _restartTimer   = null;
+    function confirmRestart() {
+      const btn = document.getElementById('restartBtn');
+      if (!_restartPending) {
+        _restartPending = true;
+        btn.textContent = t('restartConfirm');
+        btn.style.background  = '#e67e22';
+        btn.style.color       = '#fff';
+        btn.style.borderColor = '#ca6f1e';
+        _restartTimer = setTimeout(function() {
+          _restartPending = false;
+          btn.textContent = t('restartBtn');
+          btn.style.background  = '';
+          btn.style.color       = '';
+          btn.style.borderColor = '';
+        }, 5000);
+      } else {
+        clearTimeout(_restartTimer);
+        _restartPending = false;
+        fetch('/restart', {method: 'POST'})
+          .then(function() {
+            showToast(t('restartDone'));
+            btn.disabled    = true;
+            btn.textContent = '✓';
+            setTimeout(function() { location.reload(); }, 4000);
+          })
+          .catch(function() {
+            showToast(t('restartDone'));
+            btn.disabled    = true;
+            btn.textContent = '✓';
+            setTimeout(function() { location.reload(); }, 4000);
+          });
       }
     }
 
@@ -1126,6 +1224,22 @@
         </div>
 
       </div>
+    </div>
+
+    <!-- Zona de perill: esborra configuració -->
+    <div class="card" id="clearConfigCard" style="border:1px solid #f0c0c0;background:#fff8f8;">
+      <label style="color:#c0392b;font-size:0.85em;font-weight:600;display:block;margin-bottom:6px;">&#9888; <span data-i18n="clearConfigZone">Zona de perill</span></label>
+      <p data-i18n="clearConfigDesc" style="font-size:0.82em;color:#888;margin:0 0 10px;">Esborra tota la configuració guardada al dispositiu.</p>
+      <button id="clearConfigBtn" type="button" onclick="confirmClearConfig()"
+              data-i18n="clearConfigBtn"
+              style="background:#f5f5f5;color:#666;border:1px solid #ddd;cursor:pointer;width:100%;margin-bottom:6px;">
+        Esborra configuració
+      </button>
+      <button id="restartBtn" type="button" onclick="confirmRestart()"
+              data-i18n="restartBtn"
+              style="background:#f5f5f5;color:#666;border:1px solid #ddd;cursor:pointer;width:100%;">
+        Reinicia el dispositiu
+      </button>
     </div>
 
   </div>

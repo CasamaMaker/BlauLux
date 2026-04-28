@@ -18,6 +18,7 @@
 #include <blauprotocol.h>
 #include <blauprotocol_trg.h>
 #include "config.h"
+#include "log.h"
 #include <AsyncMqttClient.h>
 
 
@@ -77,6 +78,7 @@ bool webTesting = false;                   // actiu quan la web envia color/duty
 static volatile bool _ack_pending = false; // hi ha un ACK pendent d'enviar per ESP-NOW
 static uint8_t       _ack_mac[6];          // MAC destinatari de l'ACK
 static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
+
 
 int pwmCh1 = 0;                            // canal LEDC per pin1
 int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
@@ -174,7 +176,6 @@ TimerHandle_t  mqttReconnectTimer   = nullptr;
 #ifndef HARDCODED_CONFIG
 Preferences prefs;
 
-#ifdef CLEAR_CONFIG
 // Esborra tota la configuració guardada i reseteja els pins a PIN_UNUSED
 void clearConfig() {
   prefs.begin("blau", false);
@@ -201,9 +202,8 @@ void clearConfig() {
   prefs.putString("mqtt_topic",     HC_MQTT_TOPIC);
   prefs.putString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
   prefs.end();
-  Serial.println("Config NVS esborrada (pins reset a PIN_UNUSED)!");
+  LOG_I("[CFG] NVS esborrada (pins reset a PIN_UNUSED)");
 }
-#endif
 
 // Llegeix la configuració des de NVS
 void loadConfig() {
@@ -233,10 +233,11 @@ void loadConfig() {
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
-  Serial.printf("Config carregada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
-  Serial.printf("WiFi STA: ssid='%s' pass=%s\n", sta_ssid.c_str(), sta_pass.length() > 0 ? "***" : "(buit)");
-  Serial.printf("MQTT: host='%s' port=%d user='%s' client='%s' topic='%s' fulltopic='%s'\n",
+  LOG_D("[CFG] ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d",
+    control_type, pin1, pin2, pin3, boto_pin, button_pullup,
+    brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  LOG_D("[CFG] WiFi STA: ssid='%s' pass=%s", sta_ssid.c_str(), sta_pass.length() > 0 ? "***" : "(buit)");
+  LOG_D("[CFG] MQTT: host='%s' port=%d user='%s' client='%s' topic='%s' fulltopic='%s'",
     mqtt_host.c_str(), mqtt_port, mqtt_user.c_str(),
     mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
 }
@@ -258,8 +259,9 @@ void saveConfig() {
   prefs.putInt("nl",  num_leds);
   prefs.putInt("pf",  pwm_freq);
   prefs.end();
-  Serial.printf("Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d\n",
-    control_type, pin1, pin2, pin3, boto_pin, button_pullup, brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  LOG_D("[CFG] Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d",
+    control_type, pin1, pin2, pin3, boto_pin, button_pullup,
+    brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
 }
 #endif
 
@@ -270,16 +272,16 @@ void saveConfig() {
 
 // Callback quan s'ha enviat un ACK per ESP-NOW
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "ACK TX: OK" : "ACK TX: FAIL");
+  LOG_I("[ESPNOW] ACK TX: %s", status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAIL");
 }
 
 // Inicialitza ESP-NOW; reinicia el dispositiu si falla
 void initEspNow() {
   if (esp_now_init() == ESP_OK) {
-    Serial.println("ESPNow Init Success");
+    LOG_I("[ESPNOW] Init OK");
   }
   else {
-    Serial.println("ESPNow Init Failed");
+    LOG_E("[ESPNOW] Init Failed");
     ESP.restart();
   }
 }
@@ -300,7 +302,7 @@ void stopWebServer() {
   server.reset();
   dnsServer.stop();
   LittleFS.end();
-  Serial.println("Servidor i LittleFS aturats, però WiFi AP continua actiu");
+  LOG_I("[WEB] Servidor i LittleFS aturats");
 }
 
 // Serveix la pàgina principal del gestor WiFi des de LittleFS
@@ -343,15 +345,15 @@ String mqttResolvedClientId() {
 void publishState() {
   if (!mqttClient.connected()) return;
   String base = mqttBaseTopic();
-  Serial.printf("[MQTT] publish %s/state = %s\n", base.c_str(), state ? "ON" : "OFF");
+  LOG_D("[MQTT] publish %s/state = %s", base.c_str(), state ? "ON" : "OFF");
   mqttClient.publish((base + "/state").c_str(), 1, true, state ? "ON" : "OFF");
   if (control_type >= 1 && control_type <= 4) {
-    Serial.printf("[MQTT] publish %s/brightness = %d\n", base.c_str(), brightness[control_type]);
+    LOG_D("[MQTT] publish %s/brightness = %d", base.c_str(), brightness[control_type]);
     mqttClient.publish((base + "/brightness").c_str(), 1, true, String(brightness[control_type]).c_str());
   }
   if (control_type == 1) {
     String rgb = String(mqttR) + "," + String(mqttG) + "," + String(mqttB);
-    Serial.printf("[MQTT] publish %s/rgb = %s\n", base.c_str(), rgb.c_str());
+    LOG_D("[MQTT] publish %s/rgb = %s", base.c_str(), rgb.c_str());
     mqttClient.publish((base + "/rgb").c_str(), 1, true, rgb.c_str());
   }
 }
@@ -393,41 +395,38 @@ void publishHADiscovery() {
     payload += "\"availability_topic\":\"" + base + "/available\","
                + dev + "}";
   }
-  Serial.printf("[MQTT] HA discovery → %s\n", topic.c_str());
+  LOG_I("[MQTT] HA discovery -> %s", topic.c_str());
   mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
 }
 
 void connectMqtt() {
   if (mqtt_host.length() == 0 || !WiFi.isConnected()) {
-    Serial.printf("[MQTT] connect skipped (host='%s' wifi=%d)\n",
-      mqtt_host.c_str(), (int)WiFi.isConnected());
+    LOG_I("[MQTT] connect skipped (host='%s' wifi=%d)", mqtt_host.c_str(), (int)WiFi.isConnected());
     return;
   }
-  Serial.printf("[MQTT] connecting to %s:%d  (IP: %s)\n",
-    mqtt_host.c_str(), mqtt_port, WiFi.localIP().toString().c_str());
+  LOG_I("[MQTT] connecting to %s:%d", mqtt_host.c_str(), mqtt_port);
   mqttClient.connect();
 }
 
 void onMqttConnect(bool sessionPresent) {
-  Serial.printf("[MQTT] connected! session=%s  base=%s\n",
-    sessionPresent ? "yes" : "no", mqttBaseTopic().c_str());
+  LOG_I("[MQTT] connected! session=%s base=%s", sessionPresent ? "yes" : "no", mqttBaseTopic().c_str());
   String base = mqttBaseTopic();
   mqttClient.subscribe((base + "/set").c_str(), 1);
-  Serial.println("[MQTT] subscribed: " + base + "/set");
+  LOG_D("[MQTT] subscribed: %s/set", base.c_str());
   mqttClient.subscribe((base + "/brightness/set").c_str(), 1);
-  Serial.println("[MQTT] subscribed: " + base + "/brightness/set");
+  LOG_D("[MQTT] subscribed: %s/brightness/set", base.c_str());
   if (control_type == 1) {
     mqttClient.subscribe((base + "/rgb/set").c_str(), 1);
-    Serial.println("[MQTT] subscribed: " + base + "/rgb/set");
+    LOG_D("[MQTT] subscribed: %s/rgb/set", base.c_str());
   }
   mqttClient.publish((base + "/available").c_str(), 1, true, "online");
-  Serial.println("[MQTT] published:  " + base + "/available = online");
+  LOG_D("[MQTT] published: %s/available = online", base.c_str());
   publishHADiscovery();
   publishState();
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
-  Serial.printf("[MQTT] disconnected (reason: %d)\n", (int)reason);
+  LOG_I("[MQTT] disconnected (reason: %d)", (int)reason);
   if (WiFi.isConnected() && mqttReconnectTimer != nullptr)
     xTimerStart(mqttReconnectTimer, 0);
 }
@@ -439,7 +438,7 @@ void onMqttMessage(char* topic, char* payload,
   String topicStr(topic);
   String payloadStr;
   for (size_t i = 0; i < len; i++) payloadStr += (char)payload[i];
-  Serial.printf("[MQTT] recv [%s] = [%s]\n", topicStr.c_str(), payloadStr.c_str());
+  LOG_I("[MQTT] recv [%s] = [%s]", topicStr.c_str(), payloadStr.c_str());
 
   String base = mqttBaseTopic();
 
@@ -509,7 +508,7 @@ void webServerSetup() {
   // Full d'estils
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(LittleFS, "/style.css", "text/css");
-    Serial.println("Served CSS");
+    LOG_D("[WEB] Served CSS");
   });
 
   // ── Endpoints d'estat (GET) ──────────────────────────────────
@@ -517,7 +516,7 @@ void webServerSetup() {
   // Retorna el mode de control actiu (0=On/Off, 1=NeoPixel, 2=PWM, 3=WW/CW)
   server.on("/driverMode", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", String(control_type));
-    Serial.println(control_type);
+    LOG_D("[WEB] driverMode=%d", control_type);
   });
 
   // Retorna "hardcoded" o "web" segons el mode de configuració compilat
@@ -532,7 +531,7 @@ void webServerSetup() {
   // Retorna la MAC del AP
   server.on("/mymac", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", WiFi.softAPmacAddress());
-    Serial.println(macAP);
+    LOG_D("[WEB] MAC AP=%s", macAP.c_str());
   });
 
   // Retorna els pins configurats en format JSON
@@ -542,7 +541,7 @@ void webServerSetup() {
     String sPin3 = (pin3 == PIN_UNUSED) ? "null" : String(pin3);
     String json  = "{\"pin1\":" + sPin1 + ",\"pin2\":" + sPin2 + ",\"pin3\":" + sPin3 + "}";
     request->send(200, "application/json", json);
-    Serial.println(json);
+    LOG_D("[WEB] pins=%s", json.c_str());
   });
 
   // Retorna la brillantor de cada mode en format JSON
@@ -612,7 +611,7 @@ void webServerSetup() {
       if (pin2 != PIN_UNUSED) digitalWrite(pin2, (r == 0 && g == 0 && b == 0) ? LOW : HIGH);
       for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(r, g, b));
       strip.show();
-      Serial.printf("Color: rgb(%d,%d,%d)\n", r, g, b);
+      LOG_D("[WEB] Color: rgb(%d,%d,%d)", r, g, b);
     }
     request->send(200, "text/plain", "OK");
   });
@@ -673,7 +672,7 @@ void webServerSetup() {
         prefs.putString("sta_ssid", sta_ssid);
         prefs.putString("sta_pass", sta_pass);
         prefs.end();
-        Serial.println("WiFi STA credentials saved: " + sta_ssid);
+        LOG_I("[WIFI] STA credentials saved: %s", sta_ssid.c_str());
         WiFi.disconnect();
         if (sta_ssid.length() > 0) WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
       }
@@ -720,7 +719,7 @@ void webServerSetup() {
         prefs.putString("mqtt_topic",     mqtt_topic);
         prefs.putString("mqtt_fulltopic", mqtt_fulltopic);
         prefs.end();
-        Serial.printf("MQTT config saved: %s:%d client='%s' topic='%s' fulltopic='%s'\n",
+        LOG_I("[MQTT] config saved: %s:%d client='%s' topic='%s' fulltopic='%s'",
           mqtt_host.c_str(), mqtt_port, mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
         mqttClientId  = mqttResolvedClientId();
         mqttWillTopic = mqttBaseTopic() + "/available";
@@ -736,11 +735,30 @@ void webServerSetup() {
     request->send(200, "text/plain", "OK");
   });
 
+  // Reinicia el dispositiu
+  server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "OK");
+    delay(500);
+    ESP.restart();
+  });
+
+  // Esborra tota la configuració de NVS i reinicia el dispositiu
+  server.on("/clearconfig", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      clearConfig();
+      request->send(200, "text/plain", "OK");
+      delay(500);
+      ESP.restart();
+    #else
+      request->send(403, "text/plain", "hardcoded");
+    #endif
+  });
+
   // Qualsevol URL no reconeguda → portal captiu
   server.onNotFound(serveixWifiManager);
 
   server.begin();
-  Serial.println("Web server started");
+  LOG_I("[WEB] server started");
 }
 
 
@@ -750,11 +768,10 @@ void webServerSetup() {
 
 // Llegeix i formata la MAC del AP; guarda els últims 4 caràcters per al SSID
 void getMyMacAddress() {
-  Serial.print("MAC del microcontrolador: ");
   macAP = WiFi.softAPmacAddress();
   macAP.replace(":", "");
-  Serial.print("La meva adreça MAC (ap)"); Serial.println(macAP);
   macAPSuffix = macAP.substring(macAP.length() - 4);
+  LOG_D("[WIFI] MAC AP: %s", macAP.c_str());
 }
 
 // Configura el dispositiu en mode AP+STA. L'AP obre al canal ESPNOW_CHANNEL
@@ -766,22 +783,19 @@ void configDeviceAP() {
   String apSsid = String(ssid) + "_" + macAPSuffix;
   bool apOk = WiFi.softAP(apSsid, "", ESPNOW_CHANNEL);
   if (!apOk) {
-    Serial.println("AP Config failed.");
+    LOG_E("[WIFI] AP Config failed");
   } else {
-    Serial.println("AP Config Success. Broadcasting with AP: " + String(apSsid));
-    Serial.print("AP CHANNEL "); Serial.println(WiFi.channel());
-    Serial.print("AP MAC: ");    Serial.println(WiFi.softAPmacAddress());
+    LOG_I("[WIFI] AP ok: %s ch=%d MAC=%s",
+          apSsid.c_str(), WiFi.channel(), WiFi.softAPmacAddress().c_str());
   }
 }
 
 // Munta LittleFS, inicia el DNS i arrenca el servidor web del portal captiu
 void wifiApModeServer() {
-  if (!LittleFS.begin()) return Serial.println("Error muntant LittleFS"), void();
-  Serial.println("Wifi initialized");
-  Serial.println(WiFi.softAPIP());
+  if (!LittleFS.begin()) { LOG_E("[FS] Error muntant LittleFS"); return; }
+  LOG_I("[WIFI] AP IP: %s", WiFi.softAPIP().toString().c_str());
   dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());  // redirigeix qualsevol domini al portal
   webServerSetup();
-  Serial.println("Setup complete");
 }
 
 
@@ -843,7 +857,7 @@ void configuracioLlum() {
       break;
 
     default:
-      Serial.println("Mode desconegut");
+      LOG_E("[CTRL] Mode desconegut: %d", control_type);
       break;
   }
 }
@@ -960,7 +974,7 @@ void controlLlum(String trigger) {
       break;
 
     default:
-      Serial.println("Mode desconegut");
+      LOG_E("[CTRL] Mode desconegut: %d", control_type);
       break;
   }
 
@@ -994,7 +1008,7 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
       case EVT_LONG_START:
       case EVT_LONG_END:                          return ACK_OK;
       default:
-        Serial.print("EVT desconegut: 0x"); Serial.println(cmd, HEX);
+        LOG_I("[ESPNOW] EVT desconegut: 0x%02X", cmd);
         return ACK_ERROR;
     }
   }
@@ -1091,7 +1105,7 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
       }
 
       default:
-        Serial.print("CMD no implementat: 0x"); Serial.println(cmd, HEX);
+        LOG_I("[ESPNOW] CMD no implementat: 0x%02X", cmd);
         return ACK_ERROR;
     }
   }
@@ -1122,7 +1136,7 @@ void setup() {
 
     // Si el botó no està configurat → mode de setup inicial (AP + web)
     if (boto_pin == PIN_UNUSED) {
-      Serial.println("Boto no configurat, entrant en mode AP inicial...");
+      LOG_I("[CFG] Boto no configurat, mode AP inicial");
       configDeviceAP();
       wifiApModeServer();
 
@@ -1132,7 +1146,7 @@ void setup() {
         if (pin1 != PIN_UNUSED && control_type >= 0) controlLlum("wifiAP");
         delay(DNS_POLL_MS);
         if (millis() - apStart > WIFI_AP_TIMEOUT_MS) {
-          Serial.println("Temps excedit en setup inicial");
+          LOG_I("[AP] Temps excedit en setup inicial");
           ESP.restart();
         }
       }
@@ -1167,13 +1181,13 @@ void setup() {
 #ifdef ENABLE_WIFI_STA
   if (sta_ssid.length() > 0) {
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
-    Serial.println("[WiFi] STA connecting to: " + sta_ssid);
+    LOG_I("[WIFI] STA connecting to: %s", sta_ssid.c_str());
   }
 #endif
 
 #ifdef ENABLE_MQTT
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(5000), pdFALSE, (void*)0,
-                        [](TimerHandle_t){ Serial.println("[MQTT] timer → reconnect"); connectMqtt(); });
+                        [](TimerHandle_t){ LOG_I("[MQTT] timer -> reconnect"); connectMqtt(); });
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onMessage(onMqttMessage);
@@ -1184,7 +1198,7 @@ void setup() {
     mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
     if (mqtt_user.length() > 0) mqttClient.setCredentials(mqtt_user.c_str(), mqtt_pass.c_str());
     mqttClient.setWill(mqttWillTopic.c_str(), 1, true, "offline");
-    Serial.printf("[MQTT] configured: broker=%s:%d user=%s\n",
+    LOG_I("[MQTT] configured: broker=%s:%d user=%s",
       mqtt_host.c_str(), mqtt_port, mqtt_user.length() > 0 ? mqtt_user.c_str() : "(none)");
   }
 #endif
@@ -1195,6 +1209,7 @@ void setup() {
 //  LOOP PRINCIPAL
 // ════════════════════════════════════════════════════════════════
 void loop() {
+
   // Envia l'ACK pendent si n'hi ha un de preparat per ESP-NOW
   blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
 
@@ -1205,17 +1220,17 @@ void loop() {
     bool wifiNow = WiFi.isConnected();
     if (wifiNow && !lastWifiConnected) {
       int staCh = WiFi.channel();
-      Serial.printf("[WiFi] STA connected, IP: %s, canal STA: %d\n",
+      LOG_I("[WIFI] STA connected, IP: %s, canal STA: %d",
         WiFi.localIP().toString().c_str(), staCh);
       // El hardware mou l'AP al canal del STA. En ESP32-C3 (ràdio única) no es pot
       // canviar el canal quan el STA ja és connectat — BlauLink ha de fer scan per trobar-nos.
       esp_err_t chErr = esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
-      Serial.printf("[WiFi] esp_wifi_set_channel(%d) → %s (canal actual: %d)\n",
-        ESPNOW_CHANNEL, chErr == ESP_OK ? "OK" : "FAIL (ràdio bloquejada al canal STA)", staCh);
+      LOG_I("[WIFI] esp_wifi_set_channel(%d) -> %s (canal actual: %d)",
+        ESPNOW_CHANNEL, chErr == ESP_OK ? "OK" : "FAIL (radio bloquejada al canal STA)", staCh);
       if (mqtt_host.length() > 0 && !mqttClient.connected()) connectMqtt();
     }
     if (!wifiNow && lastWifiConnected) {
-      Serial.println("[WiFi] STA disconnected");
+      LOG_I("[WIFI] STA disconnected");
       if (mqttReconnectTimer != nullptr) xTimerStop(mqttReconnectTimer, 0);
     }
     lastWifiConnected = wifiNow;
@@ -1232,7 +1247,7 @@ void loop() {
 
   if (buttonPressed()) {
     startTime = millis();
-    Serial.println("Boto presionat");
+    LOG_I("[BTN] Boto presionat");
     controlLlum("boto");
 
     // Espera que el botó s'alliberi o que es superi el temps per entrar al mode AP
@@ -1253,7 +1268,7 @@ void loop() {
 
           // Reinici per timeout
           if (startTime + WIFI_AP_TIMEOUT_MS < millis()) {
-            Serial.println("Temps excedit");
+            LOG_I("[AP] Temps excedit");
             ESP.restart();
           }
 
@@ -1262,12 +1277,12 @@ void loop() {
 
           if (!pressed && lastButtonPressed && !buttonReleased) {
             buttonReleased = true;
-            Serial.println("Botó alliberat");
+            LOG_I("[BTN] Boto alliberat");
             delay(BUTTON_RELEASE_DEBOUNCE_MS);
           }
 
           if (pressed && !lastButtonPressed && buttonReleased) {
-            Serial.println("Botó premut després d'alliberar");
+            LOG_I("[BTN] Boto premut despres d'alliberar");
             buttonReleased = false;
             ESP.restart();
           }
