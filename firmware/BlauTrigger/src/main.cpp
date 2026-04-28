@@ -471,7 +471,7 @@ void onMqttMessage(char* topic, char* payload,
       mqttG = (uint8_t)payloadStr.substring(c1 + 1, c2).toInt();
       mqttB = (uint8_t)payloadStr.substring(c2 + 1).toInt();
       if (control_type == 1 && state) {
-        strip.setPixelColor(0, strip.Color(mqttR, mqttG, mqttB));
+        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
         strip.show();
       }
       publishState();
@@ -567,6 +567,11 @@ void webServerSetup() {
     request->send(200, "text/plain", boto_pin == PIN_UNUSED ? "true" : "false");
   });
 
+  // Retorna la versió del firmware
+  server.on("/version", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", FIRMWARE_VERSION);
+  });
+
   // ── Endpoints d'escriptura (POST) ────────────────────────────
 
   // Rep i desa la configuració enviada per la web
@@ -604,7 +609,8 @@ void webServerSetup() {
       int r = request->getParam("r", true)->value().toInt();
       int g = request->getParam("g", true)->value().toInt();
       int b = request->getParam("b", true)->value().toInt();
-      strip.setPixelColor(0, strip.Color(r, g, b));
+      if (pin2 != PIN_UNUSED) digitalWrite(pin2, (r == 0 && g == 0 && b == 0) ? LOW : HIGH);
+      for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(r, g, b));
       strip.show();
       Serial.printf("Color: rgb(%d,%d,%d)\n", r, g, b);
     }
@@ -794,10 +800,15 @@ void configuracioLlum() {
       break;
 
     case 1:  // LED digital (NeoPixel / WS2812)
-      strip = Adafruit_NeoPixel(num_leds, pin1, NEO_GRB + NEO_KHZ800);
+      strip.updateLength(num_leds);
+      strip.setPin(pin1);
       strip.begin();
       strip.clear();
       strip.show();
+      if (pin2 != PIN_UNUSED) {
+        pinMode(pin2, OUTPUT);
+        digitalWrite(pin2, LOW);
+      }
       break;
 
     case 2:  // LED dimmer (1× PWM)
@@ -818,7 +829,8 @@ void configuracioLlum() {
       pinMode(pin2, OUTPUT);
       digitalWrite(pin2, LOW);
       if (pin3 != PIN_UNUSED) {
-        strip = Adafruit_NeoPixel(1, pin3, NEO_GRB + NEO_KHZ800);
+        strip.updateLength(1);
+        strip.setPin(pin3);
         strip.begin();
         strip.clear();
         strip.show();
@@ -856,21 +868,26 @@ void controlLlum(String trigger) {
 
     case 1:  // LED digital (NeoPixel)
       strip.setBrightness(map(brightness[1], 0, 100, 0, 255));
-      if (trigger == "boto")   strip.setPixelColor(0, state ? 0 : COLOR_BOTO);
-      if (trigger == "espnow") strip.setPixelColor(0, state ? 0 : COLOR_ESPNOW);
-      if (trigger == "mqtt")   strip.setPixelColor(0, state ? 0 : strip.Color(mqttR, mqttG, mqttB));
+      if (trigger == "boto")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : COLOR_BOTO);
+      if (trigger == "espnow") for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : COLOR_ESPNOW);
+      if (trigger == "mqtt")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : strip.Color(mqttR, mqttG, mqttB));
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
+        if (pin2 != PIN_UNUSED) digitalWrite(pin2, state ? LOW : HIGH);
+      }
       if (trigger == "inici") {
-        strip.setPixelColor(0, COLOR_INICI);
+        if (pin2 != PIN_UNUSED) digitalWrite(pin2, HIGH);
+        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, COLOR_INICI);
         strip.show();
         delay(INICI_BLINK_MS);
         strip.clear();
+        if (pin2 != PIN_UNUSED) digitalWrite(pin2, LOW);
       }
       if (trigger == "wifiAP") {
-        // pols sinusoïdal aproximat amb triangle 0→255→0 cada ~1 s
+        if (pin2 != PIN_UNUSED) digitalWrite(pin2, HIGH);
         uint16_t osc   = (millis() / 2) % 510;
         uint8_t  bright = (osc < 255) ? osc : 510 - osc;
         strip.setBrightness(bright);
-        strip.setPixelColor(0, COLOR_WIFI_AP);
+        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, COLOR_WIFI_AP);
       }
       strip.show();
       break;
@@ -918,7 +935,8 @@ void controlLlum(String trigger) {
           // brillantor = brightness_cw (LED) × potència triac / 100
           uint8_t ledBr = (uint8_t)map((long)brightness_cw * brightness[4] / 100, 0, 100, 0, 255);
           strip.setBrightness(max((uint8_t)5, ledBr));
-          strip.setPixelColor(0, trigger == "boto" ? COLOR_BOTO : COLOR_ESPNOW);
+          strip.setPixelColor(0, trigger == "boto" ? COLOR_BOTO :
+                                         trigger == "mqtt" ? COLOR_MQTT : COLOR_ESPNOW);
         } else {
           strip.clear();
         }
@@ -955,11 +973,19 @@ void controlLlum(String trigger) {
 //  PROTOCOL BLAU (ESP-NOW)
 // ════════════════════════════════════════════════════════════════
 
+// Aplica la brillantor actual al hardware sense canviar l'estat on/off
+static void applyBrightness(int br) {
+  switch (control_type) {
+    case 1: strip.setBrightness(map(br, 0, 100, 0, 255)); strip.show(); break;
+    case 2: ledcWrite(pwmCh1, map(br, 0, 100, 0, 255)); break;
+    case 3: ledcWrite(pwmCh1, map(br, 0, 100, 0, 255)); break;
+    case 4: break;  // la tasca triac llegeix brightness[4] automàticament
+  }
+}
+
 // Processa un paquet rebut i retorna el codi ACK corresponent
 uint8_t handleAction(uint8_t pktType, uint8_t cmd,
                      uint8_t p1, uint8_t p2, uint8_t p3) {
-  (void)p1; (void)p2; (void)p3;
-
   if (pktType == TYPE_EVENT) {
     switch (cmd) {
       case EVT_CLICK_1:
@@ -975,9 +1001,95 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 
   if (pktType == TYPE_CMD) {
     switch (cmd) {
-      case CMD_TOGGLE:             controlLlum("espnow"); return ACK_OK;
-      case CMD_ON:   if (!state)   controlLlum("espnow"); return ACK_OK;
-      case CMD_OFF:  if ( state)   controlLlum("espnow"); return ACK_OK;
+      case CMD_TOGGLE:           controlLlum("espnow"); return ACK_OK;
+      case CMD_ON:   if (!state) controlLlum("espnow"); return ACK_OK;
+      case CMD_OFF:  if ( state) controlLlum("espnow"); return ACK_OK;
+
+      case CMD_SET_BRIGHTNESS: {
+        if (control_type < 1 || control_type > 4) return ACK_OK;
+        int br = constrain((int)p1, 0, 100);
+        brightness[control_type] = br;
+        if (state) applyBrightness(br);
+        return ACK_OK;
+      }
+
+      case CMD_SET_RGB: {
+        mqttR = p1; mqttG = p2; mqttB = p3;
+        if (control_type == 1 && state) {
+          for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
+          strip.show();
+        }
+        return ACK_OK;
+      }
+
+      case CMD_SET_CCT: {
+        if (control_type == 3) {
+          brightness[3] = constrain((int)p1, 0, 100);
+          brightness_cw = constrain((int)p2, 0, 100);
+          if (state) {
+            ledcWrite(pwmCh1, map(brightness[3], 0, 100, 0, 255));
+            if (pin2 != PIN_UNUSED) ledcWrite(pwmCh2, map(brightness_cw, 0, 100, 0, 255));
+          }
+        }
+        return ACK_OK;
+      }
+
+      case CMD_DIM_UP: {
+        if (control_type < 1 || control_type > 4) return ACK_OK;
+        int step = (p1 >= 1 && p1 <= 10) ? (int)p1 : 5;
+        int br = constrain(brightness[control_type] + step, 0, 100);
+        brightness[control_type] = br;
+        if (state) applyBrightness(br);
+        return ACK_OK;
+      }
+
+      case CMD_DIM_DOWN: {
+        if (control_type < 1 || control_type > 4) return ACK_OK;
+        int step = (p1 >= 1 && p1 <= 10) ? (int)p1 : 5;
+        int br = constrain(brightness[control_type] - step, 0, 100);
+        brightness[control_type] = br;
+        if (br == 0 && state)  controlLlum("espnow");  // apaga si arriba a 0
+        else if (state)        applyBrightness(br);
+        return ACK_OK;
+      }
+
+      case CMD_SET_SCENE: {
+        // Escenes predefinides (p1 = id):
+        //   0 → Apagat
+        //   1 → Ple  (100%, blanc càlid per RGB)
+        //   2 → Lectura (30%, blanc càlid tènue per RGB)
+        //   3 → Nit   (5%, taronja nit per RGB)
+        struct { uint8_t br; uint8_t r, g, b; uint8_t cw; } scenes[] = {
+          { 0,   0,   0,   0,   0 },  // 0: off
+          { 100, 255, 200, 100, 100 },  // 1: ple
+          { 30,  255, 150,  50,  15 },  // 2: lectura
+          { 5,   255,  60,   0,   0 },  // 3: nit
+        };
+        if (p1 >= sizeof(scenes) / sizeof(scenes[0])) return ACK_ERROR;
+
+        auto& sc = scenes[p1];
+        if (p1 == 0) {
+          if (state) controlLlum("espnow");
+          return ACK_OK;
+        }
+        // Escenes 1-3: actualitza brillantor i color, encén si apagat
+        if (control_type >= 1 && control_type <= 4) brightness[control_type] = sc.br;
+        if (control_type == 1) { mqttR = sc.r; mqttG = sc.g; mqttB = sc.b; }
+        if (control_type == 3) brightness_cw = sc.cw;
+        if (!state) controlLlum("espnow");  // state → true
+        // Aplica el color/brillantor correctes (sobreescriu l'indicador d'espnow)
+        switch (control_type) {
+          case 1: strip.setBrightness(map(sc.br, 0, 100, 0, 255));
+                  for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
+                  strip.show(); break;
+          case 2: ledcWrite(pwmCh1, map(sc.br, 0, 100, 0, 255)); break;
+          case 3: ledcWrite(pwmCh1, map(sc.br, 0, 100, 0, 255));
+                  if (pin2 != PIN_UNUSED) ledcWrite(pwmCh2, map(sc.cw, 0, 100, 0, 255)); break;
+          case 4: break;
+        }
+        return ACK_OK;
+      }
+
       default:
         Serial.print("CMD no implementat: 0x"); Serial.println(cmd, HEX);
         return ACK_ERROR;

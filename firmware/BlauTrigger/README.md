@@ -34,12 +34,14 @@ Supports relay switching, digital RGB LEDs (NeoPixel/WS2812), PWM dimming, dual 
 
 - **ESP-NOW receiver** — low-latency, connectionless protocol; no router needed
 - **5 control modes** — relay, digital RGB LED, single PWM dimmer, dual WW/CW PWM, phase-cut triac dimmer
+- **Full BlauProtocol command set** — toggle, on/off, set brightness, set RGB, set CCT, dim up/down, scenes
 - **ACK-based reliability** — acknowledges every received command back to the sender
 - **Captive portal** — web-based configuration and live testing over WiFi AP
+- **WiFi STA + MQTT** — optional home network connection with Home Assistant auto-discovery
 - **Physical button** — toggle the load or enter config mode with a long press
 - **Persistent configuration** — settings stored in NVS (survives power cycles)
 - **Deduplication** — ignores duplicate packets within a 2-second window
-- **Multi-language UI** — Catalan and English web interfaces
+- **Multi-language UI** — Catalan, English and Spanish web interface (JS i18n, single file)
 
 ---
 
@@ -49,10 +51,10 @@ Supports relay switching, digital RGB LEDs (NeoPixel/WS2812), PWM dimming, dual 
 
 If `HARDCODED_CONFIG` is defined in `src/config.h`, all hardware parameters are fixed at compile time and the web UI cannot modify them. The configurable parameters are:
 
-- `CONTROL_TYPE` — control mode (0 = relay, 1 = digital LED, 2 = PWM, 3 = WW/CW)
-- `PIN1` — primary output GPIO (relay, NeoPixel data, or PWM channel 1)
-- `PIN2` — secondary output GPIO (PWM channel 2 for WW/CW mode)
-- `BOTO_PIN` — button input GPIO
+- `HW_CONTROL_TYPE` — control mode (0 = relay, 1 = digital LED, 2 = PWM, 3 = WW/CW, 4 = triac)
+- `HW_PIN1` — primary output GPIO (relay, NeoPixel data, or PWM channel 1)
+- `HW_PIN2` — secondary output GPIO (PWM channel 2 for WW/CW mode)
+- `PIN_BOTO` — button input GPIO
 - `BRIGHTNESS_DEF` — default brightness percentage (0–100)
 - `NUM_LEDS` — number of NeoPixel LEDs
 
@@ -99,19 +101,19 @@ The firing angle is computed from the configured power level (0–100%). A FreeR
 1. Clone the repository:
    ```bash
    git clone https://github.com/your-user/BlauTrigger.git
-   cd BlauTrigger/BlauTrigger
+   cd BlauTrigger/firmware/BlauTrigger
    ```
 
-2. (Optional) Edit `src/config.h` to select your hardware variant and language.
+2. (Optional) Edit `src/config.h` to select your hardware variant.
 
 3. Build and upload:
    ```bash
-   pio run -e arduino-esp32c3 -t upload
+   pio run -e esp32c3 -t upload
    ```
 
 4. Upload the web UI filesystem:
    ```bash
-   pio run -e arduino-esp32c3 -t uploadfs
+   pio run -e esp32c3 -t uploadfs
    ```
 
 5. Open the serial monitor to verify boot output:
@@ -140,7 +142,6 @@ On first boot (or after clearing config), the device detects that no button GPIO
 | `PICO_CLICK` / `SONOFF_BASIC_R4` | `PICO_CLICK` | Hardware pinout selection |
 | `HARDCODED_CONFIG` | *(commented)* | If defined, pins are fixed in code and the web UI cannot change them |
 | `CLEAR_CONFIG` | *(commented)* | If defined, clears all NVS on boot. Flash once, then comment out and reflash |
-| `IDIOMA` | `"CAT"` | Web UI language: `"CAT"` (Catalan) or `"EN"` (English) |
 | `WIFI_SSID` | `"BlauTrigger"` | AP name prefix (MAC suffix is appended automatically) |
 | `WIFI_PASSWORD` | `""` | AP password — empty for open network |
 | `NUM_LEDS` | `1` | Number of NeoPixel LEDs |
@@ -154,9 +155,11 @@ On first boot (or after clearing config), the device detects that no button GPIO
 
 When `HARDCODED_CONFIG` is not defined, all hardware settings can be changed through the web interface at `http://192.168.4.1`:
 
-- **Control type** — relay / digital LED / PWM / WW-CW
-- **GPIO pins** — pin1 (output), pin2 (second output for WW/CW), button pin
+- **Control type** — relay / digital LED / PWM / WW-CW / triac
+- **GPIO pins** — pin1 (output), pin2 (second output for WW/CW or triac gate), pin3 (WS2812 indicator for triac mode), button pin
 - **Brightness** — per control mode, 0–100%
+- **WiFi STA** — connect the device to a home router for MQTT support
+- **MQTT** — configure broker, credentials, and topic templates
 - **Live preview** — test color (RGB) or brightness before saving
 
 ---
@@ -185,18 +188,26 @@ On receiving a valid BlauProtocol packet, BlauTrigger:
 
 ### Web Interface
 
-While in AP mode, the web interface exposes the following HTTP endpoints:
+The web interface is always accessible at `http://192.168.4.1` while in AP mode. It exposes the following HTTP endpoints:
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/` | `POST` | Serve configuration page and save new configuration to NVS |
-| `/color` | `POST` | Preview RGB color (`r`, `g`, `b` params) |
-| `/dutty` | `POST` | Preview brightness level (0–100) |
-| `/driverMode` | `GET` | Current control type (JSON) |
-| `/pins` | `GET` | Current GPIO assignments (JSON) |
-| `/brightness` | `GET` | Brightness values per mode (JSON) |
-| `/boto` | `GET` | Button GPIO (JSON) |
-| `/configMode` | `GET` | `"hardcoded"` or `"web"` |
+| `/` | `GET` / `POST` | Serve the configuration page / save new hardware config to NVS |
+| `/color` | `POST` | Preview RGB color (`r`, `g`, `b` params, 0–255) |
+| `/dutty` | `POST` | Preview brightness level (`value`, 0–100) |
+| `/duttyCW` | `POST` | Preview cold-white brightness (`value`, 0–100, mode 3/4) |
+| `/wifi` | `POST` | Save WiFi STA credentials and reconnect |
+| `/mqtt` | `POST` | Save MQTT broker settings and reconnect |
+| `/driverMode` | `POST` | Returns current control type (plain text) |
+| `/configMode` | `POST` | Returns `"hardcoded"` or `"web"` |
+| `/mymac` | `POST` | Returns AP MAC address |
+| `/pins` | `POST` | Returns GPIO assignments (JSON) |
+| `/brightness` | `POST` | Returns brightness per mode (JSON) |
+| `/numLeds` | `POST` | Returns number of NeoPixel LEDs |
+| `/boto` | `POST` | Returns button GPIO and pull-up setting (JSON) |
+| `/initialSetup` | `POST` | Returns `"true"` if no button GPIO is configured yet |
+| `/wifiStatus` | `POST` | Returns WiFi STA connection state (JSON) |
+| `/mqttStatus` | `POST` | Returns MQTT connection state and config (JSON) |
 
 ---
 
@@ -236,9 +247,9 @@ BlauTrigger uses **BlauProtocol v1** — a compact 10-byte binary protocol desig
 
 **Event codes:** `EVT_CLICK_1/2/3` (single/double/triple tap), `EVT_LONG_START/END` (long press)
 
-**Command codes:** `CMD_TOGGLE`, `CMD_ON`, `CMD_OFF`, `CMD_SET_BRIGHTNESS`, `CMD_SET_RGB`, `CMD_SET_CCT`
+**Command codes:** `CMD_TOGGLE`, `CMD_ON`, `CMD_OFF`, `CMD_SET_BRIGHTNESS`, `CMD_SET_RGB`, `CMD_SET_CCT`, `CMD_SET_SCENE`, `CMD_DIM_UP`, `CMD_DIM_DOWN`
 
-See [BLAUPROTOCOL.md](BLAUPROTOCOL.md) for the full specification.
+See [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/blauprotocol.h) for the full specification.
 
 ---
 
@@ -256,11 +267,9 @@ BlauTrigger/
 │       ├── blauprotocol_trg.h    # BlauTrigger helpers: parse, dedup, ACK build
 │       └── blauprotocol_link.h   # BlauLink helpers (sender side)
 ├── data/
-│   ├── wifimanager_CAT.html      # Catalan web UI
-│   ├── wifimanager_EN.html       # English web UI
-│   └── style.css                 # Web interface styles
-├── platformio.ini        # PlatformIO build configuration
-└── BLAUPROTOCOL.md       # Full protocol specification
+│   ├── wifimanager.html   # Multilingual web UI (CA / EN / ES via JS i18n)
+│   └── style.css          # Web interface styles
+└── platformio.ini         # PlatformIO build configuration
 ```
 
 ---

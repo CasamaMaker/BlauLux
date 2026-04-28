@@ -6,6 +6,7 @@
   <link rel="stylesheet" type="text/css" href="style.css" />
   <title>Configurador BlauTrigger</title>
   <script>
+    let FW_VER = '';
 
     const i18n = {
       ca: {
@@ -41,13 +42,13 @@
         labelBrightnessCWTest: 'Brillantor CW',
         labelTriacTest: 'Potència triac',
         labelBrightnessLEDTest: 'Brillantor LED',
-        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812',
+        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812', pinMosfet: 'MOSFET',
         pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
         pinZCD: 'ZCD', pinTriac: 'Triac',
         toastSaved: 'Configuració guardada!',
         toastSavedRestart: 'Configuració guardada! Reiniciant...',
         toastError: 'Error en guardar',
-        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        footer: 'BlauTrigger | Martí Casamayor',
         labelWifi: 'WiFi domèstica',
         labelSsid: 'Nom de la xarxa (SSID)',
         labelPassword: 'Contrasenya',
@@ -108,13 +109,13 @@
         labelBrightnessCWTest: 'CW brightness',
         labelTriacTest: 'Triac power',
         labelBrightnessLEDTest: 'LED brightness',
-        pinRele: 'Relay', pinLed: 'LED', pinWS2812: 'WS2812',
+        pinRele: 'Relay', pinLed: 'LED', pinWS2812: 'WS2812', pinMosfet: 'MOSFET',
         pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
         pinZCD: 'ZCD', pinTriac: 'Triac',
         toastSaved: 'Configuration saved!',
         toastSavedRestart: 'Configuration saved! Restarting...',
         toastError: 'Error saving',
-        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        footer: 'BlauTrigger | Martí Casamayor',
         labelWifi: 'Home WiFi',
         labelSsid: 'Network name (SSID)',
         labelPassword: 'Password',
@@ -175,13 +176,13 @@
         labelBrightnessCWTest: 'Brillo CW',
         labelTriacTest: 'Potencia triac',
         labelBrightnessLEDTest: 'Brillo LED',
-        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812',
+        pinRele: 'Relé', pinLed: 'Led', pinWS2812: 'WS2812', pinMosfet: 'MOSFET',
         pinPWM: 'PWM', pinWW: 'WW', pinCW: 'CW',
         pinZCD: 'ZCD', pinTriac: 'Triac',
         toastSaved: '¡Configuración guardada!',
         toastSavedRestart: '¡Configuración guardada! Reiniciando...',
         toastError: 'Error al guardar',
-        footer: 'BlauTrigger 1.0 | Martí Casamayor',
+        footer: 'BlauTrigger | Martí Casamayor',
         labelWifi: 'WiFi doméstica',
         labelSsid: 'Nombre de red (SSID)',
         labelPassword: 'Contraseña',
@@ -246,6 +247,19 @@
       if (nav.startsWith('es')) return 'es';
       if (nav.startsWith('en')) return 'en';
       return 'ca';
+    }
+
+    function fetchVersion() {
+      fetch('/version')
+        .then(r => r.text())
+        .then(v => {
+          FW_VER = v.trim();
+          Object.keys(i18n).forEach(lang => {
+            i18n[lang].footer = 'BlauTrigger ' + FW_VER + ' | Martí Casamayor';
+          });
+          applyTranslations(currentLang);
+        })
+        .catch(() => {});
     }
 
     function sendDutyToServer(value) {
@@ -496,10 +510,16 @@
 
         case '1': // Digital LED WS2812
           pin1Label.textContent = t('pinWS2812');
+          pin2Label.textContent = t('pinMosfet');
           pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'none';
-          pinSeparator.style.display = 'none';
-          document.getElementById('pin2').value = '';
+          pin2Group.style.display = 'flex';
+          pin2Group.style.opacity = '0';
+          pin2Group.style.transform = 'scale(0.8)';
+          setTimeout(() => {
+            pin2Group.style.opacity = '1';
+            pin2Group.style.transform = 'scale(1)';
+          }, 50);
+          pinSeparator.style.display = 'flex';
           testToggle.style.display = 'flex';
           testDigital.style.display = 'flex';
           testDuty.style.display = 'none';
@@ -753,6 +773,7 @@
       document.getElementById('langSelector').value = currentLang;
       applyTranslations(currentLang);
 
+      fetchVersion();
       fetchMyMac();
       fetchConfigMode();
       fetchDriveMode();
@@ -1110,7 +1131,7 @@
   </div>
 
   <footer>
-    <p data-i18n="footer">BlauTrigger 1.0 | Martí Casamayor</p>
+    <p data-i18n="footer">BlauTrigger | Martí Casamayor</p>
     <p style="display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 5px;">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>

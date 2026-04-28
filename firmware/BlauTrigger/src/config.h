@@ -139,6 +139,7 @@
 // ════════════════════════════════════════════════════════════════
 //  SISTEMA
 // ════════════════════════════════════════════════════════════════
+#define FIRMWARE_VERSION       "1.0"
 #define SERIAL_BAUD            115200  // velocitat del port sèrie
 #define WIFI_AP_HOLD_MS          3000  // ms prement el botó per entrar al mode AP
 #define WIFI_AP_TIMEOUT_MS     120000  // ms màxims en mode AP abans de reiniciar
