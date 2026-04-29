@@ -605,3 +605,33 @@ footer {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: var(--primary-color);
+  border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+  background: #e0e0e0;
+  color: var(--primary-color);
+}
+
+.btn-back {
+  background: transparent;
+  color: var(--primary-color);
+  border: none;
+  padding: 6px 0;
+  font-size: 14px;
+  font-weight: 500;
+  width: auto;
+  text-align: left;
+  margin-bottom: 12px;
+  box-shadow: none;
+}
+
+.btn-back:hover {
+  background: transparent;
+  color: var(--secondary-color);
+  box-shadow: none;
+}

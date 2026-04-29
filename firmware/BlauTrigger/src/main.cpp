@@ -12,6 +12,7 @@
 
 #include <esp_sleep.h>
 #include <esp_wifi.h>
+#include <esp_system.h>
 #include <Preferences.h>
 #include <esp_now.h>
 #include <Adafruit_NeoPixel.h>
@@ -19,6 +20,7 @@
 #include <blauprotocol_trg.h>
 #include "config.h"
 #include "log.h"
+#include "watchdog.h"
 #include <AsyncMqttClient.h>
 
 
@@ -176,38 +178,31 @@ TimerHandle_t  mqttReconnectTimer   = nullptr;
 #ifndef HARDCODED_CONFIG
 Preferences prefs;
 
-// Esborra tota la configuració guardada i reseteja els pins a PIN_UNUSED
+// Esborra tota la configuració guardada (schema inclòs → loadConfig() usarà defaults)
 void clearConfig() {
   prefs.begin("blau", false);
-  prefs.putInt("ct",  PIN_UNUSED);
-  prefs.putInt("p1",  PIN_UNUSED);
-  prefs.putInt("p2",  PIN_UNUSED);
-  prefs.putInt("p3",  PIN_UNUSED);
-  prefs.putInt("bp",  PIN_UNUSED);
-  prefs.putInt("bpu", BUTTON_PULLUP);
-  prefs.putInt("b1",  BRIGHTNESS_DEF);
-  prefs.putInt("b2",  BRIGHTNESS_DEF);
-  prefs.putInt("b3",  BRIGHTNESS_DEF);
-  prefs.putInt("b4",  BRIGHTNESS_DEF);
-  prefs.putInt("bcw", BRIGHTNESS_DEF);
-  prefs.putInt("nl",  NUM_LEDS);
-  prefs.putInt("pf",  PWM_FREQ);
-  prefs.putString("sta_ssid", "");
-  prefs.putString("sta_pass", "");
-  prefs.putString("mqtt_host",      "");
-  prefs.putInt("mqtt_port",         1883);
-  prefs.putString("mqtt_user",      "");
-  prefs.putString("mqtt_pass",      "");
-  prefs.putString("mqtt_client",    HC_MQTT_CLIENT);
-  prefs.putString("mqtt_topic",     HC_MQTT_TOPIC);
-  prefs.putString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
+  prefs.clear();
   prefs.end();
-  LOG_I("[CFG] NVS esborrada (pins reset a PIN_UNUSED)");
+  LOG_I("[CFG] NVS esborrada");
 }
 
 // Llegeix la configuració des de NVS
 void loadConfig() {
   prefs.begin("blau", true);
+  uint8_t schema = prefs.getUChar("schema", 0);
+  if (schema != CONFIG_SCHEMA_VERSION) {
+    prefs.end();
+    LOG_I("[CFG] Schema v%d → esperava v%d, usant defaults", schema, CONFIG_SCHEMA_VERSION);
+    control_type = pin1 = pin2 = pin3 = boto_pin = PIN_UNUSED;
+    button_pullup = BUTTON_PULLUP;
+    brightness[1] = brightness[2] = brightness[3] = brightness[4] = BRIGHTNESS_DEF;
+    brightness_cw = BRIGHTNESS_DEF;
+    num_leds = NUM_LEDS; pwm_freq = PWM_FREQ;
+    sta_ssid = sta_pass = mqtt_host = mqtt_user = mqtt_pass = "";
+    mqtt_port = 1883;
+    mqtt_client = HC_MQTT_CLIENT; mqtt_topic = HC_MQTT_TOPIC; mqtt_fulltopic = HC_MQTT_FULLTOPIC;
+    return;
+  }
   control_type  = prefs.getInt("ct",  PIN_UNUSED);
   pin1          = prefs.getInt("p1",  PIN_UNUSED);
   pin2          = prefs.getInt("p2",  PIN_UNUSED);
@@ -245,6 +240,7 @@ void loadConfig() {
 // Desa la configuració actual a NVS
 void saveConfig() {
   prefs.begin("blau", false);
+  prefs.putUChar("schema", CONFIG_SCHEMA_VERSION);
   prefs.putInt("ct",  control_type);
   prefs.putInt("p1",  pin1);
   prefs.putInt("p2",  pin2);
@@ -313,6 +309,7 @@ void serveixWifiManager(AsyncWebServerRequest *request) {
 // Declaració anticipada necessària per al POST de configuració
 void configuracioLlum();
 void controlLlum(String trigger);
+static const char* resetReasonStr(esp_reset_reason_t r);
 
 
 // ════════════════════════════════════════════════════════════════
@@ -423,6 +420,21 @@ void onMqttConnect(bool sessionPresent) {
   LOG_D("[MQTT] published: %s/available = online", base.c_str());
   publishHADiscovery();
   publishState();
+
+  #ifndef HARDCODED_CONFIG
+  {
+    prefs.begin("blau", true);
+    uint8_t lastReset = prefs.getUChar("lastReset", 0xFF);
+    prefs.end();
+    if (lastReset != 0xFF) {
+      mqttClient.publish((base + "/stat/reset").c_str(), 1, false,
+                         resetReasonStr((esp_reset_reason_t)lastReset));
+      prefs.begin("blau", false);
+      prefs.remove("lastReset");
+      prefs.end();
+    }
+  }
+  #endif
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -478,6 +490,33 @@ void onMqttMessage(char* topic, char* payload,
   }
 }
 
+
+// ════════════════════════════════════════════════════════════════
+//  2.4 REGISTRE DEL MOTIU DE RESET
+// ════════════════════════════════════════════════════════════════
+static const char* resetReasonStr(esp_reset_reason_t r) {
+  switch (r) {
+    case ESP_RST_POWERON:   return "power-on";
+    case ESP_RST_SW:        return "reset SW";
+    case ESP_RST_PANIC:     return "excepcio/panic";
+    case ESP_RST_INT_WDT:   return "WDT interrupcio";
+    case ESP_RST_TASK_WDT:  return "WDT tasca";
+    case ESP_RST_WDT:       return "WDT (altre)";
+    case ESP_RST_DEEPSLEEP: return "deep sleep";
+    case ESP_RST_BROWNOUT:  return "brownout";
+    default:                return "desconegut";
+  }
+}
+
+void logResetReason() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  LOG_I("[BOOT] Reset: %s (%d)", resetReasonStr(reason), (int)reason);
+  #ifndef HARDCODED_CONFIG
+  prefs.begin("blau", false);
+  prefs.putUChar("lastReset", (uint8_t)reason);
+  prefs.end();
+  #endif
+}
 
 void webServerSetup() {
   // Pàgina principal (ordinador)
@@ -1127,6 +1166,8 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
 // ════════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(SERIAL_BAUD);
+  wdtSetup();
+  logResetReason();
 
   #ifndef HARDCODED_CONFIG
     #ifdef CLEAR_CONFIG
@@ -1142,6 +1183,7 @@ void setup() {
 
       unsigned long apStart = millis();
       while (boto_pin == PIN_UNUSED) {
+        wdtReset();
         dnsServer.processNextRequest();
         if (pin1 != PIN_UNUSED && control_type >= 0) controlLlum("wifiAP");
         delay(DNS_POLL_MS);
@@ -1209,11 +1251,11 @@ void setup() {
 //  LOOP PRINCIPAL
 // ════════════════════════════════════════════════════════════════
 void loop() {
+  wdtReset();
 
-  // Envia l'ACK pendent si n'hi ha un de preparat per ESP-NOW
+  // ── Tasques sempre actives ──────────────────────────────────────
   blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
 
-  // Detecta canvis de connexió WiFi STA i dispara connectMqtt quan toca
 #if defined(ENABLE_WIFI_STA) && defined(ENABLE_MQTT)
   {
     static bool lastWifiConnected = false;
@@ -1222,8 +1264,6 @@ void loop() {
       int staCh = WiFi.channel();
       LOG_I("[WIFI] STA connected, IP: %s, canal STA: %d",
         WiFi.localIP().toString().c_str(), staCh);
-      // El hardware mou l'AP al canal del STA. En ESP32-C3 (ràdio única) no es pot
-      // canviar el canal quan el STA ja és connectat — BlauLink ha de fer scan per trobar-nos.
       esp_err_t chErr = esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
       LOG_I("[WIFI] esp_wifi_set_channel(%d) -> %s (canal actual: %d)",
         ESPNOW_CHANNEL, chErr == ESP_OK ? "OK" : "FAIL (radio bloquejada al canal STA)", staCh);
@@ -1237,7 +1277,6 @@ void loop() {
   }
 #endif
 
-  // Publica l'estat per MQTT si ha canviat (per ESP-NOW o botó)
 #ifdef ENABLE_MQTT
   {
     static bool lastState = false;
@@ -1245,53 +1284,79 @@ void loop() {
   }
 #endif
 
-  if (buttonPressed()) {
-    startTime = millis();
-    LOG_I("[BTN] Boto presionat");
-    controlLlum("boto");
+  // ── Màquina d'estats (mode AP + botó) — sense delay() bloquejant ─
+  static bool     _apActive        = false;
+  static uint32_t _apStart         = 0;
+  static bool     _apBtnReleased   = false;
+  static uint32_t _apBtnReleasedAt = 0;
+  static bool     _apLastBtn       = false;
+  static bool     _btnDown         = false;
+  static uint32_t _btnDownTime     = 0;
+  static bool     _btnDebouncing   = false;
+  static uint32_t _btnUpTime       = 0;
+  static uint32_t _lastDnsPoll     = 0;
 
-    // Espera que el botó s'alliberi o que es superi el temps per entrar al mode AP
-    while (buttonPressed()) {
-      if (startTime + WIFI_AP_HOLD_MS < millis()) {
-        // ── Mode AP de configuració (botó mantingut > WIFI_AP_HOLD_MS) ──
-        configDeviceAP();
-        wifiApModeServer();
-        controlLlum("wifiAP");
+  // ── Mode AP actiu ───────────────────────────────────────────────
+  if (_apActive) {
+    uint32_t now = millis();
+    if (now - _lastDnsPoll >= 10) {
+      dnsServer.processNextRequest();
+      _lastDnsPoll = now;
+    }
+    if (!webTesting) controlLlum("wifiAP");
 
-        bool buttonReleased = false;
-        static bool lastButtonPressed = false;
-
-        while (1) {
-          dnsServer.processNextRequest();
-          if (!webTesting) controlLlum("wifiAP");
-          delay(DNS_POLL_MS);
-
-          // Reinici per timeout
-          if (startTime + WIFI_AP_TIMEOUT_MS < millis()) {
-            LOG_I("[AP] Temps excedit");
-            ESP.restart();
-          }
-
-          // Detecció de la seqüència: alliberar i tornar a prémer → reinicia el dispositiu
-          bool pressed = buttonPressed();
-
-          if (!pressed && lastButtonPressed && !buttonReleased) {
-            buttonReleased = true;
-            LOG_I("[BTN] Boto alliberat");
-            delay(BUTTON_RELEASE_DEBOUNCE_MS);
-          }
-
-          if (pressed && !lastButtonPressed && buttonReleased) {
-            LOG_I("[BTN] Boto premut despres d'alliberar");
-            buttonReleased = false;
-            ESP.restart();
-          }
-
-          lastButtonPressed = pressed;
-        }
-      }
+    if (now - _apStart > WIFI_AP_TIMEOUT_MS) {
+      LOG_I("[AP] Temps excedit");
+      ESP.restart();
     }
 
-    delay(BUTTON_DEBOUNCE_MS);
+    bool pressed = buttonPressed();
+    if (!pressed && _apLastBtn && !_apBtnReleased) {
+      _apBtnReleased   = true;
+      _apBtnReleasedAt = millis();
+      LOG_I("[BTN] Boto alliberat (mode AP)");
+    }
+    if (pressed && !_apLastBtn && _apBtnReleased &&
+        millis() - _apBtnReleasedAt >= BUTTON_RELEASE_DEBOUNCE_MS) {
+      LOG_I("[BTN] Boto premut despres d'alliberar -> reiniciant");
+      ESP.restart();
+    }
+    _apLastBtn = pressed;
+    return;
+  }
+
+  // ── Debounce post-clic (no bloquejant) ─────────────────────────
+  if (_btnDebouncing) {
+    if (millis() - _btnUpTime >= BUTTON_DEBOUNCE_MS) _btnDebouncing = false;
+    return;
+  }
+
+  // ── Detecció del botó ───────────────────────────────────────────
+  bool pressed = buttonPressed();
+
+  if (pressed && !_btnDown) {
+    _btnDown     = true;
+    _btnDownTime = millis();
+    LOG_I("[BTN] Boto presionat");
+    controlLlum("boto");
+  }
+
+  if (pressed && _btnDown && millis() - _btnDownTime >= WIFI_AP_HOLD_MS) {
+    LOG_I("[BTN] Hold -> mode AP");
+    configDeviceAP();
+    wifiApModeServer();
+    controlLlum("wifiAP");
+    _apActive      = true;
+    _apStart       = millis();
+    _apBtnReleased = false;
+    _apLastBtn     = true;
+    _btnDown       = false;
+    return;
+  }
+
+  if (!pressed && _btnDown) {
+    _btnDown       = false;
+    _btnDebouncing = true;
+    _btnUpTime     = millis();
   }
 }
