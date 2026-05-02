@@ -36,8 +36,9 @@
   #define pin3          HW_PIN3
   #define boto_pin      PIN_BOTO
   #define num_leds      NUM_LEDS
-  #define brightness_cw BRIGHTNESS_DEF
+  #define pwm_freq      PWM_FREQ
   #define button_pullup BUTTON_PULLUP
+  int brightness_cw = BRIGHTNESS_DEF;
 #else
   int control_type;
   int pin1;
@@ -50,8 +51,7 @@
   int button_pullup = BUTTON_PULLUP;
 #endif
 
-const char* ssid     = WIFI_SSID;
-const char* password = WIFI_PASSWORD;
+String device_name = WIFI_SSID;  // nom del dispositiu (AP SSID base, guardat a NVS)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -66,7 +66,11 @@ String macAP, macAPSuffix;          // MAC del AP (completa i últims 4 caràcte
 // ════════════════════════════════════════════════════════════════
 //  LED DIGITAL (NeoPixel)
 // ════════════════════════════════════════════════════════════════
-Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
+#ifdef HARDCODED_CONFIG
+  Adafruit_NeoPixel strip(NUM_LEDS, HW_PIN1, NEO_GRB + NEO_KHZ800);
+#else
+  Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
+#endif
 int brightness[5] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};  // índex = control_type
 
 
@@ -85,6 +89,8 @@ static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
 int pwmCh1 = 0;                            // canal LEDC per pin1
 int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
+static const char* resetReasonStr(esp_reset_reason_t r);
+
 uint8_t mqttR = (COLOR_MQTT >> 16) & 0xFF;  // color per defecte MQTT mode 1
 uint8_t mqttG = (COLOR_MQTT >> 8)  & 0xFF;
 uint8_t mqttB = (COLOR_MQTT)       & 0xFF;
@@ -97,9 +103,17 @@ static SemaphoreHandle_t _zcdSemaphore    = NULL;
 static TaskHandle_t      _triacTaskHandle = NULL;
 static int               _zcdPin          = PIN_UNUSED;
 static volatile uint32_t _zcdMicros       = 0;
+static volatile uint32_t _zcdPeriodUs     = 0;
+static volatile uint32_t _zcdCount        = 0;
 
 void IRAM_ATTR zcdISR() {
-  _zcdMicros = (uint32_t)micros();
+  uint32_t now = (uint32_t)micros();
+  uint32_t period = now - _zcdMicros;
+  _zcdMicros = now;
+  // Accept only periods within ±15% of 50Hz (17–23ms); EMA α=1/8 to reject glitches
+  if (period > 17000 && period < 23000)
+    _zcdPeriodUs = _zcdPeriodUs == 0 ? period : (_zcdPeriodUs * 7 + period) >> 3;
+  _zcdCount++;
   BaseType_t woken = pdFALSE;
   xSemaphoreGiveFromISR(_zcdSemaphore, &woken);
   if (woken) portYIELD_FROM_ISR();
@@ -148,6 +162,7 @@ void cleanupTriac() {
     _zcdSemaphore = NULL;
   }
   if (pin2 != PIN_UNUSED) digitalWrite(pin2, LOW);
+  _zcdPeriodUs = 0;
 }
 
 
@@ -201,6 +216,7 @@ void loadConfig() {
     sta_ssid = sta_pass = mqtt_host = mqtt_user = mqtt_pass = "";
     mqtt_port = 1883;
     mqtt_client = HC_MQTT_CLIENT; mqtt_topic = HC_MQTT_TOPIC; mqtt_fulltopic = HC_MQTT_FULLTOPIC;
+    device_name = WIFI_SSID;
     return;
   }
   control_type  = prefs.getInt("ct",  PIN_UNUSED);
@@ -225,6 +241,7 @@ void loadConfig() {
   mqtt_client    = prefs.getString("mqtt_client",    HC_MQTT_CLIENT);
   mqtt_topic     = prefs.getString("mqtt_topic",     HC_MQTT_TOPIC);
   mqtt_fulltopic = prefs.getString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
+  device_name    = prefs.getString("devname",        WIFI_SSID);
   if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
   if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
@@ -309,7 +326,6 @@ void serveixWifiManager(AsyncWebServerRequest *request) {
 // Declaració anticipada necessària per al POST de configuració
 void configuracioLlum();
 void controlLlum(String trigger);
-static const char* resetReasonStr(esp_reset_reason_t r);
 
 
 // ════════════════════════════════════════════════════════════════
@@ -610,6 +626,17 @@ void webServerSetup() {
     request->send(200, "text/plain", FIRMWARE_VERSION);
   });
 
+  // Retorna la freqüència de xarxa AC mesurada pel ZCD (en Hz, 0 si no hi ha senyal)
+  server.on("/acfreq", HTTP_GET, [](AsyncWebServerRequest *request) {
+    uint32_t p = _zcdPeriodUs;
+    bool active = (p > 0) && ((uint32_t)(micros() - _zcdMicros) < 200000UL);
+    float freq = active ? (1000000.0f / (float)p) : 0.0f;
+    LOG_D("[AC] ZCD count:%u period:%uus freq:%.1f Hz", _zcdCount, _zcdPeriodUs, freq);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "{\"freq\":%.1f}", freq);
+    request->send(200, "application/json", buf);
+  });
+
   // ── Endpoints d'escriptura (POST) ────────────────────────────
 
   // Rep i desa la configuració enviada per la web
@@ -665,7 +692,18 @@ void webServerSetup() {
         case 1: strip.setBrightness(map(duty, 0, 100, 0, 255)); strip.show(); break;
         case 2: ledcWrite(pwmCh1, map(duty, 0, 100, 0, 255)); break;
         case 3: ledcWrite(pwmCh1, map(duty, 0, 100, 0, 255)); break;
-        case 4: break;  // la tasca triac llegeix brightness[4] automàticament
+        case 4:
+          state = (duty > 0);
+          if (pin3 != PIN_UNUSED) {
+            if (state) {
+              uint8_t ledBr = (uint8_t)map((long)brightness_cw * duty / 100, 0, 100, 0, 255);
+              strip.setBrightness(ledBr);
+            } else {
+              strip.clear();
+            }
+            strip.show();
+          }
+          break;
       }
     }
     request->send(200, "text/plain", "OK");
@@ -680,9 +718,11 @@ void webServerSetup() {
       if (control_type == 3 && pin2 != PIN_UNUSED) {
         ledcWrite(pwmCh2, map(duty, 0, 100, 0, 255));
       } else if (control_type == 4 && pin3 != PIN_UNUSED) {
-        uint8_t ledBr = (uint8_t)map((long)duty * brightness[4] / 100, 0, 100, 0, 255);
-        strip.setBrightness(max((uint8_t)5, ledBr));
-        strip.show();
+        if (state) {
+          uint8_t ledBr = (uint8_t)map((long)duty * brightness[4] / 100, 0, 100, 0, 255);
+          strip.setBrightness(ledBr);
+          strip.show();
+        }
       }
     }
     request->send(200, "text/plain", "OK");
@@ -698,6 +738,19 @@ void webServerSetup() {
                   ",\"ssid\":\"" + sta_ssid + "\"" +
                   ",\"pass\":\"" + sta_pass + "\"" +
                   ",\"rssi\":" + String(rssi) + "}";
+    request->send(200, "application/json", json);
+  });
+
+  // Retorna les xarxes WiFi disponibles en format JSON
+  server.on("/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
+    int n = WiFi.scanNetworks();
+    String json = "[";
+    for (int i = 0; i < n; i++) {
+      if (i > 0) json += ",";
+      json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + ",\"enc\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? 1 : 0) + "}";
+    }
+    json += "]";
+    WiFi.scanDelete();
     request->send(200, "application/json", json);
   });
 
@@ -774,6 +827,77 @@ void webServerSetup() {
     request->send(200, "text/plain", "OK");
   });
 
+  // Esborra les credencials WiFi de NVS i desconnecta
+  server.on("/clearwifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      sta_ssid = "";
+      sta_pass = "";
+      prefs.begin("blau", false);
+      prefs.remove("sta_ssid");
+      prefs.remove("sta_pass");
+      prefs.end();
+      WiFi.disconnect();
+      LOG_I("[WIFI] Credencials WiFi esborrades");
+      request->send(200, "text/plain", "OK");
+    #else
+      request->send(403, "text/plain", "hardcoded");
+    #endif
+  });
+
+  // Esborra la configuració MQTT de NVS i desconnecta
+  server.on("/clearmqtt", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      mqtt_host = "";
+      mqtt_port = 1883;
+      mqtt_user = "";
+      mqtt_pass = "";
+      mqtt_client    = HC_MQTT_CLIENT;
+      mqtt_topic     = HC_MQTT_TOPIC;
+      mqtt_fulltopic = HC_MQTT_FULLTOPIC;
+      prefs.begin("blau", false);
+      prefs.remove("mqtt_host");
+      prefs.remove("mqtt_port");
+      prefs.remove("mqtt_user");
+      prefs.remove("mqtt_pass");
+      prefs.remove("mqtt_client");
+      prefs.remove("mqtt_topic");
+      prefs.remove("mqtt_fulltopic");
+      prefs.end();
+      if (mqttClient.connected()) mqttClient.disconnect();
+      LOG_I("[MQTT] Configuració MQTT esborrada");
+      request->send(200, "text/plain", "OK");
+    #else
+      request->send(403, "text/plain", "hardcoded");
+    #endif
+  });
+
+  // Esborra la configuració de hardware de NVS i reinicia
+  server.on("/clearhardware", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      prefs.begin("blau", false);
+      prefs.remove("ct");
+      prefs.remove("p1");
+      prefs.remove("p2");
+      prefs.remove("p3");
+      prefs.remove("bp");
+      prefs.remove("bpu");
+      prefs.remove("b1");
+      prefs.remove("b2");
+      prefs.remove("b3");
+      prefs.remove("b4");
+      prefs.remove("bcw");
+      prefs.remove("nl");
+      prefs.remove("pf");
+      prefs.end();
+      LOG_I("[CFG] Configuració hardware esborrada");
+      request->send(200, "text/plain", "OK");
+      delay(500);
+      ESP.restart();
+    #else
+      request->send(403, "text/plain", "hardcoded");
+    #endif
+  });
+
   // Reinicia el dispositiu
   server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "OK");
@@ -791,6 +915,43 @@ void webServerSetup() {
     #else
       request->send(403, "text/plain", "hardcoded");
     #endif
+  });
+
+  // Esborra el nom del dispositiu de NVS i restaura el valor per defecte
+  server.on("/cleardevicename", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      device_name = WIFI_SSID;
+      prefs.begin("blau", false);
+      prefs.remove("devname");
+      prefs.end();
+      LOG_I("[CFG] Nom del dispositiu esborrat (default: %s)", device_name.c_str());
+      request->send(200, "text/plain", device_name);
+    #else
+      request->send(403, "text/plain", "hardcoded");
+    #endif
+  });
+
+  // Retorna el nom del dispositiu
+  server.on("/devicename", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", device_name);
+  });
+
+  // Desa el nom del dispositiu a NVS
+  server.on("/devicename", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      if (request->hasParam("device_name", true)) {
+        String name = request->getParam("device_name", true)->value();
+        name.trim();
+        if (name.length() > 0 && name.length() <= 32) {
+          device_name = name;
+          prefs.begin("blau", false);
+          prefs.putString("devname", device_name);
+          prefs.end();
+          LOG_I("[CFG] device_name: %s", device_name.c_str());
+        }
+      }
+    #endif
+    request->send(200, "text/plain", "OK");
   });
 
   // Qualsevol URL no reconeguda → portal captiu
@@ -819,7 +980,7 @@ void getMyMacAddress() {
 void configDeviceAP() {
   WiFi.mode(WIFI_AP_STA);
   getMyMacAddress();
-  String apSsid = String(ssid) + "_" + macAPSuffix;
+  String apSsid = device_name + "_" + macAPSuffix;
   bool apOk = WiFi.softAP(apSsid, "", ESPNOW_CHANNEL);
   if (!apOk) {
     LOG_E("[WIFI] AP Config failed");
@@ -1149,7 +1310,7 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
     }
   }
 
-  return ACK_ERROR;
+  return ACK_ERROR; 
 }
 
 // Callback ESP-NOW: rep un paquet i prepara l'ACK si cal
@@ -1166,6 +1327,7 @@ void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
 // ════════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(SERIAL_BAUD);
+  // delay(2000);
   wdtSetup();
   logResetReason();
 
@@ -1201,6 +1363,10 @@ void setup() {
   controlLlum("inici"); // parpelleig d'arrencada
 
   configDeviceAP();     // activa el WiFi en mode Access Point
+
+  // El servidor web és sempre accessible mentre hi hagi WiFi actiu
+  if (!LittleFS.begin()) { LOG_E("[FS] Error muntant LittleFS"); }
+  else { LOG_I("[WIFI] AP IP: %s", WiFi.softAPIP().toString().c_str()); webServerSetup(); }
 
   pinMode(boto_pin, button_pullup ? INPUT_PULLUP : INPUT_PULLDOWN);
 
@@ -1342,9 +1508,8 @@ void loop() {
   }
 
   if (pressed && _btnDown && millis() - _btnDownTime >= WIFI_AP_HOLD_MS) {
-    LOG_I("[BTN] Hold -> mode AP");
-    configDeviceAP();
-    wifiApModeServer();
+    LOG_I("[BTN] Hold -> mode AP (captiu)");
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     controlLlum("wifiAP");
     _apActive      = true;
     _apStart       = millis();

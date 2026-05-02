@@ -1,11 +1,12 @@
 #pragma once
 
 // ════════════════════════════════════════════════════════════════
-//  SELECCIÓ DEL DISPOSITIU  (descomenta un sol)
+//  SELECCIÓ DEL DISPOSITIU  (descomenta un sol)    -->>> està també definit al platformio.ini: ${hw_profile.flags}
 // ════════════════════════════════════════════════════════════════
-#define PICO_CLICK
 // #define SONOFF_BASIC_R4
-
+// #define PICO_CLICK
+#define ESP32_S3_ZERO
+// #define AC_REGULATOR
 
 // ════════════════════════════════════════════════════════════════
 //  PINOUT I CONFIGURACIÓ DE HARDWARE
@@ -34,7 +35,29 @@
   #define HW_PIN3         PIN_UNUSED
   #define BUTTON_PULLUP   0   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
 
-#else
+#elif defined(ESP32_S3_ZERO)
+  #define PIN_BOTO        0
+  #define PIN_DIGITAL_LED 21
+  #define PIN_RELE        PIN_UNUSED
+  #define PIN_LED         PIN_UNUSED
+  #define HW_CONTROL_TYPE 1   // 1=Digital led
+  #define HW_PIN1         PIN_DIGITAL_LED
+  #define HW_PIN2         PIN_UNUSED
+  #define HW_PIN3         PIN_UNUSED
+  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
+
+#elif defined(AC_REGULATOR)
+  #define PIN_BOTO        0
+  #define PIN_DIGITAL_LED 21
+  #define PIN_RELE        PIN_UNUSED
+  #define PIN_LED         PIN_UNUSED
+  #define HW_CONTROL_TYPE 1   // 1=Digital led
+  #define HW_PIN1         PIN_DIGITAL_LED
+  #define HW_PIN2         PIN_UNUSED
+  #define HW_PIN3         PIN_UNUSED
+  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
+
+  #else
   #error "Defineix una versió del dispositiu a config.h"
 #endif
 
@@ -139,7 +162,7 @@
 // ════════════════════════════════════════════════════════════════
 //  SISTEMA
 // ════════════════════════════════════════════════════════════════
-#define LOG_LEVEL              2        // 0=silent 1=error 2=info 3=debug
+#define LOG_LEVEL              3        // 0=silent 1=error 2=info 3=debug
 #define CONFIG_SCHEMA_VERSION  1        // incrementa quan canvïes claus NVS
 #define FIRMWARE_VERSION       "1.0"
 #define SERIAL_BAUD            115200  // velocitat del port sèrie
