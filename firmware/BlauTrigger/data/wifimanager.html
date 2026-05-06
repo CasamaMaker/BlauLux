@@ -105,6 +105,34 @@
         clearHwDone:        'Hardware esborrat! Reiniciant...',
         clearAltresBtn:     'Esborrar nom',
         clearAltresDone:    'Nom esborrat!',
+        labelTemplate:      'Plantilla de dispositiu',
+        templateCustom:     'Personalitzat',
+        labelMcu:           'Microcontrolador',
+        mcuDefault:         '— Selecciona MCU —',
+        labelGpioMap:       'Mapa de GPIOs',
+        labelFunc:          'Funcio',
+        labelChan:          'Canal',
+        chanOptHint:        'opcional',
+        gpioValidNoBtn:     'Avís: cap GPIO configurat com a botó.',
+        gpioValidNeedsChan: 'Ha de tenir canal (1-15)',
+        gpioValidNeedsZcd:  'Triac de fase necessita un GPIO ZCD',
+        gpioValidChanConflict: 'Canal amb múltiples sortides incompatibles:',
+        labelPwmDuty:       'Duty cycle per defecte',
+        labelPwmDutyTest:   'Duty cycle',
+        labelMosfetTest:    'MOSFET PWM',
+        labelPinName:       'Nom',
+        gpioNamePlaceholder:'Nom pin',
+        labelZcdGpio:       'GPIO de detecció de zero',
+        zcdSelectHint:      '— Selecciona GPIO ZCD —',
+        labelNumLedsShort:  'Núm. LEDs',
+        func_none:          '—',
+        func_btn:           'In. Botó (pull-up)',
+        func_btn_inv:       'In. Botó (pull-down)',
+        func_relay_out:     'Out. ON/OFF (relé/led/mosfet)',
+        func_neopixel:      'Out. Led digital (WS2812)',
+        func_pwm:           'Out. PWM',
+        func_triac_cycle:   'Out. Triac (per cicles)',
+        func_triac_phase:   'Out. Triac (per fase)',
       },
       en: {
         pageTitle: 'BlauTrigger Configurator',
@@ -202,6 +230,34 @@
         clearHwDone:        'Hardware cleared! Restarting...',
         clearAltresBtn:     'Clear name',
         clearAltresDone:    'Name cleared!',
+        labelTemplate:      'Device template',
+        templateCustom:     'Custom',
+        labelMcu:           'Microcontroller',
+        mcuDefault:         '— Select MCU —',
+        labelGpioMap:       'GPIO Map',
+        labelFunc:          'Function',
+        labelChan:          'Channel',
+        chanOptHint:        'optional',
+        gpioValidNoBtn:     'Warning: no GPIO configured as button.',
+        gpioValidNeedsChan: 'Must have channel (1-15)',
+        gpioValidNeedsZcd:  'Phase triac needs a ZCD GPIO',
+        gpioValidChanConflict: 'Channel has multiple incompatible outputs:',
+        labelPwmDuty:       'Default duty cycle',
+        labelPwmDutyTest:   'Duty cycle',
+        labelMosfetTest:    'MOSFET PWM',
+        labelPinName:       'Name',
+        gpioNamePlaceholder:'Pin name',
+        labelZcdGpio:       'Zero-cross GPIO',
+        zcdSelectHint:      '— Select ZCD GPIO —',
+        labelNumLedsShort:  'Num. LEDs',
+        func_none:          '—',
+        func_btn:           'In. Button (pull-up)',
+        func_btn_inv:       'In. Button (pull-down)',
+        func_relay_out:     'Out. ON/OFF (relay/LED/mosfet)',
+        func_neopixel:      'Out. Digital LED (WS2812)',
+        func_pwm:           'Out. PWM',
+        func_triac_cycle:   'Out. Triac (by cycles)',
+        func_triac_phase:   'Out. Triac (phase cut)',
       },
       es: {
         pageTitle: 'Configurador BlauTrigger',
@@ -299,6 +355,34 @@
         clearHwDone:        '¡Hardware borrado! Reiniciando...',
         clearAltresBtn:     'Borrar nombre',
         clearAltresDone:    '¡Nombre borrado!',
+        labelTemplate:      'Plantilla de dispositivo',
+        templateCustom:     'Personalizado',
+        labelMcu:           'Microcontrolador',
+        mcuDefault:         '— Selecciona MCU —',
+        labelGpioMap:       'Mapa de GPIOs',
+        labelFunc:          'Función',
+        labelChan:          'Canal',
+        chanOptHint:        'opcional',
+        gpioValidNoBtn:     'Aviso: ningún GPIO configurado como botón.',
+        gpioValidNeedsChan: 'Debe tener canal (1-15)',
+        gpioValidNeedsZcd:  'Triac de fase necesita un GPIO ZCD',
+        gpioValidChanConflict: 'Canal con múltiples salidas incompatibles:',
+        labelPwmDuty:       'Duty cycle por defecto',
+        labelPwmDutyTest:   'Duty cycle',
+        labelMosfetTest:    'MOSFET PWM',
+        labelPinName:       'Nombre',
+        gpioNamePlaceholder:'Nombre pin',
+        labelZcdGpio:       'GPIO de detección de cero',
+        zcdSelectHint:      '— Selecciona GPIO ZCD —',
+        labelNumLedsShort:  'Núm. LEDs',
+        func_none:          '—',
+        func_btn:           'In. Botón (pull-up)',
+        func_btn_inv:       'In. Botón (pull-down)',
+        func_relay_out:     'Out. ON/OFF (relé/led/mosfet)',
+        func_neopixel:      'Out. Led digital (WS2812)',
+        func_pwm:           'Out. PWM',
+        func_triac_cycle:   'Out. Triac (por ciclos)',
+        func_triac_phase:   'Out. Triac (por fase)',
       },
     };
 
@@ -339,6 +423,50 @@
       return 'ca';
     }
 
+    // ── Sistema de debug estructurat ────────────────────────────
+    const DBG = {
+      _s: {
+        CONFIG: 'color:#2980b9;font-weight:700',
+        ACTION: 'color:#27ae60;font-weight:700',
+        CHANGE: 'color:#e67e22;font-weight:700',
+        VALID:  'color:#e74c3c;font-weight:700',
+        HW:     'color:#8e44ad;font-weight:700',
+        OK:     'color:#1abc9c;font-weight:700',
+      },
+      _ts() { return new Date().toTimeString().slice(0, 8); },
+      _fmt(tag, msg) { return `%c[${this._ts()}][${tag}] ${msg}`; },
+      config(msg, data) {
+        data !== undefined
+          ? console.log(this._fmt('CONFIG', msg), this._s.CONFIG, data)
+          : console.log(this._fmt('CONFIG', msg), this._s.CONFIG);
+      },
+      action(msg, data) {
+        data !== undefined
+          ? console.log(this._fmt('ACTION', msg), this._s.ACTION, data)
+          : console.log(this._fmt('ACTION', msg), this._s.ACTION);
+      },
+      change(msg, data) {
+        data !== undefined
+          ? console.log(this._fmt('CHANGE', msg), this._s.CHANGE, data)
+          : console.log(this._fmt('CHANGE', msg), this._s.CHANGE);
+      },
+      valid(msg, data) {
+        data !== undefined
+          ? console.warn(this._fmt('VALID', msg), this._s.VALID, data)
+          : console.warn(this._fmt('VALID', msg), this._s.VALID);
+      },
+      hw(msg, data) {
+        data !== undefined
+          ? console.log(this._fmt('HW', msg), this._s.HW, data)
+          : console.log(this._fmt('HW', msg), this._s.HW);
+      },
+      ok(msg, data) {
+        data !== undefined
+          ? console.log(this._fmt('OK', msg), this._s.OK, data)
+          : console.log(this._fmt('OK', msg), this._s.OK);
+      },
+    };
+
     function goTo(page) {
       document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
       document.getElementById('page-' + page).style.display = '';
@@ -359,6 +487,7 @@
     }
 
     function sendDutyToServer(value) {
+      DBG.hw(`→ /dutty  duty:${value}%`);
       fetch('/dutty', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -367,6 +496,7 @@
     }
 
     function sendDutyCWToServer(value) {
+      DBG.hw(`→ /duttyCW  duty_cw:${value}%`);
       fetch('/duttyCW', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -375,6 +505,8 @@
     }
 
     function sendColorToServer(r, g, b) {
+      const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+      DBG.hw(`→ /color  rgb(${r},${g},${b}) ${hex}`);
       fetch('/color', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -383,8 +515,10 @@
     }
 
     function handleTestSwitch(checkbox) {
-      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
-      if (selected === '1') {
+      if (_currentMode === 1) {
+        const neoIdx = gpioState.findIndex(function(s) { return s.func === 'neopixel'; });
+        const label  = neoIdx >= 0 && gpioState[neoIdx].name ? `"${gpioState[neoIdx].name}" GPIO${neoIdx}` : `GPIO${neoIdx}`;
+        DBG.hw(`NeoPixel ${label}: ${checkbox.checked ? 'ON' : 'OFF (apagat)'}`);
         if (checkbox.checked) {
           handleColorChange(document.getElementById('colorPicker'));
         } else {
@@ -394,30 +528,41 @@
     }
 
     function handleDutySwitch(checkbox) {
-      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
+      const modeNames = {2: 'PWM Dimmer', 3: 'WW/CW', 4: 'Triac'};
       if (!checkbox.checked) {
+        DBG.hw(`${modeNames[_currentMode] || 'Output'}: OFF (duty→0)`);
         sendDutyToServer(0);
-        if (selected === '3') sendDutyCWToServer(0);
+        if (_currentMode === 3) sendDutyCWToServer(0);
       } else {
-        if (selected === '2') {
-          sendDutyToServer(document.getElementById('dutySlider').value);
-        } else if (selected === '3') {
-          sendDutyToServer(document.getElementById('wwSlider').value);
-          sendDutyCWToServer(document.getElementById('cwSlider').value);
-        } else if (selected === '4') {
-          sendDutyToServer(document.getElementById('triacSlider').value);
-          sendDutyCWToServer(document.getElementById('triacLEDSlider').value);
+        if (_currentMode === 2) {
+          const v = document.getElementById('dutySlider').value;
+          DBG.hw(`PWM Dimmer: ON  duty:${v}%`);
+          sendDutyToServer(v);
+        } else if (_currentMode === 3) {
+          const ww = document.getElementById('wwSlider').value;
+          const cw = document.getElementById('cwSlider').value;
+          DBG.hw(`WW/CW: ON  ww:${ww}%  cw:${cw}%`);
+          sendDutyToServer(ww);
+          sendDutyCWToServer(cw);
+        } else if (_currentMode === 4) {
+          const tr  = document.getElementById('triacSlider').value;
+          const led = document.getElementById('triacLEDSlider').value;
+          DBG.hw(`Triac: ON  potència:${tr}%  LED:${led}%`);
+          sendDutyToServer(tr);
+          sendDutyCWToServer(led);
         }
       }
     }
 
     function handleTriacChange(slider) {
       document.getElementById('triacValue').textContent = slider.value + '%';
+      DBG.hw(`Triac: potència → ${slider.value}%`);
       sendDutyToServer(slider.value);
     }
 
     function handleTriacLEDChange(slider) {
       document.getElementById('triacLEDValue').textContent = slider.value + '%';
+      DBG.hw(`Triac LED: brillantor → ${slider.value}%`);
       sendDutyCWToServer(slider.value);
     }
 
@@ -449,6 +594,7 @@
       const isOn = document.getElementById('testSwitch').checked;
       if (!isOn) return;
       const hex = picker.value;
+      DBG.hw(`NeoPixel: color → ${hex}`);
       sendColorToServer(
         parseInt(hex.slice(1,3), 16),
         parseInt(hex.slice(3,5), 16),
@@ -458,21 +604,25 @@
 
     function handleBrightnessChange(slider) {
       document.getElementById('brightnessValue').textContent = slider.value + '%';
+      DBG.hw(`NeoPixel: brillantor → ${slider.value}%`);
       sendDutyToServer(slider.value);
     }
 
     function handleDutyChange(slider) {
       document.getElementById('dutyValue').textContent = slider.value + '%';
+      DBG.hw(`PWM Dimmer: duty → ${slider.value}%`);
       sendDutyToServer(slider.value);
     }
 
     function handleWWChange(slider) {
       document.getElementById('wwValue').textContent = slider.value + '%';
+      DBG.hw(`WW: brillantor → ${slider.value}%`);
       sendDutyToServer(slider.value);
     }
 
     function handleCWChange(slider) {
       document.getElementById('cwValue').textContent = slider.value + '%';
+      DBG.hw(`CW: brillantor → ${slider.value}%`);
       sendDutyCWToServer(slider.value);
     }
 
@@ -482,49 +632,849 @@
       }).catch(() => {});
     }
 
-    function fetchPins() {
-      fetch('/pins', {method: 'POST'}).then(r => r.json()).then(data => {
-        document.getElementById('pin1').value = data.pin1 !== null ? data.pin1 : '';
-        document.getElementById('pin2').value = data.pin2 !== null ? data.pin2 : '';
-        document.getElementById('pin3').value = data.pin3 !== null ? data.pin3 : '';
-      }).catch(() => {});
-    }
-
-    function fetchNumLeds() {
-      fetch('/numLeds', {method: 'POST'}).then(r => r.text()).then(data => {
-        document.getElementById('numLedsInput').value = parseInt(data.trim()) || 1;
-      }).catch(() => {});
-    }
-
     function fetchBrightnessConfig() {
-      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
-      if (!selected || selected === '0') return;
+      const ct = _currentMode;
+      if (ct <= 0) return;
       fetch('/brightness', {method: 'POST'}).then(r => r.json()).then(data => {
-        const map = {'1': data.b1, '2': data.b2, '3': data.b3, '4': data.b4};
-        const val = map[selected] ?? 100;
-        document.getElementById('brightnessConfigSlider').value = val;
-        document.getElementById('brightnessConfigValue').textContent = val + '%';
-        if (selected === '3') {
-          const cwVal = data.bcw ?? 100;
-          document.getElementById('brightnessCWConfigSlider').value = cwVal;
-          document.getElementById('brightnessCWConfigValue').textContent = cwVal + '%';
-        }
-        if (selected === '4') {
-          const cwVal = data.bcw ?? 100;
-          document.getElementById('brightnessCWConfigSlider').value = cwVal;
-          document.getElementById('brightnessCWConfigValue').textContent = cwVal + '%';
-        }
-        if (selected === '2' || selected === '3') {
-          document.getElementById('pwmFreqInput').value = data.pf ?? 5000;
+        const map = {1: data.b1, 2: data.b2, 3: data.b3, 4: data.b4};
+        const val = map[ct] ?? 100;
+        const sliderEl = document.getElementById('brightnessConfigSlider');
+        const valueEl  = document.getElementById('brightnessConfigValue');
+        if (sliderEl) sliderEl.value = val;
+        if (valueEl)  valueEl.textContent = val + '%';
+        if (ct === 3 || ct === 4) {
+          const cwVal   = data.bcw ?? 100;
+          const cwSlider = document.getElementById('brightnessCWConfigSlider');
+          const cwValue  = document.getElementById('brightnessCWConfigValue');
+          if (cwSlider) cwSlider.value = cwVal;
+          if (cwValue)  cwValue.textContent = cwVal + '%';
         }
       }).catch(() => {});
+    }
+
+    // ── Perfils MCU (GPIOs 0-21 per defecte; ampliar quan el fw suporti més) ──
+    const MCU_PROFILES = {
+      'esp32c3': {
+        name: 'ESP32-C3',
+        caps: [
+          {valid:true,  hasPwm:true,  hasAdc:true},   // 0
+          {valid:true,  hasPwm:true,  hasAdc:true},   // 1
+          {valid:true,  hasPwm:true,  hasAdc:true},   // 2
+          {valid:true,  hasPwm:true,  hasAdc:true},   // 3
+          {valid:true,  hasPwm:true,  hasAdc:true},   // 4
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 5
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 6
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 7
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 8
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 9
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 10
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 11 (flash CS)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 12 (flash CLK)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 13 (flash DIO)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 14 (flash DIO)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 15 (flash DIO)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 16 (flash DIO)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 17 (flash DIO)
+          {valid:false, hasPwm:false, hasAdc:false},  // 18 (USB D-)
+          {valid:false, hasPwm:false, hasAdc:false},  // 19 (USB D+)
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 20
+          {valid:true,  hasPwm:true,  hasAdc:false},  // 21
+        ]
+      },
+      'esp32s3': {
+        name: 'ESP32-S3',
+        caps: [
+          {valid:true, hasPwm:true,  hasAdc:false},  // 0  (strapping)
+          {valid:true, hasPwm:true,  hasAdc:true},   // 1
+          {valid:true, hasPwm:true,  hasAdc:true},   // 2
+          {valid:true, hasPwm:true,  hasAdc:true},   // 3
+          {valid:true, hasPwm:true,  hasAdc:true},   // 4
+          {valid:true, hasPwm:true,  hasAdc:true},   // 5
+          {valid:true, hasPwm:true,  hasAdc:true},   // 6
+          {valid:true, hasPwm:true,  hasAdc:true},   // 7
+          {valid:true, hasPwm:true,  hasAdc:true},   // 8
+          {valid:true, hasPwm:true,  hasAdc:true},   // 9
+          {valid:true, hasPwm:true,  hasAdc:true},   // 10
+          {valid:true, hasPwm:true,  hasAdc:false},  // 11
+          {valid:true, hasPwm:true,  hasAdc:false},  // 12
+          {valid:true, hasPwm:true,  hasAdc:false},  // 13
+          {valid:true, hasPwm:true,  hasAdc:false},  // 14
+          {valid:true, hasPwm:true,  hasAdc:false},  // 15
+          {valid:true, hasPwm:true,  hasAdc:false},  // 16
+          {valid:true, hasPwm:true,  hasAdc:false},  // 17
+          {valid:true, hasPwm:false, hasAdc:false},  // 18 (USB D-)
+          {valid:true, hasPwm:false, hasAdc:false},  // 19 (USB D+)
+          {valid:true, hasPwm:true,  hasAdc:false},  // 20
+          {valid:true, hasPwm:true,  hasAdc:false},  // 21
+        ]
+      },
+    };
+
+    let _currentMcu = null; // perfil MCU actiu (null = cap seleccionat)
+
+    function selectMcu(mcuId) {
+      _currentMcu = MCU_PROFILES[mcuId] || null;
+      try { localStorage.setItem('blau_mcu', mcuId || ''); } catch(e) {}
+      applyMcuProfile();
+    }
+
+    function applyMcuProfile() {
+      if (!_currentMcu) return;
+      for (let g = 0; g <= 21; g++) {
+        const cap = _currentMcu.caps[g];
+        const row = document.getElementById('gpio_row_' + g);
+        const sub = document.getElementById('gpio_sub_' + g);
+        if (!row) continue;
+        if (!cap || !cap.valid) {
+          gpioState[g].func = 'none';
+          gpioState[g].chan  = 0;
+          row.style.opacity = '0.35';
+          row.title = 'GPIO no disponible en aquest MCU';
+          row.querySelectorAll('select, input').forEach(function(el) { el.disabled = true; });
+          if (sub) { sub.style.opacity = '0.35'; sub.querySelectorAll('select, input').forEach(function(el) { el.disabled = true; }); }
+        } else {
+          row.style.opacity = '';
+          row.title = '';
+          if (gpioState[g].func !== 'zcd_reserved') {
+            row.querySelectorAll('select, input').forEach(function(el) { el.disabled = false; });
+            const cInp = document.getElementById('gpio_chan_' + g);
+            if (cInp) cInp.disabled = !needsChan(gpioState[g].func);
+          }
+          if (sub) { sub.style.opacity = ''; sub.querySelectorAll('select, input').forEach(function(el) { el.disabled = false; }); }
+        }
+      }
+      validateGpioMap();
+    }
+
+    let _funclist  = [];
+    let _templates = [];
+
+    // ── Model de dades intern ──
+    const FUNC_DEFS = [
+      { id: 'none',        i18nKey: 'func_none',       firmwareId: 'none',       hasSubRow: false, needsChan: false },
+      { id: 'btn',         i18nKey: 'func_btn',         firmwareId: 'btn',        hasSubRow: false, needsChan: true  },
+      { id: 'btn_inv',     i18nKey: 'func_btn_inv',     firmwareId: 'btn_inv',    hasSubRow: false, needsChan: true  },
+      { id: 'relay',       i18nKey: 'func_relay_out',   firmwareId: 'relay',      hasSubRow: false, needsChan: true  },
+      { id: 'neopixel',    i18nKey: 'func_neopixel',    firmwareId: 'neopixel',   hasSubRow: true,  needsChan: true  },
+      { id: 'pwm',         i18nKey: 'func_pwm',         firmwareId: 'pwm',        hasSubRow: true,  needsChan: true  },
+      { id: 'triac_cycle', i18nKey: 'func_triac_cycle', firmwareId: 'mosfet_pwm', hasSubRow: true,  needsChan: true  },
+      { id: 'triac_phase', i18nKey: 'func_triac_phase', firmwareId: 'triac',      hasSubRow: true,  needsChan: true  },
+    ];
+
+    let gpioState = Array.from({length: 22}, () =>
+      ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+    );
+    let zcdReserved = new Set();
+
+    function needsChan(func) {
+      const fd = FUNC_DEFS.find(f => f.id === func);
+      return fd ? fd.needsChan : false;
+    }
+
+    function defaultParams(func) {
+      if (func === 'neopixel')    return { numLeds: 1, color: '#ffffff', brightness: 50 };
+      if (func === 'pwm')         return { freq: 5000, duty: 50 };
+      if (func === 'triac_cycle') return { duty: 50 };
+      if (func === 'triac_phase') return { duty: 50 };
+      return {};
+    }
+
+    function mapFirmwareToUiFunc(fwId) {
+      const map = {
+        relay: 'relay', led: 'relay', mosfet: 'relay',
+        neopixel: 'neopixel', pwm: 'pwm',
+        pwm_ww: 'pwm', pwm_cw: 'pwm',
+        triac: 'triac_phase', mosfet_pwm: 'triac_cycle',
+        zcd: 'none',
+        btn: 'btn', btn_inv: 'btn_inv',
+        none: 'none', adc: 'none',
+      };
+      return map[fwId] || 'none';
+    }
+
+    function fetchFunclist() {
+      return fetch('/funclist').then(r => r.json()).then(data => {
+        _funclist = data;
+      }).catch(() => { _funclist = []; });
+    }
+
+    function fetchTemplates() {
+      return fetch('/templates').then(r => r.json()).then(data => {
+        _templates = data;
+        populateTemplateSelect();
+      }).catch(() => { _templates = []; });
+    }
+
+    function populateTemplateSelect() {
+      const sel = document.getElementById('templateSelect');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">' + t('templateCustom') + '</option>';
+      _templates.forEach(function(tmpl, i) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = tmpl.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    function onTemplateChange(val) {
+      const mcuSection = document.getElementById('mcuSection');
+      if (mcuSection) mcuSection.style.display = (val === '') ? '' : 'none';
+      applyTemplate(val);
+    }
+
+    function fetchGpioMap() {
+      return fetch('/gpiomap').then(r => r.json()).then(function(data) {
+        buildGpioTable(data);
+        // Restaura el selector MCU des de localStorage
+        try {
+          const savedMcu = localStorage.getItem('blau_mcu');
+          const mcuSel   = document.getElementById('mcuSelect');
+          if (mcuSel && savedMcu) { mcuSel.value = savedMcu; selectMcu(savedMcu); }
+        } catch(e) {}
+        validateGpioMap();
+        updateMosfetTest();
+      }).catch(function() {});
+    }
+
+    function buildGpioTable(gpiomap) {
+      const tbody = document.getElementById('gpioTableBody');
+      if (!tbody) return;
+
+      // Reinicialitzar estat
+      gpioState = Array.from({length: 22}, () =>
+        ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+      );
+      zcdReserved.clear();
+
+      // Pas 1: decodificar totes les entrades del firmware
+      for (let g = 0; g <= 21; g++) {
+        const info = gpiomap['g' + g] || {func: 0, chan: 0};
+        const fwFuncDef = _funclist[info.func];
+        const fwId = fwFuncDef ? fwFuncDef.id : 'none';
+        gpioState[g].func = mapFirmwareToUiFunc(fwId);
+        gpioState[g].chan  = info.chan || 0;
+        gpioState[g].params = defaultParams(gpioState[g].func);
+      }
+
+      // Pas 2: reconstruir parelles triac_phase ↔ zcd
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func !== 'triac_phase') continue;
+        const ch = gpioState[g].chan;
+        for (let z = 0; z <= 21; z++) {
+          if (z === g) continue;
+          const info = gpiomap['g' + z] || {func: 0, chan: 0};
+          const fwFuncDef = _funclist[info.func];
+          if (fwFuncDef && fwFuncDef.id === 'zcd' && info.chan === ch) {
+            gpioState[g].zcdGpio = z;
+            gpioState[z].func = 'zcd_reserved';
+            zcdReserved.add(z);
+            break;
+          }
+        }
+      }
+
+      // Pas 3: semar params globals als GPIOs corresponents
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func === 'neopixel') {
+          if (gpiomap.nl    !== undefined) gpioState[g].params.numLeds   = gpiomap.nl;
+          if (gpiomap.b1    !== undefined) gpioState[g].params.brightness = gpiomap.b1;
+          if (gpiomap.color !== undefined) gpioState[g].params.color      = '#' + gpiomap.color;
+          break;
+        }
+      }
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func === 'pwm' || gpioState[g].func === 'triac_cycle') {
+          if (gpiomap.pf !== undefined) gpioState[g].params.freq = gpiomap.pf;
+          if (gpiomap.pd !== undefined) gpioState[g].params.duty = gpiomap.pd;
+          break;
+        }
+      }
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func === 'triac_phase') {
+          if (gpiomap.b4 !== undefined) gpioState[g].params.duty = gpiomap.b4;
+          break;
+        }
+      }
+      // Semar noms dels pins
+      for (let g = 0; g <= 21; g++) {
+        const nm = gpiomap['n' + g];
+        if (nm !== undefined) gpioState[g].name = nm;
+      }
+
+      // Pas 4: construir DOM
+      tbody.innerHTML = '';
+      for (let g = 0; g <= 21; g++) {
+        tbody.appendChild(buildGpioRow(g));
+        const fd = FUNC_DEFS.find(f => f.id === gpioState[g].func);
+        if (fd && fd.hasSubRow) tbody.appendChild(buildSubRow(g));
+      }
+    }
+
+    function buildGpioRow(gpio) {
+      const state = gpioState[gpio];
+      const isZcdReserved = (state.func === 'zcd_reserved');
+      const tr = document.createElement('tr');
+      tr.id = 'gpio_row_' + gpio;
+      const fd0 = FUNC_DEFS.find(function(f) { return f.id === state.func; });
+      const rowClasses = [];
+      if (isZcdReserved) rowClasses.push('gpio-zcd-reserved');
+      if (fd0 && fd0.hasSubRow) rowClasses.push('gpio-has-subrow');
+      tr.className = rowClasses.join(' ');
+
+      // Col 1: nom editable
+      const tdName = document.createElement('td');
+      tdName.style.cssText = 'padding:2px 3px;';
+      const nameInp = document.createElement('input');
+      nameInp.type = 'text';
+      nameInp.id = 'gpio_name_' + gpio;
+      nameInp.value = state.name || '';
+      nameInp.placeholder = t('gpioNamePlaceholder');
+      nameInp.maxLength = 12;
+      nameInp.style.cssText = 'width:100%; font-size:0.82em; border:1px solid #ddd; border-radius:4px; padding:2px 4px; box-sizing:border-box;';
+      if (isZcdReserved) nameInp.disabled = true;
+      nameInp.oninput = function() { onNameChange(gpio); };
+      tdName.appendChild(nameInp);
+      tr.appendChild(tdName);
+
+      // Col 2: número GPIO
+      const tdGpio = document.createElement('td');
+      tdGpio.textContent = gpio;
+      tdGpio.style.cssText = 'text-align:center; font-weight:600; color:#555; padding:4px 2px; white-space:nowrap;';
+      if (isZcdReserved) {
+        const badge = document.createElement('span');
+        badge.textContent = ' ZCD';
+        badge.style.cssText = 'font-size:0.7em; color:#e67e22; font-weight:400;';
+        tdGpio.appendChild(badge);
+      }
+      tr.appendChild(tdGpio);
+
+      // Col 3: funció
+      const tdFunc = document.createElement('td');
+      tdFunc.style.cssText = 'padding:2px 4px;';
+      const sel = document.createElement('select');
+      sel.id = 'gpio_func_' + gpio;
+      sel.style.cssText = 'width:100%; font-size:0.82em;';
+      sel.disabled = isZcdReserved;
+      FUNC_DEFS.forEach(function(fd) {
+        const opt = document.createElement('option');
+        opt.value = fd.id;
+        opt.textContent = t(fd.i18nKey);
+        if (fd.id === state.func) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (isZcdReserved) {
+        // Mostrar com a "ZCD reservat" però sense afegir-ho a FUNC_DEFS
+        const opt = document.createElement('option');
+        opt.value = 'zcd_reserved';
+        opt.textContent = 'ZCD (reservat)';
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.onchange = function() { onFuncChange(gpio); };
+      tdFunc.appendChild(sel);
+      tr.appendChild(tdFunc);
+
+      // Col 4: canal
+      const tdChan = document.createElement('td');
+      tdChan.style.cssText = 'padding:2px 4px; text-align:center;';
+      const chanInp = document.createElement('input');
+      chanInp.type = 'number';
+      chanInp.id = 'gpio_chan_' + gpio;
+      chanInp.min = 1; chanInp.max = 15;
+      chanInp.style.cssText = 'width:44px; text-align:center; font-size:0.82em;';
+      const hasCh = needsChan(state.func);
+      const isInputFunc = (state.func === 'btn' || state.func === 'btn_inv');
+      chanInp.disabled = !hasCh || isZcdReserved;
+      chanInp.min = isInputFunc ? 0 : 1;
+      chanInp.value = (hasCh && state.chan > 0) ? state.chan : '';
+      chanInp.placeholder = isInputFunc ? '—' : (hasCh ? '1' : '—');
+      chanInp.oninput = function() { onChanChange(gpio); };
+      tdChan.appendChild(chanInp);
+      tr.appendChild(tdChan);
+
+      return tr;
+    }
+
+    function buildSubRow(gpio) {
+      const state = gpioState[gpio];
+      const func = state.func;
+      const params = state.params;
+
+      const tr = document.createElement('tr');
+      tr.id = 'gpio_sub_' + gpio;
+      tr.className = 'gpio-sub-row';
+
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.className = 'gpio-sub-cell';
+
+      const inner = document.createElement('div');
+      inner.className = 'gpio-sub-inner';
+
+      if (func === 'neopixel') {
+        inner.appendChild(makeSubField('labelNumLedsShort',
+          makeNumberInput('sub_nl_' + gpio, params.numLeds || 1, 1, 500, '', function(v) {
+            DBG.change(`GPIO ${gpio} neopixel: numLeds → ${v}`);
+            gpioState[gpio].params.numLeds = v;
+          })));
+        inner.appendChild(makeSubField('labelColor',
+          makeColorInput('sub_color_' + gpio, params.color || '#ffffff', function(v) {
+            DBG.change(`GPIO ${gpio} neopixel: color → ${v}`);
+            gpioState[gpio].params.color = v;
+          })));
+        inner.appendChild(makeSubField('labelBrightness',
+          makeSliderInput('sub_br_' + gpio, params.brightness !== undefined ? params.brightness : 50, 0, 100, '%', function(v) {
+            DBG.change(`GPIO ${gpio} neopixel: brightness → ${v}%`);
+            gpioState[gpio].params.brightness = v;
+          })));
+      } else if (func === 'pwm') {
+        inner.appendChild(makeSubField('labelPwmFreq',
+          makeNumberInput('sub_pf_' + gpio, params.freq || 5000, 100, 40000, 'Hz', function(v) {
+            DBG.change(`GPIO ${gpio} pwm: freq → ${v} Hz`);
+            gpioState[gpio].params.freq = v;
+          })));
+        inner.appendChild(makeSubField('labelPwmDuty',
+          makeSliderInput('sub_pd_' + gpio, params.duty !== undefined ? params.duty : 50, 0, 100, '%', function(v) {
+            DBG.change(`GPIO ${gpio} pwm: duty → ${v}%`);
+            gpioState[gpio].params.duty = v;
+          })));
+      } else if (func === 'triac_cycle') {
+        inner.appendChild(makeSubField('labelPwmDuty',
+          makeSliderInput('sub_dc_' + gpio, params.duty !== undefined ? params.duty : 50, 0, 100, '%', function(v) {
+            DBG.change(`GPIO ${gpio} triac_cycle: duty → ${v}%`);
+            gpioState[gpio].params.duty = v;
+          })));
+      } else if (func === 'triac_phase') {
+        inner.appendChild(makeSubField('labelZcdGpio', makeZcdSelect(gpio)));
+        inner.appendChild(makeSubField('labelPwmDuty',
+          makeSliderInput('sub_dp_' + gpio, params.duty !== undefined ? params.duty : 50, 0, 100, '%', function(v) {
+            DBG.change(`GPIO ${gpio} triac_phase: duty → ${v}%`);
+            gpioState[gpio].params.duty = v;
+          })));
+      }
+
+      td.appendChild(inner);
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function makeSubField(labelKey, inputEl) {
+      const div = document.createElement('div');
+      div.className = 'gpio-sub-field';
+      const lbl = document.createElement('label');
+      lbl.textContent = t(labelKey);
+      div.appendChild(lbl);
+      div.appendChild(inputEl);
+      return div;
+    }
+
+    function makeNumberInput(id, val, min, max, unit, onChange) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; align-items:center; gap:4px;';
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.id = id;
+      inp.min = min; inp.max = max; inp.value = val;
+      inp.style.cssText = 'width:6ch; text-align:center; font-size:1em;';
+      inp.oninput = function() { onChange(parseInt(inp.value) || min); };
+      wrap.appendChild(inp);
+      if (unit) {
+        const sp = document.createElement('span');
+        sp.textContent = unit;
+        sp.style.cssText = 'font-weight:600; color:var(--primary-color);';
+        wrap.appendChild(sp);
+      }
+      return wrap;
+    }
+
+    function makeColorInput(id, val, onChange) {
+      const inp = document.createElement('input');
+      inp.type = 'color'; inp.id = id; inp.value = val;
+      inp.oninput = function() { onChange(inp.value); };
+      return inp;
+    }
+
+    function makeSliderInput(id, val, min, max, unit, onChange) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; align-items:center; gap:6px; flex:1;';
+      const slider = document.createElement('input');
+      slider.type = 'range'; slider.id = id;
+      slider.min = min; slider.max = max; slider.value = val;
+      slider.className = 'duty-slider';
+      slider.style.cssText = 'flex:1;';
+      const valSpan = document.createElement('span');
+      valSpan.textContent = val + unit;
+      valSpan.style.cssText = 'min-width:3ch; font-weight:600; color:var(--primary-color); text-align:right;';
+      slider.oninput = function() {
+        valSpan.textContent = slider.value + unit;
+        onChange(parseInt(slider.value));
+      };
+      wrap.appendChild(slider);
+      wrap.appendChild(valSpan);
+      return wrap;
+    }
+
+    function makeZcdSelect(ownerGpio) {
+      const sel = document.createElement('select');
+      sel.id = 'sub_zcd_' + ownerGpio;
+      sel.style.cssText = 'font-size:0.9em;';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = t('zcdSelectHint');
+      sel.appendChild(blank);
+      for (let z = 0; z <= 21; z++) {
+        if (z === ownerGpio) continue;
+        const isCurrentZcd = (z === gpioState[ownerGpio].zcdGpio);
+        const isAvailable = (gpioState[z].func === 'none' || isCurrentZcd);
+        if (!isAvailable) continue;
+        const opt = document.createElement('option');
+        opt.value = z;
+        const name = gpioState[z].name ? ' (' + gpioState[z].name + ')' : '';
+        opt.textContent = 'GPIO ' + z + name;
+        if (isCurrentZcd) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.onchange = function() {
+        const v = sel.value === '' ? null : parseInt(sel.value);
+        onZcdGpioChange(ownerGpio, v);
+      };
+      return sel;
+    }
+
+    function onZcdGpioChange(ownerGpio, newZcdGpio) {
+      const oldZcdGpio = gpioState[ownerGpio].zcdGpio;
+      // Alliberar antic
+      if (oldZcdGpio !== null) {
+        gpioState[oldZcdGpio].func = 'none';
+        gpioState[oldZcdGpio].chan = 0;
+        zcdReserved.delete(oldZcdGpio);
+        refreshRow(oldZcdGpio);
+      }
+      // Reservar nou
+      gpioState[ownerGpio].zcdGpio = newZcdGpio;
+      if (newZcdGpio !== null) {
+        gpioState[newZcdGpio].func = 'zcd_reserved';
+        gpioState[newZcdGpio].chan = gpioState[ownerGpio].chan;
+        zcdReserved.add(newZcdGpio);
+        refreshRow(newZcdGpio);
+      }
+      // Reconstruir sub-row del propietari per actualitzar les opcions disponibles
+      const existingSub = document.getElementById('gpio_sub_' + ownerGpio);
+      const newSub = buildSubRow(ownerGpio);
+      if (existingSub) existingSub.replaceWith(newSub);
+      validateGpioMap();
+    }
+
+    function refreshRow(gpio) {
+      const oldRow = document.getElementById('gpio_row_' + gpio);
+      const oldSub = document.getElementById('gpio_sub_' + gpio);
+      if (!oldRow) return;
+      const newRow = buildGpioRow(gpio);
+      oldRow.replaceWith(newRow);
+      const fd = FUNC_DEFS.find(f => f.id === gpioState[gpio].func);
+      if (fd && fd.hasSubRow) {
+        const newSub = buildSubRow(gpio);
+        if (oldSub) oldSub.replaceWith(newSub);
+        else newRow.insertAdjacentElement('afterend', newSub);
+      } else {
+        if (oldSub) oldSub.remove();
+      }
+    }
+
+    function rebuildZcdReserved() {
+      zcdReserved.clear();
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func !== 'triac_phase') continue;
+        const z = gpioState[g].zcdGpio;
+        if (z !== null) {
+          gpioState[z].func = 'zcd_reserved';
+          zcdReserved.add(z);
+        }
+      }
+    }
+
+    function onFuncChange(gpio) {
+      const sel = document.getElementById('gpio_func_' + gpio);
+      if (!sel) return;
+      const newFunc = sel.value;
+      const oldFunc = gpioState[gpio].func;
+      const gpioName = gpioState[gpio].name ? ` "${gpioState[gpio].name}"` : '';
+      DBG.change(`GPIO ${gpio}${gpioName}: func  ${oldFunc} → ${newFunc}`);
+
+      // Alliberar ZCD si era triac_phase
+      if (oldFunc === 'triac_phase' && gpioState[gpio].zcdGpio !== null) {
+        const oldZcd = gpioState[gpio].zcdGpio;
+        gpioState[oldZcd].func = 'none';
+        gpioState[oldZcd].chan = 0;
+        zcdReserved.delete(oldZcd);
+        gpioState[gpio].zcdGpio = null;
+        refreshRow(oldZcd);
+      }
+
+      gpioState[gpio].func = newFunc;
+      gpioState[gpio].params = defaultParams(newFunc);
+      gpioState[gpio].zcdGpio = null;
+
+      if (!needsChan(newFunc)) {
+        gpioState[gpio].chan = 0;
+        const cInp = document.getElementById('gpio_chan_' + gpio);
+        if (cInp) { cInp.disabled = true; cInp.value = ''; }
+      } else {
+        const cInp = document.getElementById('gpio_chan_' + gpio);
+        if (cInp) cInp.disabled = false;
+      }
+
+      // Actualitzar sub-row
+      const existingSub = document.getElementById('gpio_sub_' + gpio);
+      const fd = FUNC_DEFS.find(f => f.id === newFunc);
+      if (fd && fd.hasSubRow) {
+        const newSub = buildSubRow(gpio);
+        if (existingSub) existingSub.replaceWith(newSub);
+        else {
+          const row = document.getElementById('gpio_row_' + gpio);
+          if (row) row.insertAdjacentElement('afterend', newSub);
+        }
+      } else {
+        if (existingSub) existingSub.remove();
+      }
+
+      validateGpioMap();
+    }
+
+    function onChanChange(gpio) {
+      const inp = document.getElementById('gpio_chan_' + gpio);
+      if (!inp) return;
+      const v = parseInt(inp.value);
+      const oldChan = gpioState[gpio].chan;
+      const isInput = (gpioState[gpio].func === 'btn' || gpioState[gpio].func === 'btn_inv');
+      gpioState[gpio].chan = isInput ? (v >= 0 && v <= 15 ? v : 0) : (v >= 1 && v <= 15 ? v : 0);
+      const gpioName = gpioState[gpio].name ? ` "${gpioState[gpio].name}"` : '';
+      DBG.change(`GPIO ${gpio}${gpioName}: canal  ${oldChan} → ${gpioState[gpio].chan}`);
+      // Propagar canal al GPIO ZCD si existeix
+      if (gpioState[gpio].func === 'triac_phase' && gpioState[gpio].zcdGpio !== null) {
+        gpioState[gpioState[gpio].zcdGpio].chan = gpioState[gpio].chan;
+        DBG.change(`GPIO ${gpioState[gpio].zcdGpio} (ZCD): canal propagat → ${gpioState[gpio].chan}`);
+      }
+      validateGpioMap();
+    }
+
+    function onNameChange(gpio) {
+      const inp = document.getElementById('gpio_name_' + gpio);
+      if (!inp) return;
+      const oldName = gpioState[gpio].name;
+      gpioState[gpio].name = inp.value.trim();
+      if (oldName !== gpioState[gpio].name)
+        DBG.change(`GPIO ${gpio}: nom  "${oldName}" → "${gpioState[gpio].name}"`);
+      // Actualitzar les opcions dels selects ZCD que mostren aquest GPIO
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func !== 'triac_phase') continue;
+        const zcdSel = document.getElementById('sub_zcd_' + g);
+        if (!zcdSel) continue;
+        for (const opt of zcdSel.options) {
+          if (parseInt(opt.value) === gpio) {
+            const name = gpioState[gpio].name ? ' (' + gpioState[gpio].name + ')' : '';
+            opt.textContent = 'GPIO ' + gpio + name;
+            break;
+          }
+        }
+      }
+    }
+
+    function applyTemplate(idx) {
+      if (idx === '' || idx === null) return;
+      const tmpl = _templates[parseInt(idx)];
+      if (!tmpl) return;
+
+      // Reinicialitzar estat
+      gpioState = Array.from({length: 22}, () =>
+        ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+      );
+      zcdReserved.clear();
+
+      // Aplicar pins de la plantilla
+      tmpl.pins.forEach(function(p) {
+        const fwDef = _funclist[p.func];
+        if (!fwDef) return;
+        const uiFunc = mapFirmwareToUiFunc(fwDef.id);
+        gpioState[p.gpio].func = uiFunc;
+        gpioState[p.gpio].chan  = p.chan || 0;
+        gpioState[p.gpio].params = defaultParams(uiFunc);
+      });
+
+      // Reconstruir parelles triac ↔ zcd
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func !== 'triac_phase') continue;
+        const ch = gpioState[g].chan;
+        tmpl.pins.forEach(function(p) {
+          const fd = _funclist[p.func];
+          if (fd && fd.id === 'zcd' && p.chan === ch) {
+            gpioState[g].zcdGpio = p.gpio;
+            gpioState[p.gpio].func = 'zcd_reserved';
+            zcdReserved.add(p.gpio);
+          }
+        });
+      }
+
+      // Reconstruir DOM
+      const tbody = document.getElementById('gpioTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      for (let g = 0; g <= 21; g++) {
+        tbody.appendChild(buildGpioRow(g));
+        const fd = FUNC_DEFS.find(f => f.id === gpioState[g].func);
+        if (fd && fd.hasSubRow) tbody.appendChild(buildSubRow(g));
+      }
+      applyMcuProfile();
+      validateGpioMap();
+    }
+
+    function updateExtraParams() {
+      // Els paràmetres per funció estan als sub-rows per GPIO.
+      // Les seccions legacy de brillantor global estan amagades.
+      const brSection   = document.getElementById('brightnessConfigSection');
+      const brCwSection = document.getElementById('brightnessCWConfigSection');
+      if (brSection)   brSection.style.display   = 'none';
+      if (brCwSection) brCwSection.style.display = 'none';
+    }
+
+    function validateGpioMap() {
+      const msgEl = document.getElementById('gpioValidation');
+      if (!msgEl) return;
+      const msgs = [];
+      let hasErrors = false;
+      let hasBtn = false;
+
+      for (let g = 0; g <= 21; g++) {
+        const s = gpioState[g];
+        if (s.func === 'zcd_reserved') continue;
+        if (s.func === 'btn' || s.func === 'btn_inv') hasBtn = true;
+        if (s.func !== 'none') {
+          const isInput = (s.func === 'btn' || s.func === 'btn_inv');
+          // Inputs poden tenir chan=0 (controla tots els canals); outputs necessiten chan 1-15
+          if (!isInput && !(s.chan >= 1 && s.chan <= 15)) {
+            msgs.push('GPIO ' + g + ': ' + t('gpioValidNeedsChan'));
+            hasErrors = true;
+          }
+        }
+        if (s.func === 'triac_phase' && s.zcdGpio === null) {
+          msgs.push('GPIO ' + g + ': ' + t('gpioValidNeedsZcd'));
+          hasErrors = true;
+        }
+      }
+
+      if (!hasBtn) msgs.push(t('gpioValidNoBtn'));
+
+      if (hasErrors) {
+        msgs.forEach(function(m) { DBG.valid('ERROR: ' + m); });
+      } else if (msgs.length > 0) {
+        msgs.forEach(function(m) { DBG.valid('Avís: ' + m); });
+      } else {
+        DBG.ok('Validació GPIO OK — sense errors ni avisos');
+      }
+
+      msgEl.textContent = msgs.join(' | ');
+      msgEl.style.color = hasErrors ? '#e74c3c' : '#e67e22';
+      const saveBtn = document.getElementById('gpioSaveBtn');
+      if (saveBtn) saveBtn.disabled = hasErrors;
+    }
+
+    function debugLogGpioConfig() {
+      console.groupCollapsed('%c[CONFIG] Guardat: mapa GPIO complet', 'color:#2980b9;font-weight:700');
+      let count = 0;
+      for (let g = 0; g <= 21; g++) {
+        const s = gpioState[g];
+        if (s.func === 'none') continue;
+        count++;
+        const nameStr  = s.name      ? ` "${s.name}"`                    : '';
+        const chanStr  = s.chan > 0  ? ` canal:${s.chan}`                 : '';
+        const zcdStr   = s.zcdGpio !== null ? ` ← ZCD:GPIO${s.zcdGpio}` : '';
+        const ps       = Object.entries(s.params || {}).map(([k,v]) => `${k}:${v}`).join(', ');
+        const extraStr = ps          ? ` [${ps}]`                         : '';
+        const tag      = s.func === 'zcd_reserved' ? ' (ZCD reservat)' : '';
+        console.log(`  GPIO ${String(g).padStart(2)}${nameStr} → ${s.func}${chanStr}${zcdStr}${extraStr}${tag}`);
+      }
+      if (count === 0) console.log('  (cap GPIO configurat)');
+      console.groupEnd();
+    }
+
+    function saveGpioMap() {
+      const params = new URLSearchParams();
+
+      // Pas 1: escriure tots els GPIOs (ZCD reservats → none provisionalment)
+      for (let g = 0; g <= 21; g++) {
+        const s = gpioState[g];
+        let firmwareId, chan;
+        if (s.func === 'zcd_reserved') {
+          firmwareId = 'none'; chan = 0;
+        } else {
+          const fd = FUNC_DEFS.find(function(f) { return f.id === s.func; });
+          firmwareId = fd ? fd.firmwareId : 'none';
+          chan = (s.func !== 'none') ? (s.chan || 0) : 0;
+        }
+        const funcIdx = _funclist.findIndex(function(f) { return f.id === firmwareId; });
+        const func = funcIdx >= 0 ? funcIdx : 0;
+        params.append('g' + g, ((chan & 0xF) << 4) | (func & 0xF));
+      }
+
+      // Pas 2: sobreescriure GPIOs ZCD amb FUNC_ZCD al canal del triac
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].func !== 'triac_phase' || gpioState[g].zcdGpio === null) continue;
+        const zcdGpio = gpioState[g].zcdGpio;
+        const chan = gpioState[g].chan || 0;
+        const zcdIdx = _funclist.findIndex(function(f) { return f.id === 'zcd'; });
+        const zcdFunc = zcdIdx >= 0 ? zcdIdx : 0;
+        params.set('g' + zcdGpio, ((chan & 0xF) << 4) | (zcdFunc & 0xF));
+      }
+
+      // Params globals (backward compat amb el firmware)
+      const neopixelIdx = gpioState.findIndex(function(s) { return s.func === 'neopixel'; });
+      const triacIdx    = gpioState.findIndex(function(s) { return s.func === 'triac_phase'; });
+      const pwmIdx      = gpioState.findIndex(function(s) { return s.func === 'pwm' || s.func === 'triac_cycle'; });
+
+      if (neopixelIdx >= 0) {
+        const np = gpioState[neopixelIdx].params;
+        if (np.numLeds)                  params.set('nl', np.numLeds);
+        if (np.color)                    params.set('color', np.color.replace('#', ''));
+        if (np.brightness !== undefined) params.set(triacIdx >= 0 ? 'bcw' : 'b', np.brightness);
+      }
+      if (pwmIdx >= 0) {
+        const pp = gpioState[pwmIdx].params;
+        if (pp.freq)              params.set('pf', pp.freq);
+        if (pp.duty !== undefined) params.set('pd', pp.duty);
+      }
+      if (triacIdx >= 0 && gpioState[triacIdx].params.duty !== undefined) {
+        params.set('b', gpioState[triacIdx].params.duty);
+      }
+
+      // Noms dels pins
+      for (let g = 0; g <= 21; g++) {
+        if (gpioState[g].name) params.set('n' + g, gpioState[g].name);
+      }
+
+      debugLogGpioConfig();
+      DBG.action('Enviant configuració GPIO al servidor...');
+
+      fetch('/gpiomap', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: params.toString()
+      }).then(function() {
+        DBG.ok('Configuració GPIO guardada correctament');
+        showToast(t('toastSavedRestart'));
+        setTimeout(function() { location.reload(); }, 4000);
+      }).catch(function() {
+        DBG.valid('Error en guardar la configuració GPIO');
+        showToast(t('toastError'));
+      });
     }
 
     function fetchDriveMode() {
-      fetch('/driverMode', {method: 'POST'}).then(r => r.text()).then(mode => {
-        const radio = document.querySelector(`input[name="control_type"][value="${mode.trim()}"]`);
-        if (radio) { radio.checked = true; updateControlTypeUI(); }
-      }).catch(() => {
+      fetch('/driverMode', {method: 'POST'}).then(r => r.text()).then(function(mode) {
+        _currentMode = parseInt(mode.trim());
+        if (isNaN(_currentMode)) _currentMode = -1;
+        updateControlTypeUI();
+      }).catch(function() {
+        _currentMode = -1;
         updateControlTypeUI();
       });
     }
@@ -538,19 +1488,21 @@
     }
 
     function applyConfigMode(mode) {
-      const configFields = document.getElementById('configFields');
-      const modeInfo = document.getElementById('modeInfo');
-      const submitBtn = document.getElementById('submitBtn');
+      const modeInfo   = document.getElementById('modeInfo');
+      const saveBtn    = document.getElementById('gpioSaveBtn');
+      const tmplSelect = document.getElementById('templateSelect');
+      const tbody      = document.getElementById('gpioTableBody');
 
       if (mode === 'hardcoded') {
-        configFields.classList.add('disabled-section');
-        modeInfo.style.display = 'block';
-        submitBtn.style.display = 'none';
+        if (modeInfo)   modeInfo.style.display = 'block';
+        if (saveBtn)    saveBtn.style.display = 'none';
+        if (tmplSelect) tmplSelect.disabled = true;
+        if (tbody) { tbody.querySelectorAll('select,input').forEach(function(el) { el.disabled = true; }); }
         document.getElementById('clearConfigCard').style.display = 'none';
       } else {
-        configFields.classList.remove('disabled-section');
-        modeInfo.style.display = 'none';
-        submitBtn.style.display = '';
+        if (modeInfo)   modeInfo.style.display = 'none';
+        if (saveBtn)    saveBtn.style.display = '';
+        if (tmplSelect) tmplSelect.disabled = false;
       }
     }
 
@@ -724,208 +1676,72 @@
       }
     }
 
+    // Detecta si hi ha triac_cycle (mosfet_pwm) standalone i mostra/oculta la secció de test
+    function updateMosfetTest() {
+      const hasMosfetPwm = gpioState.some(function(s) { return s.func === 'triac_cycle'; });
+      const sec = document.getElementById('testMosfetSection');
+      if (sec) {
+        const ctrlVisible = document.getElementById('hwTestControls');
+        sec.style.display = (hasMosfetPwm && ctrlVisible && ctrlVisible.style.display !== 'none') ? 'flex' : 'none';
+      }
+    }
+
+    function handleMosfetDutyChange(slider) {
+      document.getElementById('mosfetDutyValue').textContent = slider.value + '%';
+      DBG.hw(`MOSFET PWM: duty → ${slider.value}%`);
+      fetch('/duttyMosfet', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'value=' + slider.value
+      });
+    }
+
     function updateControlTypeUI() {
-      const selected = document.querySelector('input[name="control_type"]:checked')?.value;
-      const pinLabelTop    = document.getElementById('pinLabelTop');
-      const pinsContainer  = document.getElementById('pinsContainer');
-      const pin1Group      = document.getElementById('pin1Group');
-      const pin2Group      = document.getElementById('pin2Group');
-      const pin3Group      = document.getElementById('pin3Group');
-      const pinSeparator   = document.getElementById('pinSeparator');
-      const pinSeparator2  = document.getElementById('pinSeparator2');
-      const pin1Label      = document.getElementById('pin1Label');
-      const pin2Label      = document.getElementById('pin2Label');
-      const pin3Label      = document.getElementById('pin3Label');
-      const testToggle     = document.getElementById('testToggleSection');
-      const testDigital    = document.getElementById('testDigitalSection');
-      const testDuty       = document.getElementById('testDutySection');
-      const testDimmer     = document.getElementById('testDimmerSlider');
-      const testWW         = document.getElementById('testWWSlider');
-      const testCW         = document.getElementById('testCWSlider');
-      const testTriac      = document.getElementById('testTriacSlider');
-      const brightnessConfig    = document.getElementById('brightnessConfigSection');
-      const brightnessCWConfig  = document.getElementById('brightnessCWConfigSection');
-      const freqConfig          = document.getElementById('freqConfigSection');
-      const numLedsSection      = document.getElementById('numLedsSection');
-      const brightnessLabel     = document.getElementById('brightnessConfigLabel');
+      const ct = _currentMode;
 
       document.getElementById('testDutySwitch').checked = false;
 
-      if (!selected) {
-        pinLabelTop.style.display = 'none';
-        pinsContainer.style.display = 'none';
-        testToggle.style.display = 'none';
-        testDigital.style.display = 'none';
-        testDuty.style.display = 'none';
-        brightnessConfig.style.display = 'none';
-        brightnessCWConfig.style.display = 'none';
-        numLedsSection.style.display = 'none';
-        document.getElementById('hwStatusRow').style.display = 'flex';
-        document.getElementById('hwTestControls').style.display = 'none';
-        return;
-      }
-      document.getElementById('hwStatusRow').style.display = 'none';
-      document.getElementById('hwTestControls').style.display = 'flex';
+      const noCt = (ct < 0);
+      document.getElementById('hwStatusRow').style.display    = noCt ? 'flex' : 'none';
+      document.getElementById('hwTestControls').style.display = noCt ? 'none' : 'flex';
 
-      pinLabelTop.style.display = 'flex';
-      pinsContainer.style.display = 'flex';
+      if (noCt) { stopFreqPolling(); updateMosfetTest(); return; }
 
-      pin3Group.style.display = 'none';
-      pinSeparator2.style.display = 'none';
-      document.getElementById('pin3').value = '';
-      document.getElementById('testTriacLEDSlider').style.display = 'none';
-      document.getElementById('brightnessCWConfigLabel').textContent = t('labelBrightnessCW');
-      freqConfig.style.display = 'none';
+      const testToggle  = document.getElementById('testToggleSection');
+      const testDigital = document.getElementById('testDigitalSection');
+      const testDuty    = document.getElementById('testDutySection');
+      const testDimmer  = document.getElementById('testDimmerSlider');
+      const testWW      = document.getElementById('testWWSlider');
+      const testCW      = document.getElementById('testCWSlider');
+      const testTriac   = document.getElementById('testTriacSlider');
+      const testTriacLED = document.getElementById('testTriacLEDSlider');
 
-      switch (selected) {
-        case '0':
-          pin1Label.textContent = t('pinRele');
-          pin2Label.textContent = t('pinLed');
-          pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'flex';
-          pin2Group.style.opacity = '0';
-          pin2Group.style.transform = 'scale(0.8)';
-          setTimeout(() => { pin2Group.style.opacity = '1'; pin2Group.style.transform = 'scale(1)'; }, 50);
-          pinSeparator.style.display = 'flex';
-          testToggle.style.display = 'flex';
-          testDigital.style.display = 'none';
-          testDuty.style.display = 'none';
-          brightnessConfig.style.display = 'none';
-          brightnessCWConfig.style.display = 'none';
-          numLedsSection.style.display = 'none';
-          stopFreqPolling();
-          break;
+      testToggle.style.display   = (ct === 0 || ct === 1) ? 'flex' : 'none';
+      testDigital.style.display  = (ct === 1)             ? 'flex' : 'none';
+      testDuty.style.display     = (ct >= 2 && ct <= 4)   ? 'flex' : 'none';
+      testDimmer.style.display   = (ct === 2)             ? 'flex' : 'none';
+      testWW.style.display       = (ct === 3)             ? 'flex' : 'none';
+      testCW.style.display       = (ct === 3)             ? 'flex' : 'none';
+      testTriac.style.display    = (ct === 4)             ? 'flex' : 'none';
+      testTriacLED.style.display = (ct === 4)             ? 'flex' : 'none';
 
-        case '1':
-          pin1Label.textContent = t('pinWS2812');
-          pin2Label.textContent = t('pinMosfet');
-          pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'flex';
-          pin2Group.style.opacity = '0';
-          pin2Group.style.transform = 'scale(0.8)';
-          setTimeout(() => { pin2Group.style.opacity = '1'; pin2Group.style.transform = 'scale(1)'; }, 50);
-          pinSeparator.style.display = 'flex';
-          testToggle.style.display = 'flex';
-          testDigital.style.display = 'flex';
-          testDuty.style.display = 'none';
-          brightnessLabel.textContent = t('labelBrightnessDefault');
-          brightnessConfig.style.display = 'flex';
-          brightnessCWConfig.style.display = 'none';
-          numLedsSection.style.display = 'flex';
-          fetchBrightnessConfig();
-          fetchNumLeds();
-          stopFreqPolling();
-          break;
+      updateExtraParams();
+      updateMosfetTest();
 
-        case '2':
-          pin1Label.textContent = t('pinPWM');
-          pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'none';
-          pinSeparator.style.display = 'none';
-          document.getElementById('pin2').value = '';
-          testToggle.style.display = 'none';
-          testDigital.style.display = 'none';
-          testDuty.style.display = 'flex';
-          testDimmer.style.display = 'flex';
-          testWW.style.display = 'none';
-          testCW.style.display = 'none';
-          testTriac.style.display = 'none';
-          brightnessLabel.textContent = t('labelBrightnessDefault');
-          brightnessConfig.style.display = 'flex';
-          brightnessCWConfig.style.display = 'none';
-          freqConfig.style.display = 'flex';
-          numLedsSection.style.display = 'none';
-          fetchBrightnessConfig();
-          stopFreqPolling();
-          break;
-
-        case '3':
-          pin1Label.textContent = t('pinWW');
-          pin2Label.textContent = t('pinCW');
-          pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'flex';
-          pinSeparator.style.display = 'flex';
-          pin2Group.style.opacity = '0';
-          pin2Group.style.transform = 'scale(0.8)';
-          setTimeout(() => { pin2Group.style.opacity = '1'; pin2Group.style.transform = 'scale(1)'; }, 50);
-          testToggle.style.display = 'none';
-          testDigital.style.display = 'none';
-          testDuty.style.display = 'flex';
-          testDimmer.style.display = 'none';
-          testWW.style.display = 'flex';
-          testCW.style.display = 'flex';
-          testTriac.style.display = 'none';
-          brightnessLabel.textContent = t('labelBrightnessWW');
-          brightnessConfig.style.display = 'flex';
-          brightnessCWConfig.style.display = 'flex';
-          freqConfig.style.display = 'flex';
-          numLedsSection.style.display = 'none';
-          fetchBrightnessConfig();
-          stopFreqPolling();
-          break;
-
-        case '4':
-          pin1Label.textContent = t('pinZCD');
-          pin2Label.textContent = t('pinTriac');
-          pin3Label.textContent = t('pinWS2812');
-          pin1Group.style.display = 'flex';
-          pin2Group.style.display = 'flex';
-          pin2Group.style.opacity = '0';
-          pin2Group.style.transform = 'scale(0.8)';
-          setTimeout(() => { pin2Group.style.opacity = '1'; pin2Group.style.transform = 'scale(1)'; }, 50);
-          pin3Group.style.display = 'flex';
-          pin3Group.style.opacity = '0';
-          pin3Group.style.transform = 'scale(0.8)';
-          setTimeout(() => { pin3Group.style.opacity = '1'; pin3Group.style.transform = 'scale(1)'; }, 100);
-          pinSeparator.style.display = 'flex';
-          pinSeparator2.style.display = 'flex';
-          testToggle.style.display = 'none';
-          testDigital.style.display = 'none';
-          testDuty.style.display = 'flex';
-          testDimmer.style.display = 'none';
-          testWW.style.display = 'none';
-          testCW.style.display = 'none';
-          testTriac.style.display = 'flex';
-          document.getElementById('testTriacLEDSlider').style.display = 'flex';
-          brightnessLabel.textContent = t('labelTriacPower');
-          brightnessConfig.style.display = 'flex';
-          document.getElementById('brightnessCWConfigLabel').textContent = t('labelBrightnessLED');
-          brightnessCWConfig.style.display = 'flex';
-          numLedsSection.style.display = 'none';
-          fetchBrightnessConfig();
-          startFreqPolling();
-          break;
-      }
-      fetchPins();
+      if (ct === 4) startFreqPolling(); else stopFreqPolling();
+      if (ct >= 1)  fetchBrightnessConfig();
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-      document.getElementById('pinLabelTop').style.display = 'none';
-      document.getElementById('pinsContainer').style.display = 'none';
-      document.getElementById('pin3Group').style.display = 'none';
-      document.getElementById('pinSeparator2').style.display = 'none';
       document.getElementById('testToggleSection').style.display = 'none';
       document.getElementById('testDigitalSection').style.display = 'none';
       document.getElementById('testDutySection').style.display = 'none';
       document.getElementById('testTriacSlider').style.display = 'none';
       document.getElementById('testTriacLEDSlider').style.display = 'none';
-      document.getElementById('brightnessConfigSection').style.display = 'none';
-      document.getElementById('brightnessCWConfigSection').style.display = 'none';
-      document.getElementById('freqConfigSection').style.display = 'none';
-      document.getElementById('numLedsSection').style.display = 'none';
     });
 
+    let _currentMode = -1;
     let isInitialSetup = false;
-
-    function fetchBoto() {
-      fetch('/boto', {method: 'POST'}).then(r => r.json()).then(data => {
-        if (data.boto !== null) document.getElementById('boto_pin_input').value = data.boto;
-        const bpu = data.bpu !== undefined ? data.bpu : 1;
-        document.getElementById('buttonPullupToggle').checked = bpu == 1;
-        document.getElementById('buttonPullupVal').value = bpu;
-        document.getElementById('buttonPullupLabel').textContent = bpu == 1 ? 'Pull-up' : 'Pull-down';
-      }).catch(() => {});
-    }
 
     function fetchInitialSetup() {
       fetch('/initialSetup', {method: 'POST'}).then(r => r.text()).then(data => {
@@ -1143,7 +1959,6 @@
       fetchDeviceName();
       fetchConfigMode();
       fetchDriveMode();
-      fetchBoto();
       fetchInitialSetup();
       fetchWifiStatus();
       setInterval(fetchWifiStatus, 5000);
@@ -1151,15 +1966,7 @@
       fetchMqttStatus();
       setInterval(fetchMqttStatus, 10000);
 
-      document.querySelector('form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const data = new URLSearchParams(new FormData(this));
-        fetch('/', { method: 'POST', body: data })
-          .then(() => {
-            showToast(t(isInitialSetup ? 'toastSavedRestart' : 'toastSaved'));
-          })
-          .catch(() => showToast(t('toastError')));
-      });
+      fetchFunclist().then(fetchTemplates).then(fetchGpioMap);
     }
   </script>
 </head>
@@ -1266,7 +2073,7 @@
 
             <div id="testDimmerSlider" style="display: none; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label for="dutySlider" style="margin: 0;" data-i18n="labelBrightness">Brillantor</label>
+                <label for="dutySlider" style="margin: 0;" data-i18n="labelPwmDutyTest">Duty cycle</label>
                 <span id="dutyValue" style="font-weight: 600; color: var(--primary-color);">0%</span>
               </div>
               <input type="range" id="dutySlider" min="0" max="100" value="0" class="duty-slider" oninput="handleDutyChange(this)">
@@ -1307,6 +2114,17 @@
               </div>
               <input type="range" id="triacLEDSlider" min="0" max="100" value="50" class="duty-slider" oninput="handleTriacLEDChange(this)">
             </div>
+
+          </div>
+
+          <!-- MOSFET_PWM standalone: sempre visible si hi ha un MOSFET_PWM configurat -->
+          <div id="testMosfetSection" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #eee; padding-top:12px; margin-top:4px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label style="margin:0; font-weight:600;" data-i18n="labelMosfetTest">MOSFET PWM</label>
+              <span id="mosfetDutyValue" style="font-weight:600; color:var(--primary-color);">0%</span>
+            </div>
+            <input type="range" id="mosfetDutySlider" min="0" max="100" value="0" class="duty-slider"
+                   oninput="handleMosfetDutyChange(this)">
           </div>
 
         </div>
@@ -1444,139 +2262,76 @@
 
       <button type="button" class="btn-back" onclick="goTo('config')" data-i18n="navBack">← Enrere</button>
 
-      <form action="/" method="POST">
-        <div class="card">
+      <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;" data-i18n="modeInfo">
+        Configuració hardcodejada al codi. Per canviar-la, modifica el firmware.
+      </p>
 
-          <p id="modeInfo" class="mode-info" style="display:none; margin-bottom: 15px;" data-i18n="modeInfo">
-            Configuració hardcodejada al codi. Per canviar-la, modifica el firmware.
-          </p>
+      <div id="initialSetupBanner" style="display:none; background: rgba(255,180,0,0.15); border: 1px solid rgba(255,160,0,0.4); padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em;" data-i18n="initialSetup">
+        El pin del botó no està configurat. Defineix-lo per continuar.
+      </div>
 
-          <div id="initialSetupBanner" style="display:none; background: rgba(255,180,0,0.15); border: 1px solid rgba(255,160,0,0.4); padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em;" data-i18n="initialSetup">
-            El pin del botó no està configurat. Defineix-lo per continuar.
+      <div class="card">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+
+          <div>
+            <label class="section-label" data-i18n="labelTemplate">Plantilla de dispositiu</label>
+            <select id="templateSelect" style="width:100%;" onchange="onTemplateChange(this.value)">
+              <option value="" data-i18n="templateCustom">Personalitzat</option>
+            </select>
           </div>
 
-          <div id="configFields" class="disabled-section">
+          <div id="mcuSection" style="display:flex; flex-direction:column; gap:4px;">
+            <label style="margin:0; font-size:0.9em;" data-i18n="labelMcu">Microcontrolador</label>
+            <select id="mcuSelect" style="width:100%; font-size:0.9em;" onchange="selectMcu(this.value)">
+              <option value="" data-i18n="mcuDefault">— Selecciona MCU —</option>
+              <option value="esp32c3">ESP32-C3</option>
+              <option value="esp32s3">ESP32-S3</option>
+            </select>
+          </div>
 
-            <div class="control-types-section">
-              <label class="section-label" data-i18n="labelBoto">Botó</label>
-              <div class="pins-container" style="margin-bottom: 20px;">
-                <div class="pin-group">
-                  <label for="boto_pin_input" class="pin-label" data-i18n="labelPin">Pin</label>
-                  <input type="tel" id="boto_pin_input" name="boto_pin" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
-                </div>
-                <div class="pin-group" style="align-items: center;">
-                  <label class="pin-label" data-i18n="labelButtonPullup">Mode</label>
-                  <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
-                    <div style="display: flex; align-items: center; gap: 5px; white-space: nowrap;">
-                      <span style="font-size: 0.8em; color: #888;">↓</span>
-                      <label class="toggle-switch">
-                        <input type="checkbox" id="buttonPullupToggle" checked onchange="document.getElementById('buttonPullupVal').value = this.checked ? 1 : 0; document.getElementById('buttonPullupLabel').textContent = this.checked ? 'Pull-up' : 'Pull-down';">
-                        <span class="toggle-slider"></span>
-                      </label>
-                      <span style="font-size: 0.8em; color: #888;">↑</span>
-                    </div>
-                    <span id="buttonPullupLabel" style="font-size: 0.78em; color: var(--primary-color); font-weight: 600;">Pull-up</span>
-                  </div>
-                  <input type="hidden" id="buttonPullupVal" name="button_pullup" value="1">
-                </div>
-              </div>
-            </div>
+          <div>
+            <label class="section-label" data-i18n="labelGpioMap">Mapa de GPIOs</label>
+            <table style="width:100%; border-collapse:collapse; font-size:0.88em;">
+              <thead>
+                <tr style="color:#888; font-size:0.8em;">
+                  <th style="text-align:left; padding:2px 3px; width:5em;" data-i18n="labelPinName">Nom</th>
+                  <th style="text-align:center; padding:2px 4px; width:2em;">GPIO</th>
+                  <th style="text-align:left; padding:2px 4px;" data-i18n="labelFunc">Funcio</th>
+                  <th style="text-align:center; padding:2px 4px; width:3.5em;" data-i18n="labelChan">Canal</th>
+                </tr>
+              </thead>
+              <tbody id="gpioTableBody"></tbody>
+            </table>
+          </div>
 
-            <div class="control-types-section">
-              <label class="section-label" data-i18n="labelControlType">Tipus de control</label>
-              <div class="radio-group">
-                <label class="radio-option">
-                  <input type="radio" name="control_type" value="0" class="radio-input" onchange="updateControlTypeUI()"/>
-                  <span class="radio-custom"></span>
-                  <span class="radio-text" data-i18n="radio0">Relé On/Off</span>
-                </label>
-                <label class="radio-option">
-                  <input type="radio" name="control_type" value="1" class="radio-input" onchange="updateControlTypeUI()"/>
-                  <span class="radio-custom"></span>
-                  <span class="radio-text" data-i18n="radio1">Led digital WS2812</span>
-                </label>
-                <label class="radio-option">
-                  <input type="radio" name="control_type" value="2" class="radio-input" onchange="updateControlTypeUI()"/>
-                  <span class="radio-custom"></span>
-                  <span class="radio-text" data-i18n="radio2">Led Dimmer [PWM]</span>
-                </label>
-                <label class="radio-option">
-                  <input type="radio" name="control_type" value="3" class="radio-input" onchange="updateControlTypeUI()"/>
-                  <span class="radio-custom"></span>
-                  <span class="radio-text" data-i18n="radio3">Leds WW/CW [2×PWM]</span>
-                </label>
-                <label class="radio-option">
-                  <input type="radio" name="control_type" value="4" class="radio-input" onchange="updateControlTypeUI()"/>
-                  <span class="radio-custom"></span>
-                  <span class="radio-text" data-i18n="radio4">Triac control de fase [ZCD]</span>
-                </label>
-              </div>
-            </div>
+          <div id="gpioValidation" style="font-size:0.82em; min-height:1.2em;"></div>
 
-            <label style="margin: 0;" id="pinLabelTop" data-i18n="labelPinTop">Pin de control de la llum</label>
-            <div class="pins-container" id="pinsContainer" style="display: none;">
-              <div class="pin-group" id="pin1Group">
-                <label for="pin1" class="pin-label" id="pin1Label">Pin 1</label>
-                <input type="tel" id="pin1" name="pin1" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
-              </div>
-              <div class="pin-separator" id="pinSeparator" style="display: none;">-</div>
-              <div class="pin-group" id="pin2Group" style="display: none;">
-                <label for="pin2" class="pin-label" id="pin2Label">Pin 2</label>
-                <input type="tel" id="pin2" name="pin2" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
-              </div>
-              <div class="pin-separator" id="pinSeparator2" style="display: none;">-</div>
-              <div class="pin-group" id="pin3Group" style="display: none;">
-                <label for="pin3" class="pin-label" id="pin3Label">WS2812</label>
-                <input type="tel" id="pin3" name="pin3" placeholder="XX" maxlength="2" pattern="[0-9]{1,2}" inputmode="numeric" class="pin-input"/>
-              </div>
-            </div>
-
-            <div id="numLedsSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label style="margin: 0;" data-i18n="labelNumLeds">Nombre de LEDs</label>
-                <input type="number" id="numLedsInput" name="num_leds" min="1" max="100" value="1"
-                       style="width: 60px; text-align: center;" class="pin-input">
-              </div>
-            </div>
-
-          </div><!-- /configFields -->
-
-          <div id="brightnessConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 10px; margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;" id="brightnessConfigLabel" data-i18n="labelBrightnessDefault">Brillantor per defecte</label>
-              <span id="brightnessConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
+          <div id="brightnessConfigSection" style="display:none; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label style="margin:0;" id="brightnessConfigLabel" data-i18n="labelBrightnessDefault">Brillantor per defecte</label>
+              <span id="brightnessConfigValue" style="font-weight:600; color:var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessConfigSlider" name="brightness" min="0" max="100" value="100" class="duty-slider"
               oninput="document.getElementById('brightnessConfigValue').textContent = this.value + '%'">
           </div>
 
-          <div id="brightnessCWConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label style="margin: 0;" id="brightnessCWConfigLabel" data-i18n="labelBrightnessCW">Brillantor CW per defecte</label>
-              <span id="brightnessCWConfigValue" style="font-weight: 600; color: var(--primary-color);">100%</span>
+          <div id="brightnessCWConfigSection" style="display:none; flex-direction:column; gap:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label style="margin:0;" id="brightnessCWConfigLabel" data-i18n="labelBrightnessCW">Brillantor CW per defecte</label>
+              <span id="brightnessCWConfigValue" style="font-weight:600; color:var(--primary-color);">100%</span>
             </div>
             <input type="range" id="brightnessCWConfigSlider" name="brightness_cw" min="0" max="100" value="100" class="duty-slider"
               oninput="document.getElementById('brightnessCWConfigValue').textContent = this.value + '%'">
           </div>
 
-          <div id="freqConfigSection" style="display: none; flex-direction: column; gap: 8px; margin-top: 4px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              <label style="margin: 0;" data-i18n="labelPwmFreq">Freqüència PWM</label>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <input type="number" id="pwmFreqInput" name="pwm_freq" min="100" max="40000" value="5000" step="100" class="pin-input" style="width: 6ch; min-width: 10ch; text-align: center;">
-                <span style="font-weight: 600; color: var(--primary-color);">Hz</span>
-              </div>
-            </div>
-          </div>
-
-          <input type="submit" id="submitBtn" data-i18n-value="submitBtn" value="Guardar" />
+          <button type="button" id="gpioSaveBtn" onclick="saveGpioMap()" data-i18n="submitBtn">Guardar</button>
           <button type="button" id="clearHwBtn" onclick="confirmClearHardware()" data-i18n="clearHwBtn"
                   style="background:#f5f5f5;color:#666;border:1px solid #ddd;cursor:pointer;margin-top:4px;">
             Esborrar hardware
           </button>
 
-        </div><!-- /card -->
-      </form>
+        </div>
+      </div>
 
     </div><!-- /page-hardware -->
 

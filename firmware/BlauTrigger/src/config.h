@@ -63,6 +63,133 @@
 
 
 // ════════════════════════════════════════════════════════════════
+//  REGISTRE DE FUNCIONS GPIO  (estil Tasmota)
+// ════════════════════════════════════════════════════════════════
+enum GpioFunc : uint8_t {
+  FUNC_NONE = 0,
+  FUNC_BTN,        // 1  — Botó digital entrada (pull-up, premut=LOW)
+  FUNC_BTN_INV,    // 2  — Botó invers (pull-down, premut=HIGH)
+  FUNC_RELAY,      // 3  — Relé sortida digital
+  FUNC_LED,        // 4  — LED sortida digital
+  FUNC_NEOPIXEL,   // 5  — Data WS2812/NeoPixel
+  FUNC_PWM,        // 6  — Dimmer PWM single
+  FUNC_PWM_WW,     // 7  — PWM Warm White
+  FUNC_PWM_CW,     // 8  — PWM Cold White
+  FUNC_ZCD,        // 9  — Zero Cross Detection (interrupt entrada)
+  FUNC_TRIAC,      // 10 — Porta triac sortida
+  FUNC_MOSFET,     // 11 — MOSFET On/Off (com un relé)
+  FUNC_ADC,        // 12 — ADC (voltatge raw)
+  FUNC_MOSFET_PWM, // 13 — MOSFET en mode PWM
+  FUNC_COUNT
+};
+
+struct FuncDef {
+  GpioFunc    func;
+  const char* id;
+  const char* label;
+  bool        isInput;
+  bool        needsChan;
+};
+
+static const FuncDef FUNC_REGISTRY[] = {
+  { FUNC_NONE,       "none",       "",                    false, false },
+  { FUNC_BTN,        "btn",        "Boto",                true,  true  },
+  { FUNC_BTN_INV,    "btn_inv",    "Boto (invers)",       true,  true  },
+  { FUNC_RELAY,      "relay",      "Rele",                false, true  },
+  { FUNC_LED,        "led",        "LED",                 false, true  },
+  { FUNC_NEOPIXEL,   "neopixel",   "NeoPixel/WS2812",     false, true  },
+  { FUNC_PWM,        "pwm",        "PWM Dimmer",          false, true  },
+  { FUNC_PWM_WW,     "pwm_ww",     "PWM Warm White",      false, true  },
+  { FUNC_PWM_CW,     "pwm_cw",     "PWM Cold White",      false, true  },
+  { FUNC_ZCD,        "zcd",        "Zero Cross Det.",     true,  true  },
+  { FUNC_TRIAC,      "triac",      "Triac Gate",          false, true  },
+  { FUNC_MOSFET,     "mosfet",     "MOSFET On/Off",       false, true  },
+  { FUNC_ADC,        "adc",        "ADC (voltatge)",      true,  true  },
+  { FUNC_MOSFET_PWM, "mosfet_pwm", "MOSFET PWM",          false, true  },
+};
+
+// Capacitats per GPIO (usades per la web per validar configuració)
+struct GpioCaps { bool valid; bool hasPwm; bool hasAdc; bool inputOnly; };
+
+static const GpioCaps ESP32C3_GPIO_CAPS[22] = {
+  //       valid,  hasPwm, hasAdc, inputOnly
+  {  true,  true,  true,  false },  //  0
+  {  true,  true,  true,  false },  //  1
+  {  true,  true,  true,  false },  //  2
+  {  true,  true,  true,  false },  //  3
+  {  true,  true,  true,  false },  //  4
+  {  true,  true, false,  false },  //  5
+  {  true,  true, false,  false },  //  6
+  {  true,  true, false,  false },  //  7
+  {  true,  true, false,  false },  //  8
+  {  true,  true, false,  false },  //  9
+  {  true,  true, false,  false },  // 10
+  {  true,  true, false,  false },  // 11 (flash CS, amb precaucio)
+  {  true,  true, false,  false },  // 12 (flash CLK, amb precaucio)
+  {  true,  true, false,  false },  // 13 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 14 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 15 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 16 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 17 (flash DIO, amb precaucio)
+  { false, false, false,  false },  // 18 (USB D-)
+  { false, false, false,  false },  // 19 (USB D+)
+  {  true,  true, false,  false },  // 20
+  {  true,  true, false,  false },  // 21
+};
+
+static const GpioCaps ESP32S3_GPIO_CAPS[22] = {
+  //       valid,  hasPwm, hasAdc, inputOnly
+  {  true,  true, false,  false },  //  0 (strapping)
+  {  true,  true,  true,  false },  //  1
+  {  true,  true,  true,  false },  //  2
+  {  true,  true,  true,  false },  //  3
+  {  true,  true,  true,  false },  //  4
+  {  true,  true,  true,  false },  //  5
+  {  true,  true,  true,  false },  //  6
+  {  true,  true,  true,  false },  //  7
+  {  true,  true,  true,  false },  //  8
+  {  true,  true,  true,  false },  //  9
+  {  true,  true,  true,  false },  // 10
+  {  true,  true, false,  false },  // 11
+  {  true,  true, false,  false },  // 12
+  {  true,  true, false,  false },  // 13
+  {  true,  true, false,  false },  // 14
+  {  true,  true, false,  false },  // 15
+  {  true,  true, false,  false },  // 16
+  {  true,  true, false,  false },  // 17
+  {  true, false, false,  false },  // 18 (USB D-, usable)
+  {  true, false, false,  false },  // 19 (USB D+, usable)
+  {  true,  true, false,  false },  // 20
+  {  true,  true, false,  false },  // 21
+};
+
+struct GpioPinTemplate { uint8_t gpio; GpioFunc func; uint8_t canal; };
+struct DeviceTemplate   { const char* name; GpioPinTemplate pins[8]; uint8_t count; };
+
+static const DeviceTemplate DEVICE_TEMPLATES[] = {
+  { "SONOFF_BASIC_R4", {
+    { 9, FUNC_BTN,      0 },
+    { 4, FUNC_RELAY,    1 },
+    { 6, FUNC_LED,      1 }
+  }, 3 },
+  { "PICO_CLICK", {
+    { 5, FUNC_BTN_INV,  0 },
+    { 6, FUNC_NEOPIXEL, 0 }
+  }, 2 },
+  { "ESP32_S3_ZERO", {
+    { 0, FUNC_BTN,      0 },
+    {21, FUNC_NEOPIXEL, 0 }
+  }, 2 },
+  { "AC_REGULATOR", {
+    { 1, FUNC_BTN_INV,      0 },
+    { 0, FUNC_ZCD,      1 },
+    { 4, FUNC_TRIAC,    1 },
+    {   5, FUNC_NEOPIXEL, 0 }
+  }, 4 },
+};
+
+
+// ════════════════════════════════════════════════════════════════
 //  MODE DE CONFIGURACIÓ
 //  · Comentat  → configuració via web (es guarda a NVS/Preferences)
 //  · Descomentat → tots els paràmetres de hardware estan fixats
@@ -137,8 +264,7 @@
 #define cian      0x00FFFF
 
 //  Colors de cada acció
-#define COLOR_BOTO      blau
-#define COLOR_ESPNOW    vermell
+#define COLOR_LLUM      blanc   // color per defecte del LED (configurable via web)
 #define COLOR_INICI     verd
 #define COLOR_WIFI_AP   lila
 #define COLOR_MQTT      groc
@@ -149,6 +275,7 @@
 // ════════════════════════════════════════════════════════════════
 #define PWM_FREQ        5000   // freqüència Hz
 #define PWM_RESOLUTION  8      // bits (8 → rang 0–255)
+#define PWM_DUTY_DEF    50     // duty cycle per defecte (0–100 %)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -163,7 +290,7 @@
 //  SISTEMA
 // ════════════════════════════════════════════════════════════════
 #define LOG_LEVEL              3        // 0=silent 1=error 2=info 3=debug
-#define CONFIG_SCHEMA_VERSION  1        // incrementa quan canvïes claus NVS
+#define CONFIG_SCHEMA_VERSION  2        // incrementa quan canvies claus NVS
 #define FIRMWARE_VERSION       "1.0"
 #define SERIAL_BAUD            115200  // velocitat del port sèrie
 #define WIFI_AP_HOLD_MS          3000  // ms prement el botó per entrar al mode AP

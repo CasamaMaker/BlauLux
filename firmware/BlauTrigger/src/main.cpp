@@ -25,31 +25,29 @@
 
 
 // ════════════════════════════════════════════════════════════════
-//  RESOLUCIÓ DE CONFIGURACIÓ DE HARDWARE
-//  En mode HARDCODED_CONFIG els pins i el tipus de control
-//  són constants de compilació. En mode web es llegeixen de NVS.
+//  MAPA GPIO — font de veritat de la configuració de hardware
+//  gpioMap[N] = {func, canal} per al GPIO N (0-21).
+//  Les variables pin1/pin2/pin3/control_type es deriven via
+//  applyGpioConfig() i es mantenen per compatibilitat interna.
 // ════════════════════════════════════════════════════════════════
-#ifdef HARDCODED_CONFIG
-  #define control_type  HW_CONTROL_TYPE
-  #define pin1          HW_PIN1
-  #define pin2          HW_PIN2
-  #define pin3          HW_PIN3
-  #define boto_pin      PIN_BOTO
-  #define num_leds      NUM_LEDS
-  #define pwm_freq      PWM_FREQ
-  #define button_pullup BUTTON_PULLUP
-  int brightness_cw = BRIGHTNESS_DEF;
-#else
-  int control_type;
-  int pin1;
-  int pin2;
-  int pin3;
-  int boto_pin;
-  int num_leds      = NUM_LEDS;
-  int brightness_cw = BRIGHTNESS_DEF;
-  int pwm_freq      = PWM_FREQ;
-  int button_pullup = BUTTON_PULLUP;
-#endif
+struct GpioAssign { GpioFunc func; uint8_t canal; };
+GpioAssign gpioMap[22];
+char gpio_names[22][13];         // noms dels pins (max 12 chars), configurables via web
+
+int control_type  = -1;   // -1=sense hw, 0=relay/mosfet, 1=neopixel, 2=pwm/mosfet_pwm, 3=ww/cw, 4=triac
+int pin1          = PIN_UNUSED;
+int pin2          = PIN_UNUSED;
+int pin3          = PIN_UNUSED;
+int boto_pin      = PIN_UNUSED;
+int button_pullup = BUTTON_PULLUP;
+int boto_canal    = 0;    // canal del botó (0=controla tots els canals)
+int num_leds      = NUM_LEDS;
+int brightness_cw = BRIGHTNESS_DEF;
+int pwm_freq      = PWM_FREQ;
+int pwm_duty      = PWM_DUTY_DEF;  // duty cycle per defecte per a PWM i MOSFET_PWM (0-100)
+static int _triacPin    = PIN_UNUSED;
+static int _mosfetGpio  = PIN_UNUSED;  // GPIO del MOSFET_PWM standalone
+static int _pwmChMosfet = 2;           // canal LEDC per al MOSFET_PWM
 
 String device_name = WIFI_SSID;  // nom del dispositiu (AP SSID base, guardat a NVS)
 
@@ -66,11 +64,7 @@ String macAP, macAPSuffix;          // MAC del AP (completa i últims 4 caràcte
 // ════════════════════════════════════════════════════════════════
 //  LED DIGITAL (NeoPixel)
 // ════════════════════════════════════════════════════════════════
-#ifdef HARDCODED_CONFIG
-  Adafruit_NeoPixel strip(NUM_LEDS, HW_PIN1, NEO_GRB + NEO_KHZ800);
-#else
-  Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
-#endif
+Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
 int brightness[5] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};  // índex = control_type
 
 
@@ -91,9 +85,10 @@ int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
 static const char* resetReasonStr(esp_reset_reason_t r);
 
-uint8_t mqttR = (COLOR_MQTT >> 16) & 0xFF;  // color per defecte MQTT mode 1
-uint8_t mqttG = (COLOR_MQTT >> 8)  & 0xFF;
-uint8_t mqttB = (COLOR_MQTT)       & 0xFF;
+uint8_t  mqttR = (COLOR_MQTT >> 16) & 0xFF;
+uint8_t  mqttG = (COLOR_MQTT >> 8)  & 0xFF;
+uint8_t  mqttB = (COLOR_MQTT)       & 0xFF;
+uint32_t neopixel_color = COLOR_LLUM;  // color configurable via web (botó, ESP-NOW)
 
 
 // ════════════════════════════════════════════════════════════════
@@ -123,14 +118,15 @@ void triacTask(void* pvParameters) {
   (void)pvParameters;
   while (1) {
     if (xSemaphoreTake(_zcdSemaphore, pdMS_TO_TICKS(100)) != pdTRUE) continue;
-    if (!state || pin2 == PIN_UNUSED) continue;
+    if (!state || _triacPin == PIN_UNUSED) continue;
     int power = brightness[4];
     if (power <= 0) continue;
 
+    uint32_t zcd = _zcdMicros;
     // Retard de fase: potència alta → retard curt; potència baixa → retard llarg
     uint32_t delay_us = (uint32_t)((100 - power) * (AC_HALF_CYCLE_US - TRIAC_MIN_DELAY_US) / 100
                                     + TRIAC_MIN_DELAY_US);
-    uint32_t target = _zcdMicros + delay_us;
+    uint32_t target = zcd + delay_us;
 
     // Espera gruixuda (allibera CPU)
     int32_t remaining = (int32_t)(target - (uint32_t)micros());
@@ -139,11 +135,29 @@ void triacTask(void* pvParameters) {
     // Espera fina (spin precís)
     while ((int32_t)(target - (uint32_t)micros()) > 0);
 
-    if (state && pin2 != PIN_UNUSED) {
-      digitalWrite(pin2, HIGH);
+    if (state && _triacPin != PIN_UNUSED) {
+      digitalWrite(_triacPin, HIGH);
       delayMicroseconds(TRIAC_PULSE_US);
-      digitalWrite(pin2, LOW);
+      digitalWrite(_triacPin, LOW);
     }
+
+
+
+
+    // SEGON SEMICICLE (negatiu)
+    uint32_t target2 = zcd + AC_HALF_CYCLE_US + delay_us;
+
+    int32_t remaining2 = (int32_t)(target2 - (uint32_t)micros());
+    if (remaining2 > 3000) vTaskDelay(pdMS_TO_TICKS((remaining2 - 3000) / 1000));
+
+    while ((int32_t)(target2 - (uint32_t)micros()) > 0);
+
+    if (state && _triacPin != PIN_UNUSED) {
+      digitalWrite(_triacPin, HIGH);
+      delayMicroseconds(TRIAC_PULSE_US);
+      digitalWrite(_triacPin, LOW);
+    }
+
   }
 }
 
@@ -161,9 +175,138 @@ void cleanupTriac() {
     vSemaphoreDelete(_zcdSemaphore);
     _zcdSemaphore = NULL;
   }
-  if (pin2 != PIN_UNUSED) digitalWrite(pin2, LOW);
+  if (_triacPin != PIN_UNUSED) { digitalWrite(_triacPin, LOW); _triacPin = PIN_UNUSED; }
   _zcdPeriodUs = 0;
 }
+
+
+// ════════════════════════════════════════════════════════════════
+//  HELPERS DE GPIO
+// ════════════════════════════════════════════════════════════════
+
+// Retorna el número de GPIO amb la funció indicada (i canal, si >0), o PIN_UNUSED
+int findGpio(GpioFunc func, uint8_t canal = 0) {
+  for (int i = 0; i <= 21; i++)
+    if (gpioMap[i].func == func && (canal == 0 || gpioMap[i].canal == canal))
+      return i;
+  return PIN_UNUSED;
+}
+
+// Recalcula control_type, pin1, pin2, pin3, boto_pin, button_pullup des de gpio_config
+void applyGpioConfig() {
+  pin1 = pin2 = pin3 = boto_pin = PIN_UNUSED;
+  button_pullup = BUTTON_PULLUP;
+  boto_canal    = 0;
+  control_type  = -1;
+  _mosfetGpio   = PIN_UNUSED;
+
+  // Botó: BTN = pull-up (premut=LOW), BTN_INV = pull-down (premut=HIGH)
+  int bg = findGpio(FUNC_BTN);
+  if (bg != PIN_UNUSED) { boto_pin = bg; button_pullup = 1; boto_canal = gpioMap[bg].canal; }
+  else {
+    bg = findGpio(FUNC_BTN_INV);
+    if (bg != PIN_UNUSED) { boto_pin = bg; button_pullup = 0; boto_canal = gpioMap[bg].canal; }
+  }
+
+  // Relay + LED indicador (mateix canal). MOSFET (on/off) es tracta igual que relay.
+  for (int i = 0; i <= 21 && control_type < 0; i++) {
+    if (gpioMap[i].func != FUNC_RELAY && gpioMap[i].func != FUNC_MOSFET) continue;
+    uint8_t ch = gpioMap[i].canal;
+    if (ch == 0) continue;  // canal 0 = standalone, no és la sortida principal
+    control_type = 0; pin1 = i;
+    pin2 = findGpio(FUNC_LED, ch);
+  }
+
+  // Triac: ZCD + TRIAC al mateix canal; NEOPIXEL com indicador (pin3)
+  if (control_type < 0) {
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_TRIAC) continue;
+      uint8_t ch = gpioMap[i].canal;
+      int zcd = (ch > 0) ? findGpio(FUNC_ZCD, ch) : findGpio(FUNC_ZCD);
+      if (zcd != PIN_UNUSED) {
+        control_type = 4; pin1 = zcd; pin2 = i;
+        pin3 = findGpio(FUNC_NEOPIXEL, ch > 0 ? ch : 0);
+        if (pin3 == PIN_UNUSED) pin3 = findGpio(FUNC_NEOPIXEL); // qualsevol
+        break;
+      }
+    }
+  }
+
+  // NeoPixel (standalone o en canal, sense triac)
+  if (control_type < 0) {
+    // Preferim el NeoPixel amb canal assignat (no standalone)
+    int np = PIN_UNUSED;
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_NEOPIXEL) continue;
+      if (gpioMap[i].canal > 0 && np == PIN_UNUSED) np = i;
+      else if (np == PIN_UNUSED) np = i;  // standalone com a fallback
+    }
+    if (np != PIN_UNUSED) { control_type = 1; pin1 = np; }
+  }
+
+  // WW/CW: PWM_WW + PWM_CW al mateix canal (prioritat sobre PWM simple)
+  if (control_type < 0) {
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_PWM_WW) continue;
+      uint8_t ch = gpioMap[i].canal;
+      int cw = (ch > 0) ? findGpio(FUNC_PWM_CW, ch) : findGpio(FUNC_PWM_CW);
+      if (cw != PIN_UNUSED) { control_type = 3; pin1 = i; pin2 = cw; break; }
+    }
+  }
+
+  // PWM simple (inclou MOSFET_PWM amb canal assignat)
+  if (control_type < 0) {
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_PWM && gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+      if (gpioMap[i].canal == 0) continue; // canal 0 = standalone, es gestiona a part
+      control_type = 2; pin1 = i; break;
+    }
+  }
+
+  // Relay/MOSFET On-Off standalone (canal 0): és la sortida principal si no hi ha res més
+  if (control_type < 0) {
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_RELAY && gpioMap[i].func != FUNC_MOSFET) continue;
+      control_type = 0; pin1 = i; break;
+    }
+  }
+
+  // PWM / MOSFET_PWM standalone (canal 0): és la sortida principal si no hi ha res més
+  if (control_type < 0) {
+    for (int i = 0; i <= 21; i++) {
+      if (gpioMap[i].func != FUNC_PWM && gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+      control_type = 2; pin1 = i; break;
+    }
+  }
+
+  // MOSFET_PWM standalone (canal 0) secundari: controlable per HW test i MQTT
+  // (es pot acumular amb una sortida principal de tipus diferent)
+  for (int i = 0; i <= 21; i++) {
+    if (gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+    if (pin1 == i) continue; // ja és la sortida principal
+    _mosfetGpio = i; break;
+  }
+
+  LOG_D("[CFG] gpio_config -> ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d bchan=%d mosfet=%d",
+        control_type, pin1, pin2, pin3, boto_pin, button_pullup, boto_canal, _mosfetGpio);
+}
+
+#ifdef HARDCODED_CONFIG
+void hardcodedInitGpioConfig() {
+  memset(gpioMap, 0, sizeof(gpioMap));
+  #if   defined(SONOFF_BASIC_R4)
+    const DeviceTemplate& t = DEVICE_TEMPLATES[0];
+  #elif defined(PICO_CLICK)
+    const DeviceTemplate& t = DEVICE_TEMPLATES[1];
+  #elif defined(ESP32_S3_ZERO)
+    const DeviceTemplate& t = DEVICE_TEMPLATES[2];
+  #elif defined(AC_REGULATOR)
+    const DeviceTemplate& t = DEVICE_TEMPLATES[3];
+  #endif
+  for (int i = 0; i < t.count; i++)
+    gpioMap[t.pins[i].gpio] = { t.pins[i].func, t.pins[i].canal };
+}
+#endif
 
 
 // ════════════════════════════════════════════════════════════════
@@ -201,15 +344,14 @@ void clearConfig() {
   LOG_I("[CFG] NVS esborrada");
 }
 
-// Llegeix la configuració des de NVS
+// Llegeix la configuració des de NVS (schema v2: claus g0..g21)
 void loadConfig() {
+  memset(gpioMap, 0, sizeof(gpioMap));
   prefs.begin("blau", true);
   uint8_t schema = prefs.getUChar("schema", 0);
   if (schema != CONFIG_SCHEMA_VERSION) {
     prefs.end();
-    LOG_I("[CFG] Schema v%d → esperava v%d, usant defaults", schema, CONFIG_SCHEMA_VERSION);
-    control_type = pin1 = pin2 = pin3 = boto_pin = PIN_UNUSED;
-    button_pullup = BUTTON_PULLUP;
+    LOG_I("[CFG] Schema v%d -> esperava v%d, usant defaults", schema, CONFIG_SCHEMA_VERSION);
     brightness[1] = brightness[2] = brightness[3] = brightness[4] = BRIGHTNESS_DEF;
     brightness_cw = BRIGHTNESS_DEF;
     num_leds = NUM_LEDS; pwm_freq = PWM_FREQ;
@@ -219,12 +361,14 @@ void loadConfig() {
     device_name = WIFI_SSID;
     return;
   }
-  control_type  = prefs.getInt("ct",  PIN_UNUSED);
-  pin1          = prefs.getInt("p1",  PIN_UNUSED);
-  pin2          = prefs.getInt("p2",  PIN_UNUSED);
-  pin3          = prefs.getInt("p3",  PIN_UNUSED);
-  boto_pin      = prefs.getInt("bp",  PIN_UNUSED);
-  button_pullup = prefs.getInt("bpu", BUTTON_PULLUP);
+  // Mapa GPIO: clau "gN" = uint8 (canal<<4 | func)
+  char key[4];
+  for (int i = 0; i <= 21; i++) {
+    snprintf(key, sizeof(key), "g%d", i);
+    uint8_t packed = prefs.getUChar(key, 0);
+    gpioMap[i].func  = (GpioFunc)(packed & 0x0F);
+    gpioMap[i].canal = (packed >> 4) & 0x0F;
+  }
   brightness[1] = prefs.getInt("b1",  BRIGHTNESS_DEF);
   brightness[2] = prefs.getInt("b2",  BRIGHTNESS_DEF);
   brightness[3] = prefs.getInt("b3",  BRIGHTNESS_DEF);
@@ -232,6 +376,15 @@ void loadConfig() {
   brightness_cw = prefs.getInt("bcw", BRIGHTNESS_DEF);
   num_leds      = prefs.getInt("nl",  NUM_LEDS);
   pwm_freq      = prefs.getInt("pf",  PWM_FREQ);
+  pwm_duty      = prefs.getInt("pd",  PWM_DUTY_DEF);
+  neopixel_color = prefs.getUInt("color", COLOR_LLUM);
+  char nkey[4];
+  for (int i = 0; i <= 21; i++) {
+    snprintf(nkey, sizeof(nkey), "n%d", i);
+    String nm = prefs.getString(nkey, "");
+    strncpy(gpio_names[i], nm.c_str(), 12);
+    gpio_names[i][12] = '\0';
+  }
   sta_ssid      = prefs.getString("sta_ssid", "");
   sta_pass      = prefs.getString("sta_pass", "");
   mqtt_host      = prefs.getString("mqtt_host",      "");
@@ -242,28 +395,23 @@ void loadConfig() {
   mqtt_topic     = prefs.getString("mqtt_topic",     HC_MQTT_TOPIC);
   mqtt_fulltopic = prefs.getString("mqtt_fulltopic", HC_MQTT_FULLTOPIC);
   device_name    = prefs.getString("devname",        WIFI_SSID);
-  if (pin1 == 99) pin1 = PIN_UNUSED;  // migració de valors antics
-  if (pin2 == 99) pin2 = PIN_UNUSED;
   prefs.end();
-  LOG_D("[CFG] ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d",
-    control_type, pin1, pin2, pin3, boto_pin, button_pullup,
-    brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
   LOG_D("[CFG] WiFi STA: ssid='%s' pass=%s", sta_ssid.c_str(), sta_pass.length() > 0 ? "***" : "(buit)");
   LOG_D("[CFG] MQTT: host='%s' port=%d user='%s' client='%s' topic='%s' fulltopic='%s'",
     mqtt_host.c_str(), mqtt_port, mqtt_user.c_str(),
     mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
 }
 
-// Desa la configuració actual a NVS
+// Desa el mapa GPIO i parametres de hardware a NVS (schema v2)
 void saveConfig() {
   prefs.begin("blau", false);
   prefs.putUChar("schema", CONFIG_SCHEMA_VERSION);
-  prefs.putInt("ct",  control_type);
-  prefs.putInt("p1",  pin1);
-  prefs.putInt("p2",  pin2);
-  prefs.putInt("p3",  pin3);
-  prefs.putInt("bp",  boto_pin);
-  prefs.putInt("bpu", button_pullup);
+  char key[4];
+  for (int i = 0; i <= 21; i++) {
+    snprintf(key, sizeof(key), "g%d", i);
+    uint8_t packed = ((gpioMap[i].canal & 0x0F) << 4) | (gpioMap[i].func & 0x0F);
+    prefs.putUChar(key, packed);
+  }
   prefs.putInt("b1",  brightness[1]);
   prefs.putInt("b2",  brightness[2]);
   prefs.putInt("b3",  brightness[3]);
@@ -271,10 +419,17 @@ void saveConfig() {
   prefs.putInt("bcw", brightness_cw);
   prefs.putInt("nl",  num_leds);
   prefs.putInt("pf",  pwm_freq);
+  prefs.putInt("pd",  pwm_duty);
+  prefs.putUInt("color", neopixel_color);
+  char nkey[4];
+  for (int i = 0; i <= 21; i++) {
+    snprintf(nkey, sizeof(nkey), "n%d", i);
+    if (gpio_names[i][0]) prefs.putString(nkey, gpio_names[i]);
+    else prefs.remove(nkey);
+  }
   prefs.end();
-  LOG_D("[CFG] Config guardada: ct=%d p1=%d p2=%d p3=%d bp=%d bpu=%d b1=%d b2=%d b3=%d b4=%d bcw=%d nl=%d pf=%d",
-    control_type, pin1, pin2, pin3, boto_pin, button_pullup,
-    brightness[1], brightness[2], brightness[3], brightness[4], brightness_cw, num_leds, pwm_freq);
+  LOG_D("[CFG] Config guardada (schema v2): ct=%d p1=%d p2=%d p3=%d bp=%d nl=%d pf=%d",
+    control_type, pin1, pin2, pin3, boto_pin, num_leds, pwm_freq);
 }
 #endif
 
@@ -601,7 +756,7 @@ void webServerSetup() {
 
   // Retorna la brillantor de cada mode en format JSON
   server.on("/brightness", HTTP_POST, [](AsyncWebServerRequest *request) {
-    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4]) + ",\"bcw\":" + String(brightness_cw) + ",\"pf\":" + String(pwm_freq) + "}";
+    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2]) + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4]) + ",\"bcw\":" + String(brightness_cw) + ",\"pf\":" + String(pwm_freq) + ",\"pd\":" + String(pwm_duty) + "}";
     request->send(200, "application/json", json);
   });
 
@@ -631,7 +786,7 @@ void webServerSetup() {
     uint32_t p = _zcdPeriodUs;
     bool active = (p > 0) && ((uint32_t)(micros() - _zcdMicros) < 200000UL);
     float freq = active ? (1000000.0f / (float)p) : 0.0f;
-    LOG_D("[AC] ZCD count:%u period:%uus freq:%.1f Hz", _zcdCount, _zcdPeriodUs, freq);
+    // LOG_D("[AC] ZCD count:%u period:%uus freq:%.1f Hz", _zcdCount, _zcdPeriodUs, freq);
     char buf[32];
     snprintf(buf, sizeof(buf), "{\"freq\":%.1f}", freq);
     request->send(200, "application/json", buf);
@@ -639,7 +794,7 @@ void webServerSetup() {
 
   // ── Endpoints d'escriptura (POST) ────────────────────────────
 
-  // Rep i desa la configuració enviada per la web
+  // Rep i desa parametres de brillantor/llum (la config de hardware va a /gpiomap)
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
     #ifndef HARDCODED_CONFIG
       int newBrightness = -1;
@@ -647,22 +802,15 @@ void webServerSetup() {
       for (int i = 0; i < params; i++) {
         const AsyncWebParameter* p = request->getParam(i);
         if (p->isPost()) {
-          if      (p->name() == "control_type") control_type  = p->value().toInt();
-          else if (p->name() == "pin1")         pin1          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "pin2")         pin2          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "pin3")         pin3          = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "boto_pin")     boto_pin      = p->value().isEmpty() ? PIN_UNUSED : p->value().toInt();
-          else if (p->name() == "button_pullup") button_pullup = p->value().toInt();
-          else if (p->name() == "brightness")   newBrightness = p->value().toInt();
+          if      (p->name() == "brightness")    newBrightness = p->value().toInt();
           else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
-          else if (p->name() == "num_leds")     { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
-          else if (p->name() == "pwm_freq")     { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
+          else if (p->name() == "num_leds")      { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
+          else if (p->name() == "pwm_freq")      { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
         }
       }
       if (newBrightness >= 0 && control_type >= 1 && control_type <= 4)
         brightness[control_type] = newBrightness;
       saveConfig();
-      configuracioLlum();
     #endif
     request->send(200, "text/plain", "OK");
   });
@@ -682,6 +830,17 @@ void webServerSetup() {
     request->send(200, "text/plain", "OK");
   });
 
+  // Rep un valor de duty/brillantor del MOSFET_PWM standalone per previsualitzar
+  server.on("/duttyMosfet", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("value", true) && _mosfetGpio != PIN_UNUSED) {
+      webTesting = true;
+      int duty = constrain(request->getParam("value", true)->value().toInt(), 0, 100);
+      pwm_duty = duty;
+      ledcWrite(_pwmChMosfet, map(duty, 0, 100, 0, 255));
+    }
+    request->send(200, "text/plain", "OK");
+  });
+
   // Rep un valor de brillantor WW (0–100) per previsualitzar des de la web
   server.on("/dutty", HTTP_POST, [](AsyncWebServerRequest *request) {
     if (request->hasParam("value", true)) {
@@ -697,7 +856,8 @@ void webServerSetup() {
           if (pin3 != PIN_UNUSED) {
             if (state) {
               uint8_t ledBr = (uint8_t)map((long)brightness_cw * duty / 100, 0, 100, 0, 255);
-              strip.setBrightness(ledBr);
+              strip.setBrightness(max((uint8_t)5, ledBr));
+              strip.setPixelColor(0, strip.Color(255, 255, 255));
             } else {
               strip.clear();
             }
@@ -720,7 +880,8 @@ void webServerSetup() {
       } else if (control_type == 4 && pin3 != PIN_UNUSED) {
         if (state) {
           uint8_t ledBr = (uint8_t)map((long)duty * brightness[4] / 100, 0, 100, 0, 255);
-          strip.setBrightness(ledBr);
+          strip.setBrightness(max((uint8_t)5, ledBr));
+          strip.setPixelColor(0, strip.Color(255, 255, 255));
           strip.show();
         }
       }
@@ -875,19 +1036,13 @@ void webServerSetup() {
   server.on("/clearhardware", HTTP_POST, [](AsyncWebServerRequest *request) {
     #ifndef HARDCODED_CONFIG
       prefs.begin("blau", false);
-      prefs.remove("ct");
-      prefs.remove("p1");
-      prefs.remove("p2");
-      prefs.remove("p3");
-      prefs.remove("bp");
-      prefs.remove("bpu");
-      prefs.remove("b1");
-      prefs.remove("b2");
-      prefs.remove("b3");
-      prefs.remove("b4");
-      prefs.remove("bcw");
-      prefs.remove("nl");
-      prefs.remove("pf");
+      char key[4];
+      for (int i = 0; i <= 21; i++) { snprintf(key, sizeof(key), "g%d", i); prefs.remove(key); }
+      prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3"); prefs.remove("b4");
+      prefs.remove("bcw"); prefs.remove("nl"); prefs.remove("pf"); prefs.remove("pd");
+      prefs.remove("color");
+      char nkey[4];
+      for (int i = 0; i <= 21; i++) { snprintf(nkey, sizeof(nkey), "n%d", i); prefs.remove(nkey); }
       prefs.end();
       LOG_I("[CFG] Configuració hardware esborrada");
       request->send(200, "text/plain", "OK");
@@ -896,6 +1051,103 @@ void webServerSetup() {
     #else
       request->send(403, "text/plain", "hardcoded");
     #endif
+  });
+
+  // Retorna el mapa GPIO actual en format JSON
+  server.on("/gpiomap", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "{";
+    bool first = true;
+    for (int i = 0; i <= 21; i++) {
+      if (!first) json += ",";
+      json += "\"g" + String(i) + "\":{\"func\":" + String((int)gpioMap[i].func)
+            + ",\"chan\":" + String((int)gpioMap[i].canal) + "}";
+      first = false;
+    }
+    for (int i = 0; i <= 21; i++) {
+      if (gpio_names[i][0]) json += ",\"n" + String(i) + "\":\"" + String(gpio_names[i]) + "\"";
+    }
+    char colorHex[7];
+    snprintf(colorHex, sizeof(colorHex), "%06lX", (unsigned long)neopixel_color);
+    json += ",\"nl\":" + String(num_leds);
+    json += ",\"pf\":" + String(pwm_freq);
+    json += ",\"pd\":" + String(pwm_duty);
+    json += ",\"b1\":" + String(brightness[1]);
+    json += ",\"b4\":" + String(brightness[4]);
+    json += ",\"color\":\"" + String(colorHex) + "\"";
+    json += "}";
+    request->send(200, "application/json", json);
+  });
+
+  // Rep i desa el mapa GPIO
+  // Params: g0..g21 com a uint8 decimal (canal<<4|func); opcionals: nl, pf
+  server.on("/gpiomap", HTTP_POST, [](AsyncWebServerRequest *request) {
+    #ifndef HARDCODED_CONFIG
+      char key[4];
+      for (int i = 0; i <= 21; i++) {
+        snprintf(key, sizeof(key), "g%d", i);
+        if (request->hasParam(key, true)) {
+          uint8_t packed = (uint8_t)request->getParam(key, true)->value().toInt();
+          gpioMap[i].func  = (GpioFunc)(packed & 0x0F);
+          gpioMap[i].canal = (packed >> 4) & 0x0F;
+        }
+      }
+      if (request->hasParam("nl", true)) { int v = request->getParam("nl", true)->value().toInt(); if (v > 0) num_leds = v; }
+      if (request->hasParam("pf", true)) { int v = request->getParam("pf", true)->value().toInt(); if (v >= 100) pwm_freq = v; }
+      if (request->hasParam("pd", true)) { int v = request->getParam("pd", true)->value().toInt(); pwm_duty = constrain(v, 0, 100); }
+      if (request->hasParam("color", true)) {
+        String hex = request->getParam("color", true)->value();
+        if (hex.length() == 6) neopixel_color = (uint32_t)strtoul(hex.c_str(), NULL, 16);
+      }
+      char nkey[4];
+      for (int i = 0; i <= 21; i++) {
+        snprintf(nkey, sizeof(nkey), "n%d", i);
+        if (request->hasParam(nkey, true)) {
+          String nm = request->getParam(nkey, true)->value();
+          strncpy(gpio_names[i], nm.c_str(), 12);
+          gpio_names[i][12] = '\0';
+        }
+      }
+      saveConfig();
+      applyGpioConfig();
+      configuracioLlum();
+      if (request->hasParam("b",   true)) { int v = request->getParam("b",   true)->value().toInt(); if (control_type >= 1 && control_type <= 4) brightness[control_type] = v; saveConfig(); }
+      if (request->hasParam("bcw", true)) { int v = request->getParam("bcw", true)->value().toInt(); brightness_cw = v; saveConfig(); }
+      LOG_I("[CFG] gpio_config actualitzat via /gpiomap");
+    #endif
+    request->send(200, "text/plain", "OK");
+  });
+
+  // Retorna la llista de funcions GPIO disponibles
+  server.on("/funclist", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "[";
+    for (int i = 0; i < (int)FUNC_COUNT; i++) {
+      if (i > 0) json += ",";
+      json += "{\"id\":\"" + String(FUNC_REGISTRY[i].id) + "\""
+            + ",\"label\":\"" + String(FUNC_REGISTRY[i].label) + "\""
+            + ",\"needsChan\":" + (FUNC_REGISTRY[i].needsChan ? "true" : "false")
+            + ",\"isInput\":" + (FUNC_REGISTRY[i].isInput ? "true" : "false") + "}";
+    }
+    json += "]";
+    request->send(200, "application/json", json);
+  });
+
+  // Retorna la llista de plantilles de dispositiu
+  server.on("/templates", HTTP_GET, [](AsyncWebServerRequest *request) {
+    int numTemplates = sizeof(DEVICE_TEMPLATES) / sizeof(DEVICE_TEMPLATES[0]);
+    String json = "[";
+    for (int t = 0; t < numTemplates; t++) {
+      if (t > 0) json += ",";
+      json += "{\"name\":\"" + String(DEVICE_TEMPLATES[t].name) + "\",\"pins\":[";
+      for (int p = 0; p < DEVICE_TEMPLATES[t].count; p++) {
+        if (p > 0) json += ",";
+        json += "{\"gpio\":" + String((int)DEVICE_TEMPLATES[t].pins[p].gpio)
+              + ",\"func\":" + String((int)DEVICE_TEMPLATES[t].pins[p].func)
+              + ",\"chan\":" + String((int)DEVICE_TEMPLATES[t].pins[p].canal) + "}";
+      }
+      json += "]}";
+    }
+    json += "]";
+    request->send(200, "application/json", json);
   });
 
   // Reinicia el dispositiu
@@ -1003,46 +1255,90 @@ void wifiApModeServer() {
 //  CONTROL DE LA LLUM
 // ════════════════════════════════════════════════════════════════
 
-// Inicialitza els perifèrics (GPIO, LEDC, NeoPixel) segons el tipus de control
+// Inicialitza els perifèrics (GPIO, LEDC, NeoPixel) iterant gpio_config agrupat per canal
 void configuracioLlum() {
-  cleanupTriac();  // atura ZCD ISR i tasca de triac si estaven actius
-  if (pin1 == PIN_UNUSED) return;
-  switch (control_type) {
-    case 0:  // On/Off — relé + led indicador
-      pinMode(pin1, OUTPUT);
-      pinMode(pin2, OUTPUT);
-      break;
+  cleanupTriac();
 
-    case 1:  // LED digital (NeoPixel / WS2812)
-      strip.updateLength(num_leds);
-      strip.setPin(pin1);
-      strip.begin();
-      strip.clear();
-      strip.show();
-      if (pin2 != PIN_UNUSED) {
-        pinMode(pin2, OUTPUT);
-        digitalWrite(pin2, LOW);
+  // GPIOs sense canal (canal=0): NEOPIXEL, BTN, ADC — init directe
+  for (int gpio = 0; gpio <= 21; gpio++) {
+    if (gpioMap[gpio].canal != 0) continue;
+    switch (gpioMap[gpio].func) {
+      case FUNC_NEOPIXEL:
+        strip.updateLength(num_leds);
+        strip.setPin(gpio);
+        strip.begin();
+        strip.clear();
+        strip.show();
+        break;
+      case FUNC_LED:
+        pinMode(gpio, OUTPUT);
+        digitalWrite(gpio, LOW);
+        break;
+      default: break;
+    }
+  }
+
+  // MOSFET_PWM standalone (canal 0): LEDC independent del canal principal
+  if (_mosfetGpio != PIN_UNUSED) {
+    ledcSetup(_pwmChMosfet, pwm_freq, PWM_RESOLUTION);
+    ledcAttachPin(_mosfetGpio, _pwmChMosfet);
+    ledcWrite(_pwmChMosfet, 0);
+    LOG_D("[CFG] MOSFET_PWM standalone gpio=%d ledc_ch=%d", _mosfetGpio, _pwmChMosfet);
+  }
+
+  // MOSFET On/Off standalone (canal 0): sortida digital
+  for (int gpio = 0; gpio <= 21; gpio++) {
+    if (gpioMap[gpio].func != FUNC_MOSFET || gpioMap[gpio].canal != 0) continue;
+    if (pin1 == gpio) continue;  // ja és la sortida principal
+    pinMode(gpio, OUTPUT); digitalWrite(gpio, LOW);
+  }
+
+  // Canals agrupats (canal 1-15): detecta el tipus i inicialitza el hardware
+  for (uint8_t chan = 1; chan <= 15; chan++) {
+    int relayPin = PIN_UNUSED, ledPin   = PIN_UNUSED;
+    int pwmPin   = PIN_UNUSED, pwmWwPin = PIN_UNUSED, pwmCwPin = PIN_UNUSED;
+    int zcdPin   = PIN_UNUSED, triacPin = PIN_UNUSED;
+
+    for (int gpio = 0; gpio <= 21; gpio++) {
+      if (gpioMap[gpio].canal != chan) continue;
+      switch (gpioMap[gpio].func) {
+        case FUNC_RELAY:       relayPin  = gpio; break;
+        case FUNC_LED:         ledPin    = gpio; break;
+        case FUNC_PWM:         pwmPin    = gpio; break;
+        case FUNC_PWM_WW:      pwmWwPin  = gpio; break;
+        case FUNC_PWM_CW:      pwmCwPin  = gpio; break;
+        case FUNC_ZCD:         zcdPin    = gpio; break;
+        case FUNC_TRIAC:       triacPin  = gpio; break;
+        case FUNC_MOSFET:      pinMode(gpio, OUTPUT); digitalWrite(gpio, LOW); break;
+        case FUNC_MOSFET_PWM:  // inicialitzat com pwmPin si és la sortida principal
+          if (pin1 == gpio) pwmPin = gpio;
+          else { ledcSetup(_pwmChMosfet, pwm_freq, PWM_RESOLUTION); ledcAttachPin(gpio, _pwmChMosfet); ledcWrite(_pwmChMosfet, 0); }
+          break;
+        default: break;
       }
-      break;
+    }
 
-    case 2:  // LED dimmer (1× PWM)
+    if (relayPin != PIN_UNUSED) {
+      pinMode(relayPin, OUTPUT);
+      if (ledPin != PIN_UNUSED) { pinMode(ledPin, OUTPUT); digitalWrite(ledPin, LOW); }
+    }
+
+    if (pwmPin != PIN_UNUSED) {
       ledcSetup(pwmCh1, pwm_freq, PWM_RESOLUTION);
-      ledcAttachPin(pin1, pwmCh1);
+      ledcAttachPin(pwmPin, pwmCh1);
       ledcWrite(pwmCh1, map(brightness[2], 0, 100, 0, 255));
-      break;
-
-    case 3:  // LEDs WW/CW (2× PWM)
+    } else if (pwmWwPin != PIN_UNUSED && pwmCwPin != PIN_UNUSED) {
       ledcSetup(pwmCh1, pwm_freq, PWM_RESOLUTION);
       ledcSetup(pwmCh2, pwm_freq, PWM_RESOLUTION);
-      ledcAttachPin(pin1, pwmCh1);
-      ledcAttachPin(pin2, pwmCh2);
-      break;
+      ledcAttachPin(pwmWwPin, pwmCh1);
+      ledcAttachPin(pwmCwPin, pwmCh2);
+    }
 
-    case 4:  // Triac control de fase (ZCD + MOC3021S) + WS2812 indicador
-      // pin1 = ZCD entrada (H11AA4), pin2 = sortida triac (MOC3021S), pin3 = WS2812
-      pinMode(pin2, OUTPUT);
-      digitalWrite(pin2, LOW);
-      if (pin3 != PIN_UNUSED) {
+    if (zcdPin != PIN_UNUSED && triacPin != PIN_UNUSED) {
+      _triacPin = triacPin;
+      pinMode(triacPin, OUTPUT);
+      digitalWrite(triacPin, LOW);
+      if (pin3 != PIN_UNUSED) {  // pin3 = NEOPIXEL indicador (canal=0)
         strip.updateLength(1);
         strip.setPin(pin3);
         strip.begin();
@@ -1050,15 +1346,11 @@ void configuracioLlum() {
         strip.show();
       }
       _zcdSemaphore = xSemaphoreCreateBinary();
-      _zcdPin = pin1;
-      pinMode(pin1, INPUT);
-      attachInterrupt(digitalPinToInterrupt(pin1), zcdISR, RISING);
+      _zcdPin = zcdPin;
+      pinMode(zcdPin, INPUT);
+      attachInterrupt(digitalPinToInterrupt(zcdPin), zcdISR, RISING);
       xTaskCreate(triacTask, "triac", 3072, NULL, 5, &_triacTaskHandle);
-      break;
-
-    default:
-      LOG_E("[CTRL] Mode desconegut: %d", control_type);
-      break;
+    }
   }
 }
 
@@ -1066,6 +1358,14 @@ void configuracioLlum() {
 // Triggers: "boto" | "espnow" → commuta; "inici" → parpelleig d'arrencada; "wifiAP" → pols suau
 void controlLlum(String trigger) {
   if (pin1 == PIN_UNUSED) return;
+
+  // Comprovació de canal: el botó (boto_canal>0) només controla sortides del seu canal.
+  // Sortides amb canal 0 (standalone) NO es controlen per botó ni ESP-NOW.
+  if (trigger == "boto" || trigger == "espnow") {
+    uint8_t output_canal = gpioMap[pin1].canal;
+    if (output_canal == 0) return;  // standalone: no respon a boto/espnow
+    if (boto_canal > 0 && boto_canal != output_canal) return;  // canal diferent
+  }
   switch (control_type) {
     case 0:  // On/Off
       if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
@@ -1082,8 +1382,8 @@ void controlLlum(String trigger) {
 
     case 1:  // LED digital (NeoPixel)
       strip.setBrightness(map(brightness[1], 0, 100, 0, 255));
-      if (trigger == "boto")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : COLOR_BOTO);
-      if (trigger == "espnow") for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : COLOR_ESPNOW);
+      if (trigger == "boto")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : neopixel_color);
+      if (trigger == "espnow") for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : neopixel_color);
       if (trigger == "mqtt")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : strip.Color(mqttR, mqttG, mqttB));
       if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         if (pin2 != PIN_UNUSED) digitalWrite(pin2, state ? LOW : HIGH);
@@ -1149,8 +1449,7 @@ void controlLlum(String trigger) {
           // brillantor = brightness_cw (LED) × potència triac / 100
           uint8_t ledBr = (uint8_t)map((long)brightness_cw * brightness[4] / 100, 0, 100, 0, 255);
           strip.setBrightness(max((uint8_t)5, ledBr));
-          strip.setPixelColor(0, trigger == "boto" ? COLOR_BOTO :
-                                         trigger == "mqtt" ? COLOR_MQTT : COLOR_ESPNOW);
+          strip.setPixelColor(0, trigger == "mqtt" ? COLOR_MQTT : neopixel_color);
         } else {
           strip.clear();
         }
@@ -1315,10 +1614,11 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 
 // Callback ESP-NOW: rep un paquet i prepara l'ACK si cal
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  uint8_t br = (control_type >= 1 && control_type <= 4) ? (uint8_t)brightness[control_type] : 0;
   blau_trg_on_data_recv(mac, data, len,
                         &_ack_pending, _ack_mac, &_ack_pkt,
                         handleAction,
-                        state, (uint8_t)brightness[control_type], (uint8_t)control_type);
+                        state, br, (uint8_t)(control_type < 0 ? 0 : control_type));
 }
 
 
@@ -1331,11 +1631,15 @@ void setup() {
   wdtSetup();
   logResetReason();
 
-  #ifndef HARDCODED_CONFIG
+  #ifdef HARDCODED_CONFIG
+    hardcodedInitGpioConfig();
+    applyGpioConfig();
+  #else
     #ifdef CLEAR_CONFIG
       clearConfig();
     #endif
     loadConfig();
+    applyGpioConfig();
 
     // Si el botó no està configurat → mode de setup inicial (AP + web)
     if (boto_pin == PIN_UNUSED) {
@@ -1368,7 +1672,8 @@ void setup() {
   if (!LittleFS.begin()) { LOG_E("[FS] Error muntant LittleFS"); }
   else { LOG_I("[WIFI] AP IP: %s", WiFi.softAPIP().toString().c_str()); webServerSetup(); }
 
-  pinMode(boto_pin, button_pullup ? INPUT_PULLUP : INPUT_PULLDOWN);
+  if (boto_pin != PIN_UNUSED)
+    pinMode(boto_pin, button_pullup ? INPUT_PULLUP : INPUT_PULLDOWN);
 
   initEspNow();
   esp_now_register_send_cb(onDataSent);

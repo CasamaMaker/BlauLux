@@ -651,3 +651,66 @@ footer {
   color: var(--secondary-color);
   box-shadow: none;
 }
+
+/* GPIO sub-rows */
+.gpio-sub-row {
+  background-color: #f4f8fb;
+}
+.gpio-sub-cell {
+  padding: 0 0 6px 0;
+  border-bottom: 2px solid #c3d8ea;
+}
+.gpio-sub-inner {
+  margin: 0 4px 0 calc(2em + 4px);
+  padding: 6px 8px;
+  background: #eef4fa;
+  border-left: 3px solid var(--secondary-color);
+  border-radius: 0 6px 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82em;
+}
+.gpio-sub-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.gpio-sub-field label {
+  margin: 0;
+  font-weight: 500;
+  color: #555;
+  flex-shrink: 0;
+}
+.gpio-sub-field input[type="number"],
+.gpio-sub-field select {
+  width: auto;
+  font-size: 1em;
+  padding: 2px 4px;
+  border: 1px solid #bdd4e7;
+  border-radius: 4px;
+}
+.gpio-sub-field input[type="color"] {
+  width: 36px;
+  height: 26px;
+  padding: 1px;
+  border: 1px solid #bdd4e7;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gpio-sub-field .duty-slider {
+  accent-color: var(--secondary-color);
+}
+tr.gpio-zcd-reserved {
+  opacity: 0.4;
+  background: #fff8e1;
+  pointer-events: none;
+}
+/* Visual grouping: each GPIO row + sub-row forms a unit */
+tr[id^="gpio_row_"] {
+  border-top: 1px solid #dde6ee;
+}
+tr.gpio-has-subrow {
+  background-color: #f0f6fc;
+}
