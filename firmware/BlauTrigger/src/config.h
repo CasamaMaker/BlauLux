@@ -78,8 +78,6 @@ enum GpioFunc : uint8_t {
   FUNC_ZCD,        // 9  — Zero Cross Detection (interrupt entrada)
   FUNC_TRIAC,      // 10 — Porta triac sortida
   FUNC_MOSFET,     // 11 — MOSFET On/Off (com un relé)
-  FUNC_ADC,        // 12 — ADC (voltatge raw)
-  FUNC_MOSFET_PWM, // 13 — MOSFET en mode PWM
   FUNC_COUNT
 };
 
@@ -98,14 +96,12 @@ static const FuncDef FUNC_REGISTRY[] = {
   { FUNC_RELAY,      "relay",      "Rele",                false, true  },
   { FUNC_LED,        "led",        "LED",                 false, true  },
   { FUNC_NEOPIXEL,   "neopixel",   "NeoPixel/WS2812",     false, true  },
-  { FUNC_PWM,        "pwm",        "PWM Dimmer",          false, true  },
+  { FUNC_PWM,        "pwm",        "PWM",                 false, true  },
   { FUNC_PWM_WW,     "pwm_ww",     "PWM Warm White",      false, true  },
   { FUNC_PWM_CW,     "pwm_cw",     "PWM Cold White",      false, true  },
   { FUNC_ZCD,        "zcd",        "Zero Cross Det.",     true,  true  },
   { FUNC_TRIAC,      "triac",      "Triac Gate",          false, true  },
   { FUNC_MOSFET,     "mosfet",     "MOSFET On/Off",       false, true  },
-  { FUNC_ADC,        "adc",        "ADC (voltatge)",      true,  true  },
-  { FUNC_MOSFET_PWM, "mosfet_pwm", "MOSFET PWM",          false, true  },
 };
 
 // Capacitats per GPIO (usades per la web per validar configuració)
@@ -190,14 +186,6 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 
 
 // ════════════════════════════════════════════════════════════════
-//  MODE DE CONFIGURACIÓ
-//  · Comentat  → configuració via web (es guarda a NVS/Preferences)
-//  · Descomentat → tots els paràmetres de hardware estan fixats
-//                  al codi i la web és de només lectura
-// ════════════════════════════════════════════════════════════════
-// #define HARDCODED_CONFIG   // comenta per desactivar
-
-// ════════════════════════════════════════════════════════════════
 //  ESBORRA CONFIG  (descomenta per esborrar les Preferences de NVS)
 //  · Comentat    → comportament normal
 //  · Descomentat → esborra tota la config guardada a l'inici
@@ -223,22 +211,9 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 
 
 // ════════════════════════════════════════════════════════════════
-//  WIFI STA  (xarxa domèstica — actiu quan HARDCODED_CONFIG)
-//  En mode web, les credencials es guarden via el portal (NVS).
-// ════════════════════════════════════════════════════════════════
-#define HC_STA_SSID   ""     // SSID del router
-#define HC_STA_PASS   ""     // contrasenya del router
-
-
-// ════════════════════════════════════════════════════════════════
-//  MQTT  (broker — actiu quan HARDCODED_CONFIG)
-//  En mode web, la configuració es guarda via el portal (NVS).
+//  MQTT  (valors per defecte — configurables via web i guardats a NVS)
 //  Wildcards: %id% → últims 4 caràcters de la MAC  |  %topic% → valor resolt de HC_MQTT_TOPIC
 // ════════════════════════════════════════════════════════════════
-#define HC_MQTT_HOST      ""                     // adreça del broker (ex: "192.168.1.100")
-#define HC_MQTT_PORT      1883                   // port MQTT
-#define HC_MQTT_USER      ""                     // usuari (buit = sense autenticació)
-#define HC_MQTT_PASS      ""                     // contrasenya
 #define HC_MQTT_CLIENT    "BlauTrigger_%id%"     // client ID  (ex: BlauTrigger_A1B2)
 #define HC_MQTT_TOPIC     "%id%"                 // topic curt del dispositiu  (ex: A1B2)
 #define HC_MQTT_FULLTOPIC "blautrigger/%topic%"  // prefix complet dels topics (ex: blautrigger/A1B2)

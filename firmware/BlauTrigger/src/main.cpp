@@ -75,9 +75,9 @@ unsigned long startTime;                   // instant en què es comença a pré
 bool state      = false;                   // estat actual de la llum (ON/OFF)
 bool webTesting = false;                   // actiu quan la web envia color/duty directament
 
-static volatile bool _ack_pending = false; // hi ha un ACK pendent d'enviar per ESP-NOW
-static uint8_t       _ack_mac[6];          // MAC destinatari de l'ACK
-static BlauPacket_t  _ack_pkt;             // paquet ACK preparat
+static volatile bool         _ack_pending = false; // hi ha un ACK pendent d'enviar per ESP-NOW
+static volatile uint8_t      _ack_mac[6];          // MAC destinatari de l'ACK
+static volatile BlauPacket_t _ack_pkt;             // paquet ACK preparat
 
 
 int pwmCh1 = 0;                            // canal LEDC per pin1
@@ -85,10 +85,7 @@ int pwmCh2 = 1;                            // canal LEDC per pin2 (mode WW/CW)
 
 static const char* resetReasonStr(esp_reset_reason_t r);
 
-uint8_t  mqttR = (COLOR_MQTT >> 16) & 0xFF;
-uint8_t  mqttG = (COLOR_MQTT >> 8)  & 0xFF;
-uint8_t  mqttB = (COLOR_MQTT)       & 0xFF;
-uint32_t neopixel_color = COLOR_LLUM;  // color configurable via web (botó, ESP-NOW)
+uint32_t currentColor = COLOR_LLUM;  // color actiu (0xRRGGBB), modificable via ESP-NOW/MQTT/web
 
 
 // ════════════════════════════════════════════════════════════════
@@ -257,7 +254,7 @@ void applyGpioConfig() {
   // PWM simple (inclou MOSFET_PWM amb canal assignat)
   if (control_type < 0) {
     for (int i = 0; i <= 21; i++) {
-      if (gpioMap[i].func != FUNC_PWM && gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+      if (gpioMap[i].func != FUNC_PWM) continue;
       if (gpioMap[i].canal == 0) continue; // canal 0 = standalone, es gestiona a part
       control_type = 2; pin1 = i; break;
     }
@@ -271,18 +268,18 @@ void applyGpioConfig() {
     }
   }
 
-  // PWM / MOSFET_PWM standalone (canal 0): és la sortida principal si no hi ha res més
+  // PWM standalone (canal 0): és la sortida principal si no hi ha res més
   if (control_type < 0) {
     for (int i = 0; i <= 21; i++) {
-      if (gpioMap[i].func != FUNC_PWM && gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+      if (gpioMap[i].func != FUNC_PWM) continue;
       control_type = 2; pin1 = i; break;
     }
   }
 
-  // MOSFET_PWM standalone (canal 0) secundari: controlable per HW test i MQTT
+  // PWM standalone (canal 0) secundari: controlable per HW test i MQTT
   // (es pot acumular amb una sortida principal de tipus diferent)
   for (int i = 0; i <= 21; i++) {
-    if (gpioMap[i].func != FUNC_MOSFET_PWM) continue;
+    if (gpioMap[i].func != FUNC_PWM || gpioMap[i].canal != 0) continue;
     if (pin1 == i) continue; // ja és la sortida principal
     _mosfetGpio = i; break;
   }
@@ -291,28 +288,10 @@ void applyGpioConfig() {
         control_type, pin1, pin2, pin3, boto_pin, button_pullup, boto_canal, _mosfetGpio);
 }
 
-#ifdef HARDCODED_CONFIG
-void hardcodedInitGpioConfig() {
-  memset(gpioMap, 0, sizeof(gpioMap));
-  #if   defined(SONOFF_BASIC_R4)
-    const DeviceTemplate& t = DEVICE_TEMPLATES[0];
-  #elif defined(PICO_CLICK)
-    const DeviceTemplate& t = DEVICE_TEMPLATES[1];
-  #elif defined(ESP32_S3_ZERO)
-    const DeviceTemplate& t = DEVICE_TEMPLATES[2];
-  #elif defined(AC_REGULATOR)
-    const DeviceTemplate& t = DEVICE_TEMPLATES[3];
-  #endif
-  for (int i = 0; i < t.count; i++)
-    gpioMap[t.pins[i].gpio] = { t.pins[i].func, t.pins[i].canal };
-}
-#endif
-
 
 // ════════════════════════════════════════════════════════════════
-//  WIFI STA + MQTT — variables globals (sempre presents)
-//  En mode web: loadConfig() les omple des de NVS.
-//  En mode HARDCODED: setup() les omple des de config.h (HC_*).
+//  WIFI STA + MQTT — variables globals
+//  loadConfig() les omple des de NVS.
 // ════════════════════════════════════════════════════════════════
 String sta_ssid;        // SSID de la xarxa domèstica (WiFi STA)
 String sta_pass;        // contrasenya de la xarxa domèstica
@@ -331,9 +310,7 @@ TimerHandle_t  mqttReconnectTimer   = nullptr;
 
 // ════════════════════════════════════════════════════════════════
 //  GESTIÓ DE CONFIGURACIÓ (NVS / Preferences)
-//  Només disponible quan HARDCODED_CONFIG no està definit.
 // ════════════════════════════════════════════════════════════════
-#ifndef HARDCODED_CONFIG
 Preferences prefs;
 
 // Esborra tota la configuració guardada (schema inclòs → loadConfig() usarà defaults)
@@ -377,7 +354,7 @@ void loadConfig() {
   num_leds      = prefs.getInt("nl",  NUM_LEDS);
   pwm_freq      = prefs.getInt("pf",  PWM_FREQ);
   pwm_duty      = prefs.getInt("pd",  PWM_DUTY_DEF);
-  neopixel_color = prefs.getUInt("color", COLOR_LLUM);
+  currentColor = prefs.getUInt("color", COLOR_LLUM);
   char nkey[4];
   for (int i = 0; i <= 21; i++) {
     snprintf(nkey, sizeof(nkey), "n%d", i);
@@ -420,7 +397,7 @@ void saveConfig() {
   prefs.putInt("nl",  num_leds);
   prefs.putInt("pf",  pwm_freq);
   prefs.putInt("pd",  pwm_duty);
-  prefs.putUInt("color", neopixel_color);
+  prefs.putUInt("color", currentColor);
   char nkey[4];
   for (int i = 0; i <= 21; i++) {
     snprintf(nkey, sizeof(nkey), "n%d", i);
@@ -431,7 +408,6 @@ void saveConfig() {
   LOG_D("[CFG] Config guardada (schema v2): ct=%d p1=%d p2=%d p3=%d bp=%d nl=%d pf=%d",
     control_type, pin1, pin2, pin3, boto_pin, num_leds, pwm_freq);
 }
-#endif
 
 
 // ════════════════════════════════════════════════════════════════
@@ -520,7 +496,10 @@ void publishState() {
     mqttClient.publish((base + "/brightness").c_str(), 1, true, String(brightness[control_type]).c_str());
   }
   if (control_type == 1) {
-    String rgb = String(mqttR) + "," + String(mqttG) + "," + String(mqttB);
+    uint8_t r = (currentColor >> 16) & 0xFF;
+    uint8_t g = (currentColor >> 8)  & 0xFF;
+    uint8_t b =  currentColor        & 0xFF;
+    String rgb = String(r) + "," + String(g) + "," + String(b);
     LOG_D("[MQTT] publish %s/rgb = %s", base.c_str(), rgb.c_str());
     mqttClient.publish((base + "/rgb").c_str(), 1, true, rgb.c_str());
   }
@@ -592,7 +571,6 @@ void onMqttConnect(bool sessionPresent) {
   publishHADiscovery();
   publishState();
 
-  #ifndef HARDCODED_CONFIG
   {
     prefs.begin("blau", true);
     uint8_t lastReset = prefs.getUChar("lastReset", 0xFF);
@@ -605,7 +583,6 @@ void onMqttConnect(bool sessionPresent) {
       prefs.end();
     }
   }
-  #endif
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -649,11 +626,12 @@ void onMqttMessage(char* topic, char* payload,
     int c1 = payloadStr.indexOf(',');
     int c2 = payloadStr.indexOf(',', c1 + 1);
     if (c1 > 0 && c2 > c1) {
-      mqttR = (uint8_t)payloadStr.substring(0, c1).toInt();
-      mqttG = (uint8_t)payloadStr.substring(c1 + 1, c2).toInt();
-      mqttB = (uint8_t)payloadStr.substring(c2 + 1).toInt();
+      uint8_t r = (uint8_t)payloadStr.substring(0, c1).toInt();
+      uint8_t g = (uint8_t)payloadStr.substring(c1 + 1, c2).toInt();
+      uint8_t b = (uint8_t)payloadStr.substring(c2 + 1).toInt();
+      currentColor = strip.Color(r, g, b);
       if (control_type == 1 && state) {
-        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
+        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, currentColor);
         strip.show();
       }
       publishState();
@@ -682,11 +660,9 @@ static const char* resetReasonStr(esp_reset_reason_t r) {
 void logResetReason() {
   esp_reset_reason_t reason = esp_reset_reason();
   LOG_I("[BOOT] Reset: %s (%d)", resetReasonStr(reason), (int)reason);
-  #ifndef HARDCODED_CONFIG
   prefs.begin("blau", false);
   prefs.putUChar("lastReset", (uint8_t)reason);
   prefs.end();
-  #endif
 }
 
 void webServerSetup() {
@@ -731,11 +707,7 @@ void webServerSetup() {
 
   // Retorna "hardcoded" o "web" segons el mode de configuració compilat
   server.on("/configMode", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifdef HARDCODED_CONFIG
-      request->send(200, "text/plain", "hardcoded");
-    #else
-      request->send(200, "text/plain", "web");
-    #endif
+    request->send(200, "text/plain", "web");
   });
 
   // Retorna la MAC del AP
@@ -796,22 +768,20 @@ void webServerSetup() {
 
   // Rep i desa parametres de brillantor/llum (la config de hardware va a /gpiomap)
   server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      int newBrightness = -1;
-      int params = request->params();
-      for (int i = 0; i < params; i++) {
-        const AsyncWebParameter* p = request->getParam(i);
-        if (p->isPost()) {
-          if      (p->name() == "brightness")    newBrightness = p->value().toInt();
-          else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
-          else if (p->name() == "num_leds")      { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
-          else if (p->name() == "pwm_freq")      { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
-        }
+    int newBrightness = -1;
+    int params = request->params();
+    for (int i = 0; i < params; i++) {
+      const AsyncWebParameter* p = request->getParam(i);
+      if (p->isPost()) {
+        if      (p->name() == "brightness")    newBrightness = p->value().toInt();
+        else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
+        else if (p->name() == "num_leds")      { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
+        else if (p->name() == "pwm_freq")      { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
       }
-      if (newBrightness >= 0 && control_type >= 1 && control_type <= 4)
-        brightness[control_type] = newBrightness;
-      saveConfig();
-    #endif
+    }
+    if (newBrightness >= 0 && control_type >= 1 && control_type <= 4)
+      brightness[control_type] = newBrightness;
+    saveConfig();
     request->send(200, "text/plain", "OK");
   });
 
@@ -917,19 +887,17 @@ void webServerSetup() {
 
   // Desa les credencials WiFi STA a NVS i reconnecta
   server.on("/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      if (request->hasParam("sta_ssid", true)) {
-        sta_ssid = request->getParam("sta_ssid", true)->value();
-        sta_pass = request->hasParam("sta_pass", true) ? request->getParam("sta_pass", true)->value() : "";
-        prefs.begin("blau", false);
-        prefs.putString("sta_ssid", sta_ssid);
-        prefs.putString("sta_pass", sta_pass);
-        prefs.end();
-        LOG_I("[WIFI] STA credentials saved: %s", sta_ssid.c_str());
-        WiFi.disconnect();
-        if (sta_ssid.length() > 0) WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
-      }
-    #endif
+    if (request->hasParam("sta_ssid", true)) {
+      sta_ssid = request->getParam("sta_ssid", true)->value();
+      sta_pass = request->hasParam("sta_pass", true) ? request->getParam("sta_pass", true)->value() : "";
+      prefs.begin("blau", false);
+      prefs.putString("sta_ssid", sta_ssid);
+      prefs.putString("sta_pass", sta_pass);
+      prefs.end();
+      LOG_I("[WIFI] STA credentials saved: %s", sta_ssid.c_str());
+      WiFi.disconnect();
+      if (sta_ssid.length() > 0) WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
+    }
     request->send(200, "text/plain", "OK");
   });
 
@@ -950,107 +918,93 @@ void webServerSetup() {
 
   // Desa la configuració MQTT a NVS i reconnecta
   server.on("/mqtt", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      if (request->hasParam("mqtt_host", true)) {
-        mqtt_host      = request->getParam("mqtt_host", true)->value();
-        mqtt_port      = request->hasParam("mqtt_port", true) ?
-                         (uint16_t)request->getParam("mqtt_port", true)->value().toInt() : 1883;
-        mqtt_user      = request->hasParam("mqtt_user", true)      ? request->getParam("mqtt_user",      true)->value() : "";
-        mqtt_pass      = request->hasParam("mqtt_pass", true)      ? request->getParam("mqtt_pass",      true)->value() : "";
-        mqtt_client    = request->hasParam("mqtt_client", true)    ? request->getParam("mqtt_client",    true)->value() : HC_MQTT_CLIENT;
-        mqtt_topic     = request->hasParam("mqtt_topic", true)     ? request->getParam("mqtt_topic",     true)->value() : HC_MQTT_TOPIC;
-        mqtt_fulltopic = request->hasParam("mqtt_fulltopic", true) ? request->getParam("mqtt_fulltopic", true)->value() : HC_MQTT_FULLTOPIC;
-        if (mqtt_client.length()    == 0) mqtt_client    = HC_MQTT_CLIENT;
-        if (mqtt_topic.length()     == 0) mqtt_topic     = HC_MQTT_TOPIC;
-        if (mqtt_fulltopic.length() == 0) mqtt_fulltopic = HC_MQTT_FULLTOPIC;
-        prefs.begin("blau", false);
-        prefs.putString("mqtt_host",      mqtt_host);
-        prefs.putInt("mqtt_port",         (int)mqtt_port);
-        prefs.putString("mqtt_user",      mqtt_user);
-        prefs.putString("mqtt_pass",      mqtt_pass);
-        prefs.putString("mqtt_client",    mqtt_client);
-        prefs.putString("mqtt_topic",     mqtt_topic);
-        prefs.putString("mqtt_fulltopic", mqtt_fulltopic);
-        prefs.end();
-        LOG_I("[MQTT] config saved: %s:%d client='%s' topic='%s' fulltopic='%s'",
-          mqtt_host.c_str(), mqtt_port, mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
-        mqttClientId  = mqttResolvedClientId();
-        mqttWillTopic = mqttBaseTopic() + "/available";
-        mqttClient.setClientId(mqttClientId.c_str());
-        mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
-        if (mqtt_user.length() > 0) mqttClient.setCredentials(mqtt_user.c_str(), mqtt_pass.c_str());
-        else mqttClient.setCredentials("", "");
-        mqttClient.setWill(mqttWillTopic.c_str(), 1, true, "offline");
-        if (mqttClient.connected()) mqttClient.disconnect();
-        else if (WiFi.isConnected() && mqtt_host.length() > 0 && mqttReconnectTimer != nullptr) connectMqtt();
-      }
-    #endif
+    if (request->hasParam("mqtt_host", true)) {
+      mqtt_host      = request->getParam("mqtt_host", true)->value();
+      mqtt_port      = request->hasParam("mqtt_port", true) ?
+                       (uint16_t)request->getParam("mqtt_port", true)->value().toInt() : 1883;
+      mqtt_user      = request->hasParam("mqtt_user", true)      ? request->getParam("mqtt_user",      true)->value() : "";
+      mqtt_pass      = request->hasParam("mqtt_pass", true)      ? request->getParam("mqtt_pass",      true)->value() : "";
+      mqtt_client    = request->hasParam("mqtt_client", true)    ? request->getParam("mqtt_client",    true)->value() : HC_MQTT_CLIENT;
+      mqtt_topic     = request->hasParam("mqtt_topic", true)     ? request->getParam("mqtt_topic",     true)->value() : HC_MQTT_TOPIC;
+      mqtt_fulltopic = request->hasParam("mqtt_fulltopic", true) ? request->getParam("mqtt_fulltopic", true)->value() : HC_MQTT_FULLTOPIC;
+      if (mqtt_client.length()    == 0) mqtt_client    = HC_MQTT_CLIENT;
+      if (mqtt_topic.length()     == 0) mqtt_topic     = HC_MQTT_TOPIC;
+      if (mqtt_fulltopic.length() == 0) mqtt_fulltopic = HC_MQTT_FULLTOPIC;
+      prefs.begin("blau", false);
+      prefs.putString("mqtt_host",      mqtt_host);
+      prefs.putInt("mqtt_port",         (int)mqtt_port);
+      prefs.putString("mqtt_user",      mqtt_user);
+      prefs.putString("mqtt_pass",      mqtt_pass);
+      prefs.putString("mqtt_client",    mqtt_client);
+      prefs.putString("mqtt_topic",     mqtt_topic);
+      prefs.putString("mqtt_fulltopic", mqtt_fulltopic);
+      prefs.end();
+      LOG_I("[MQTT] config saved: %s:%d client='%s' topic='%s' fulltopic='%s'",
+        mqtt_host.c_str(), mqtt_port, mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
+      mqttClientId  = mqttResolvedClientId();
+      mqttWillTopic = mqttBaseTopic() + "/available";
+      mqttClient.setClientId(mqttClientId.c_str());
+      mqttClient.setServer(mqtt_host.c_str(), mqtt_port);
+      if (mqtt_user.length() > 0) mqttClient.setCredentials(mqtt_user.c_str(), mqtt_pass.c_str());
+      else mqttClient.setCredentials("", "");
+      mqttClient.setWill(mqttWillTopic.c_str(), 1, true, "offline");
+      if (mqttClient.connected()) mqttClient.disconnect();
+      else if (WiFi.isConnected() && mqtt_host.length() > 0 && mqttReconnectTimer != nullptr) connectMqtt();
+    }
     request->send(200, "text/plain", "OK");
   });
 
   // Esborra les credencials WiFi de NVS i desconnecta
   server.on("/clearwifi", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      sta_ssid = "";
-      sta_pass = "";
-      prefs.begin("blau", false);
-      prefs.remove("sta_ssid");
-      prefs.remove("sta_pass");
-      prefs.end();
-      WiFi.disconnect();
-      LOG_I("[WIFI] Credencials WiFi esborrades");
-      request->send(200, "text/plain", "OK");
-    #else
-      request->send(403, "text/plain", "hardcoded");
-    #endif
+    sta_ssid = "";
+    sta_pass = "";
+    prefs.begin("blau", false);
+    prefs.remove("sta_ssid");
+    prefs.remove("sta_pass");
+    prefs.end();
+    WiFi.disconnect();
+    LOG_I("[WIFI] Credencials WiFi esborrades");
+    request->send(200, "text/plain", "OK");
   });
 
   // Esborra la configuració MQTT de NVS i desconnecta
   server.on("/clearmqtt", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      mqtt_host = "";
-      mqtt_port = 1883;
-      mqtt_user = "";
-      mqtt_pass = "";
-      mqtt_client    = HC_MQTT_CLIENT;
-      mqtt_topic     = HC_MQTT_TOPIC;
-      mqtt_fulltopic = HC_MQTT_FULLTOPIC;
-      prefs.begin("blau", false);
-      prefs.remove("mqtt_host");
-      prefs.remove("mqtt_port");
-      prefs.remove("mqtt_user");
-      prefs.remove("mqtt_pass");
-      prefs.remove("mqtt_client");
-      prefs.remove("mqtt_topic");
-      prefs.remove("mqtt_fulltopic");
-      prefs.end();
-      if (mqttClient.connected()) mqttClient.disconnect();
-      LOG_I("[MQTT] Configuració MQTT esborrada");
-      request->send(200, "text/plain", "OK");
-    #else
-      request->send(403, "text/plain", "hardcoded");
-    #endif
+    mqtt_host = "";
+    mqtt_port = 1883;
+    mqtt_user = "";
+    mqtt_pass = "";
+    mqtt_client    = HC_MQTT_CLIENT;
+    mqtt_topic     = HC_MQTT_TOPIC;
+    mqtt_fulltopic = HC_MQTT_FULLTOPIC;
+    prefs.begin("blau", false);
+    prefs.remove("mqtt_host");
+    prefs.remove("mqtt_port");
+    prefs.remove("mqtt_user");
+    prefs.remove("mqtt_pass");
+    prefs.remove("mqtt_client");
+    prefs.remove("mqtt_topic");
+    prefs.remove("mqtt_fulltopic");
+    prefs.end();
+    if (mqttClient.connected()) mqttClient.disconnect();
+    LOG_I("[MQTT] Configuració MQTT esborrada");
+    request->send(200, "text/plain", "OK");
   });
 
   // Esborra la configuració de hardware de NVS i reinicia
   server.on("/clearhardware", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      prefs.begin("blau", false);
-      char key[4];
-      for (int i = 0; i <= 21; i++) { snprintf(key, sizeof(key), "g%d", i); prefs.remove(key); }
-      prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3"); prefs.remove("b4");
-      prefs.remove("bcw"); prefs.remove("nl"); prefs.remove("pf"); prefs.remove("pd");
-      prefs.remove("color");
-      char nkey[4];
-      for (int i = 0; i <= 21; i++) { snprintf(nkey, sizeof(nkey), "n%d", i); prefs.remove(nkey); }
-      prefs.end();
-      LOG_I("[CFG] Configuració hardware esborrada");
-      request->send(200, "text/plain", "OK");
-      delay(500);
-      ESP.restart();
-    #else
-      request->send(403, "text/plain", "hardcoded");
-    #endif
+    prefs.begin("blau", false);
+    char key[4];
+    for (int i = 0; i <= 21; i++) { snprintf(key, sizeof(key), "g%d", i); prefs.remove(key); }
+    prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3"); prefs.remove("b4");
+    prefs.remove("bcw"); prefs.remove("nl"); prefs.remove("pf"); prefs.remove("pd");
+    prefs.remove("color");
+    char nkey[4];
+    for (int i = 0; i <= 21; i++) { snprintf(nkey, sizeof(nkey), "n%d", i); prefs.remove(nkey); }
+    prefs.end();
+    LOG_I("[CFG] Configuració hardware esborrada");
+    request->send(200, "text/plain", "OK");
+    delay(500);
+    ESP.restart();
   });
 
   // Retorna el mapa GPIO actual en format JSON
@@ -1067,7 +1021,7 @@ void webServerSetup() {
       if (gpio_names[i][0]) json += ",\"n" + String(i) + "\":\"" + String(gpio_names[i]) + "\"";
     }
     char colorHex[7];
-    snprintf(colorHex, sizeof(colorHex), "%06lX", (unsigned long)neopixel_color);
+    snprintf(colorHex, sizeof(colorHex), "%06lX", (unsigned long)currentColor);
     json += ",\"nl\":" + String(num_leds);
     json += ",\"pf\":" + String(pwm_freq);
     json += ",\"pd\":" + String(pwm_duty);
@@ -1081,39 +1035,37 @@ void webServerSetup() {
   // Rep i desa el mapa GPIO
   // Params: g0..g21 com a uint8 decimal (canal<<4|func); opcionals: nl, pf
   server.on("/gpiomap", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      char key[4];
-      for (int i = 0; i <= 21; i++) {
-        snprintf(key, sizeof(key), "g%d", i);
-        if (request->hasParam(key, true)) {
-          uint8_t packed = (uint8_t)request->getParam(key, true)->value().toInt();
-          gpioMap[i].func  = (GpioFunc)(packed & 0x0F);
-          gpioMap[i].canal = (packed >> 4) & 0x0F;
-        }
+    char key[4];
+    for (int i = 0; i <= 21; i++) {
+      snprintf(key, sizeof(key), "g%d", i);
+      if (request->hasParam(key, true)) {
+        uint8_t packed = (uint8_t)request->getParam(key, true)->value().toInt();
+        gpioMap[i].func  = (GpioFunc)(packed & 0x0F);
+        gpioMap[i].canal = (packed >> 4) & 0x0F;
       }
-      if (request->hasParam("nl", true)) { int v = request->getParam("nl", true)->value().toInt(); if (v > 0) num_leds = v; }
-      if (request->hasParam("pf", true)) { int v = request->getParam("pf", true)->value().toInt(); if (v >= 100) pwm_freq = v; }
-      if (request->hasParam("pd", true)) { int v = request->getParam("pd", true)->value().toInt(); pwm_duty = constrain(v, 0, 100); }
-      if (request->hasParam("color", true)) {
-        String hex = request->getParam("color", true)->value();
-        if (hex.length() == 6) neopixel_color = (uint32_t)strtoul(hex.c_str(), NULL, 16);
+    }
+    if (request->hasParam("nl", true)) { int v = request->getParam("nl", true)->value().toInt(); if (v > 0) num_leds = v; }
+    if (request->hasParam("pf", true)) { int v = request->getParam("pf", true)->value().toInt(); if (v >= 100) pwm_freq = v; }
+    if (request->hasParam("pd", true)) { int v = request->getParam("pd", true)->value().toInt(); pwm_duty = constrain(v, 0, 100); }
+    if (request->hasParam("color", true)) {
+      String hex = request->getParam("color", true)->value();
+      if (hex.length() == 6) currentColor = (uint32_t)strtoul(hex.c_str(), NULL, 16);
+    }
+    char nkey[4];
+    for (int i = 0; i <= 21; i++) {
+      snprintf(nkey, sizeof(nkey), "n%d", i);
+      if (request->hasParam(nkey, true)) {
+        String nm = request->getParam(nkey, true)->value();
+        strncpy(gpio_names[i], nm.c_str(), 12);
+        gpio_names[i][12] = '\0';
       }
-      char nkey[4];
-      for (int i = 0; i <= 21; i++) {
-        snprintf(nkey, sizeof(nkey), "n%d", i);
-        if (request->hasParam(nkey, true)) {
-          String nm = request->getParam(nkey, true)->value();
-          strncpy(gpio_names[i], nm.c_str(), 12);
-          gpio_names[i][12] = '\0';
-        }
-      }
-      saveConfig();
-      applyGpioConfig();
-      configuracioLlum();
-      if (request->hasParam("b",   true)) { int v = request->getParam("b",   true)->value().toInt(); if (control_type >= 1 && control_type <= 4) brightness[control_type] = v; saveConfig(); }
-      if (request->hasParam("bcw", true)) { int v = request->getParam("bcw", true)->value().toInt(); brightness_cw = v; saveConfig(); }
-      LOG_I("[CFG] gpio_config actualitzat via /gpiomap");
-    #endif
+    }
+    saveConfig();
+    applyGpioConfig();
+    configuracioLlum();
+    if (request->hasParam("b",   true)) { int v = request->getParam("b",   true)->value().toInt(); if (control_type >= 1 && control_type <= 4) brightness[control_type] = v; saveConfig(); }
+    if (request->hasParam("bcw", true)) { int v = request->getParam("bcw", true)->value().toInt(); brightness_cw = v; saveConfig(); }
+    LOG_I("[CFG] gpio_config actualitzat via /gpiomap");
     request->send(200, "text/plain", "OK");
   });
 
@@ -1159,28 +1111,20 @@ void webServerSetup() {
 
   // Esborra tota la configuració de NVS i reinicia el dispositiu
   server.on("/clearconfig", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      clearConfig();
-      request->send(200, "text/plain", "OK");
-      delay(500);
-      ESP.restart();
-    #else
-      request->send(403, "text/plain", "hardcoded");
-    #endif
+    clearConfig();
+    request->send(200, "text/plain", "OK");
+    delay(500);
+    ESP.restart();
   });
 
   // Esborra el nom del dispositiu de NVS i restaura el valor per defecte
   server.on("/cleardevicename", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      device_name = WIFI_SSID;
-      prefs.begin("blau", false);
-      prefs.remove("devname");
-      prefs.end();
-      LOG_I("[CFG] Nom del dispositiu esborrat (default: %s)", device_name.c_str());
-      request->send(200, "text/plain", device_name);
-    #else
-      request->send(403, "text/plain", "hardcoded");
-    #endif
+    device_name = WIFI_SSID;
+    prefs.begin("blau", false);
+    prefs.remove("devname");
+    prefs.end();
+    LOG_I("[CFG] Nom del dispositiu esborrat (default: %s)", device_name.c_str());
+    request->send(200, "text/plain", device_name);
   });
 
   // Retorna el nom del dispositiu
@@ -1190,19 +1134,17 @@ void webServerSetup() {
 
   // Desa el nom del dispositiu a NVS
   server.on("/devicename", HTTP_POST, [](AsyncWebServerRequest *request) {
-    #ifndef HARDCODED_CONFIG
-      if (request->hasParam("device_name", true)) {
-        String name = request->getParam("device_name", true)->value();
-        name.trim();
-        if (name.length() > 0 && name.length() <= 32) {
-          device_name = name;
-          prefs.begin("blau", false);
-          prefs.putString("devname", device_name);
-          prefs.end();
-          LOG_I("[CFG] device_name: %s", device_name.c_str());
-        }
+    if (request->hasParam("device_name", true)) {
+      String name = request->getParam("device_name", true)->value();
+      name.trim();
+      if (name.length() > 0 && name.length() <= 32) {
+        device_name = name;
+        prefs.begin("blau", false);
+        prefs.putString("devname", device_name);
+        prefs.end();
+        LOG_I("[CFG] device_name: %s", device_name.c_str());
       }
-    #endif
+    }
     request->send(200, "text/plain", "OK");
   });
 
@@ -1310,10 +1252,6 @@ void configuracioLlum() {
         case FUNC_ZCD:         zcdPin    = gpio; break;
         case FUNC_TRIAC:       triacPin  = gpio; break;
         case FUNC_MOSFET:      pinMode(gpio, OUTPUT); digitalWrite(gpio, LOW); break;
-        case FUNC_MOSFET_PWM:  // inicialitzat com pwmPin si és la sortida principal
-          if (pin1 == gpio) pwmPin = gpio;
-          else { ledcSetup(_pwmChMosfet, pwm_freq, PWM_RESOLUTION); ledcAttachPin(gpio, _pwmChMosfet); ledcWrite(_pwmChMosfet, 0); }
-          break;
         default: break;
       }
     }
@@ -1382,9 +1320,8 @@ void controlLlum(String trigger) {
 
     case 1:  // LED digital (NeoPixel)
       strip.setBrightness(map(brightness[1], 0, 100, 0, 255));
-      if (trigger == "boto")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : neopixel_color);
-      if (trigger == "espnow") for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : neopixel_color);
-      if (trigger == "mqtt")   for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : strip.Color(mqttR, mqttG, mqttB));
+      if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt")
+        for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, state ? 0 : currentColor);
       if (trigger == "boto" || trigger == "espnow" || trigger == "mqtt") {
         if (pin2 != PIN_UNUSED) digitalWrite(pin2, state ? LOW : HIGH);
       }
@@ -1449,7 +1386,7 @@ void controlLlum(String trigger) {
           // brillantor = brightness_cw (LED) × potència triac / 100
           uint8_t ledBr = (uint8_t)map((long)brightness_cw * brightness[4] / 100, 0, 100, 0, 255);
           strip.setBrightness(max((uint8_t)5, ledBr));
-          strip.setPixelColor(0, trigger == "mqtt" ? COLOR_MQTT : neopixel_color);
+          strip.setPixelColor(0, currentColor);
         } else {
           strip.clear();
         }
@@ -1500,16 +1437,8 @@ static void applyBrightness(int br) {
 uint8_t handleAction(uint8_t pktType, uint8_t cmd,
                      uint8_t p1, uint8_t p2, uint8_t p3) {
   if (pktType == TYPE_EVENT) {
-    switch (cmd) {
-      case EVT_CLICK_1:
-      case EVT_CLICK_2:
-      case EVT_CLICK_3:    controlLlum("espnow"); return ACK_OK;
-      case EVT_LONG_START:
-      case EVT_LONG_END:                          return ACK_OK;
-      default:
-        LOG_I("[ESPNOW] EVT desconegut: 0x%02X", cmd);
-        return ACK_ERROR;
-    }
+    LOG_I("[ESPNOW] TYPE_EVENT no suportat (0x%02X), ignorat", cmd);
+    return ACK_ERROR;
   }
 
   if (pktType == TYPE_CMD) {
@@ -1527,9 +1456,9 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
       }
 
       case CMD_SET_RGB: {
-        mqttR = p1; mqttG = p2; mqttB = p3;
+        currentColor = strip.Color(p1, p2, p3);
         if (control_type == 1 && state) {
-          for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
+          for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, currentColor);
           strip.show();
         }
         return ACK_OK;
@@ -1587,13 +1516,13 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
         }
         // Escenes 1-3: actualitza brillantor i color, encén si apagat
         if (control_type >= 1 && control_type <= 4) brightness[control_type] = sc.br;
-        if (control_type == 1) { mqttR = sc.r; mqttG = sc.g; mqttB = sc.b; }
+        if (control_type == 1) currentColor = strip.Color(sc.r, sc.g, sc.b);
         if (control_type == 3) brightness_cw = sc.cw;
         if (!state) controlLlum("espnow");  // state → true
         // Aplica el color/brillantor correctes (sobreescriu l'indicador d'espnow)
         switch (control_type) {
           case 1: strip.setBrightness(map(sc.br, 0, 100, 0, 255));
-                  for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(mqttR, mqttG, mqttB));
+                  for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, currentColor);
                   strip.show(); break;
           case 2: ledcWrite(pwmCh1, map(sc.br, 0, 100, 0, 255)); break;
           case 3: ledcWrite(pwmCh1, map(sc.br, 0, 100, 0, 255));
@@ -1616,7 +1545,7 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
   uint8_t br = (control_type >= 1 && control_type <= 4) ? (uint8_t)brightness[control_type] : 0;
   blau_trg_on_data_recv(mac, data, len,
-                        &_ack_pending, _ack_mac, &_ack_pkt,
+                        &_ack_pending, (uint8_t*)_ack_mac, (BlauPacket_t*)&_ack_pkt,
                         handleAction,
                         state, br, (uint8_t)(control_type < 0 ? 0 : control_type));
 }
@@ -1631,37 +1560,32 @@ void setup() {
   wdtSetup();
   logResetReason();
 
-  #ifdef HARDCODED_CONFIG
-    hardcodedInitGpioConfig();
-    applyGpioConfig();
-  #else
-    #ifdef CLEAR_CONFIG
-      clearConfig();
-    #endif
-    loadConfig();
-    applyGpioConfig();
-
-    // Si el botó no està configurat → mode de setup inicial (AP + web)
-    if (boto_pin == PIN_UNUSED) {
-      LOG_I("[CFG] Boto no configurat, mode AP inicial");
-      configDeviceAP();
-      wifiApModeServer();
-
-      unsigned long apStart = millis();
-      while (boto_pin == PIN_UNUSED) {
-        wdtReset();
-        dnsServer.processNextRequest();
-        if (pin1 != PIN_UNUSED && control_type >= 0) controlLlum("wifiAP");
-        delay(DNS_POLL_MS);
-        if (millis() - apStart > WIFI_AP_TIMEOUT_MS) {
-          LOG_I("[AP] Temps excedit en setup inicial");
-          ESP.restart();
-        }
-      }
-      delay(500);
-      ESP.restart();  // reinicia amb la configuració nova ja desada a NVS
-    }
+  #ifdef CLEAR_CONFIG
+    clearConfig();
   #endif
+  loadConfig();
+  applyGpioConfig();
+
+  // Si el botó no està configurat → mode de setup inicial (AP + web)
+  if (boto_pin == PIN_UNUSED) {
+    LOG_I("[CFG] Boto no configurat, mode AP inicial");
+    configDeviceAP();
+    wifiApModeServer();
+
+    unsigned long apStart = millis();
+    while (boto_pin == PIN_UNUSED) {
+      wdtReset();
+      dnsServer.processNextRequest();
+      if (pin1 != PIN_UNUSED && control_type >= 0) controlLlum("wifiAP");
+      delay(DNS_POLL_MS);
+      if (millis() - apStart > WIFI_AP_TIMEOUT_MS) {
+        LOG_I("[AP] Temps excedit en setup inicial");
+        ESP.restart();
+      }
+    }
+    delay(500);
+    ESP.restart();  // reinicia amb la configuració nova ja desada a NVS
+  }
 
   configuracioLlum();   // inicialitza els perifèrics de la llum
   controlLlum("inici"); // parpelleig d'arrencada
@@ -1678,18 +1602,6 @@ void setup() {
   initEspNow();
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataRecv);
-
-  #ifdef HARDCODED_CONFIG
-    sta_ssid       = HC_STA_SSID;
-    sta_pass       = HC_STA_PASS;
-    mqtt_host      = HC_MQTT_HOST;
-    mqtt_port      = HC_MQTT_PORT;
-    mqtt_user      = HC_MQTT_USER;
-    mqtt_pass      = HC_MQTT_PASS;
-    mqtt_client    = HC_MQTT_CLIENT;
-    mqtt_topic     = HC_MQTT_TOPIC;
-    mqtt_fulltopic = HC_MQTT_FULLTOPIC;
-  #endif
 
 #ifdef ENABLE_WIFI_STA
   if (sta_ssid.length() > 0) {
@@ -1725,7 +1637,7 @@ void loop() {
   wdtReset();
 
   // ── Tasques sempre actives ──────────────────────────────────────
-  blau_trg_process_pending(&_ack_pending, _ack_mac, &_ack_pkt);
+  blau_trg_process_pending(&_ack_pending, (const uint8_t*)_ack_mac, (const BlauPacket_t*)&_ack_pkt);
 
 #if defined(ENABLE_WIFI_STA) && defined(ENABLE_MQTT)
   {
@@ -1809,7 +1721,6 @@ void loop() {
     _btnDown     = true;
     _btnDownTime = millis();
     LOG_I("[BTN] Boto presionat");
-    controlLlum("boto");
   }
 
   if (pressed && _btnDown && millis() - _btnDownTime >= WIFI_AP_HOLD_MS) {
@@ -1821,10 +1732,15 @@ void loop() {
     _apBtnReleased = false;
     _apLastBtn     = true;
     _btnDown       = false;
+    webTesting     = false;
     return;
   }
 
   if (!pressed && _btnDown) {
+    if (millis() - _btnDownTime < WIFI_AP_HOLD_MS) {
+      LOG_I("[BTN] Click curt -> toggle");
+      controlLlum("boto");
+    }
     _btnDown       = false;
     _btnDebouncing = true;
     _btnUpTime     = millis();
