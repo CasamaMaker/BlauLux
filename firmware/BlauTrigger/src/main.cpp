@@ -36,6 +36,8 @@ uint32_t currentColor = COLOR_LLUM;
 bool state      = false;
 bool webTesting = false;
 
+DeviceRuntime g_dev;
+
 String sta_ssid, sta_pass;
 String mqtt_host, mqtt_user, mqtt_pass;
 String mqtt_client = HC_MQTT_CLIENT, mqtt_topic = HC_MQTT_TOPIC, mqtt_fulltopic = HC_MQTT_FULLTOPIC;
@@ -80,6 +82,8 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   wdtSetup();
   logResetReason();
+
+  delay(2000);
 
   #ifdef CLEAR_CONFIG
     clearConfig();

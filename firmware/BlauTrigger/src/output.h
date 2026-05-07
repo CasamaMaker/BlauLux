@@ -21,6 +21,7 @@ void  applyGpioConfig();
 void  cleanupTriac();
 void  cleanupTriacCycle();
 void  configuracioLlum();
+void  applyChannelOutput(uint8_t chan);
 void  applyOutput(bool on);
 void  toggleOutput();
 void  renderVisualFeedback(const char* mode);

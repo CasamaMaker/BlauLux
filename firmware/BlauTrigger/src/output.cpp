@@ -379,6 +379,8 @@ void applyGpioConfig() {
   LOG_D("[CFG] gpio_config -> ct=%d drv=%s p1=%d p2=%d p3=%d bp=%d bpu=%d bchan=%d mosfet=%d",
         control_type, g_driver ? g_driver->typeName : "none",
         pin1, pin2, pin3, boto_pin, button_pullup, boto_canal, _mosfetGpio);
+
+  resolveChannels();  // Fase 2: omple g_dev.hw[] sense modificar cap variable existent
 }
 
 // ── Cleanup ──────────────────────────────────────────────────────
@@ -438,8 +440,8 @@ void configuracioLlum() {
   if (_mosfetGpio != PIN_UNUSED) {
     ledcSetup(_pwmChMosfet, pwm_freq, PWM_RESOLUTION);
     ledcAttachPin(_mosfetGpio, _pwmChMosfet);
-    ledcWrite(_pwmChMosfet, 0);
-    LOG_D("[CFG] MOSFET_PWM standalone gpio=%d ledc_ch=%d", _mosfetGpio, _pwmChMosfet);
+    ledcWrite(_pwmChMosfet, (uint32_t)map(pwm_duty, 0, 100, 0, 255));
+    LOG_D("[CFG] MOSFET_PWM standalone gpio=%d ledc_ch=%d duty=%d%%", _mosfetGpio, _pwmChMosfet, pwm_duty);
   }
 
   for (int gpio = 0; gpio <= 21; gpio++) {
@@ -518,20 +520,84 @@ void configuracioLlum() {
   }
 }
 
+// ── applyChannelOutput — aplica hardware per canal des de g_dev ──
+
+void applyChannelOutput(uint8_t chan) {
+  const ChannelHW&    hw = g_dev.hw[chan];
+  const ChannelState& s  = g_dev.state[chan];
+  bool    on  = s.on;
+  uint8_t br  = s.brightness;
+  uint8_t br2 = s.brightness2;
+
+  switch (hw.type) {
+    case CH_ONOFF:
+      if (hw.pin_out >= 0) digitalWrite(hw.pin_out, on ? HIGH : LOW);
+      if (hw.pin_aux >= 0) digitalWrite(hw.pin_aux, on ? HIGH : LOW);
+      break;
+
+    case CH_PWM:
+      if (hw.ledc_ch_main >= 0)
+        ledcWrite(hw.ledc_ch_main, on ? (uint32_t)map(br, 0, 100, 0, 255) : 0);
+      break;
+
+    case CH_PWM_CCT:
+      if (hw.ledc_ch_main >= 0)
+        ledcWrite(hw.ledc_ch_main, on ? (uint32_t)map(br,  0, 100, 0, 255) : 0);
+      if (hw.ledc_ch_aux >= 0)
+        ledcWrite(hw.ledc_ch_aux,  on ? (uint32_t)map(br2, 0, 100, 0, 255) : 0);
+      break;
+
+    case CH_NEOPIXEL:
+      strip.setBrightness(map(br, 0, 100, 0, 255));
+      for (int i = 0; i < hw.num_leds; i++)
+        strip.setPixelColor(i, on ? s.color : 0);
+      strip.show();
+      break;
+
+    case CH_TRIAC_CYCLE:
+      _cycleSnapUpdate(on, br);
+      if (hw.pin_led >= 0) {
+        if (on) {
+          uint8_t ledBr = (uint8_t)map((long)br2 * br / 100, 0, 100, 0, 255);
+          strip.setBrightness(max((uint8_t)5, ledBr));
+          strip.setPixelColor(0, s.color);
+        } else { strip.clear(); }
+        strip.show();
+      }
+      break;
+
+    case CH_TRIAC_PHASE:
+      _triacSnapUpdate(on, br);
+      if (hw.pin_led >= 0) {
+        if (on) {
+          uint8_t ledBr = (uint8_t)map((long)br2 * br / 100, 0, 100, 0, 255);
+          strip.setBrightness(max((uint8_t)5, ledBr));
+          strip.setPixelColor(0, s.color);
+        } else { strip.clear(); }
+        strip.show();
+      }
+      break;
+
+    default: break;
+  }
+}
+
 // ── Funcions de control de sortida ──────────────────────────────
 
 void applyOutput(bool on) {
   if (pin1 == PIN_UNUSED || !g_driver) return;
+  state = on;
+  uint8_t ch = (uint8_t)gpioMap[pin1].canal;
+  if (ch > 0) g_dev.state[ch].on = on;
   g_driver->applyOutput(on);
 }
 
 void toggleOutput() {
   if (pin1 == PIN_UNUSED) return;
-  uint8_t output_canal = gpioMap[pin1].canal;
-  if (output_canal == 0) return;
-  if (boto_canal > 0 && boto_canal != output_canal) return;
-  state = !state;
-  applyOutput(state);
+  uint8_t ch = (uint8_t)gpioMap[pin1].canal;
+  if (ch == 0) return;
+  if (boto_canal > 0 && boto_canal != ch) return;
+  toggleChannel(ch);
 }
 
 void renderVisualFeedback(const char* mode) {
@@ -542,6 +608,8 @@ void renderVisualFeedback(const char* mode) {
 
 void applyBrightness(int br) {
   brightness[control_type] = br;
+  uint8_t ch = (pin1 != PIN_UNUSED) ? (uint8_t)gpioMap[pin1].canal : 0;
+  if (ch > 0) g_dev.state[ch].brightness = (uint8_t)constrain(br, 0, 100);
   if (state) applyOutput(true);
 }
 

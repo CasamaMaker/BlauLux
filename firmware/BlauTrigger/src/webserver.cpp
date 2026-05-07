@@ -432,6 +432,61 @@ void webServerSetup() {
     r->send(200, "text/plain", "OK"); delay(500); ESP.restart();
   });
 
+  // ── Canals — estat (GET) ─────────────────────────────────────────
+
+  server.on("/channels", HTTP_GET, [](AsyncWebServerRequest *r) {
+    static const char* typeNames[] = {"none","onoff","pwm","pwm_cct","neopixel","triac_cycle","triac_phase"};
+    String json = "{\"channels\":[";
+    bool first = true;
+    for (uint8_t ch = 1; ch <= 15; ch++) {
+      if (g_dev.hw[ch].type == CH_NONE) continue;
+      const ChannelHW&    hw   = g_dev.hw[ch];
+      const ChannelState& s    = g_dev.state[ch];
+      ChannelCaps         caps = getChannelCaps(hw.type);
+      if (!first) json += ",";
+      first = false;
+      json += "{\"id\":"    + String(ch)
+            + ",\"type\":\"" + String(typeNames[(int)hw.type]) + "\""
+            + ",\"on\":"    + (s.on ? "true" : "false")
+            + ",\"br\":"    + String(s.brightness)
+            + ",\"br2\":"   + String(s.brightness2)
+            + ",\"hasBr\":" + (caps.hasBrightness ? "true" : "false")
+            + ",\"hasCCT\":" + (caps.hasCCT ? "true" : "false")
+            + ",\"hasColor\":" + (caps.hasColor ? "true" : "false");
+      if (caps.hasColor) {
+        char hex[7];
+        snprintf(hex, sizeof(hex), "%06lX", (unsigned long)s.color);
+        json += ",\"color\":\"" + String(hex) + "\"";
+      }
+      json += "}";
+    }
+    json += "],\"mosfet\":" + String(g_dev.mosfet_gpio >= 0 ? g_dev.mosfet_duty : -1) + "}";
+    r->send(200, "application/json", json);
+  });
+
+  // ── Canals — control (POST) ───────────────────────────────────────
+
+  server.on("/channel", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!r->hasParam("ch", true)) { r->send(400, "text/plain", "missing ch"); return; }
+    uint8_t ch = (uint8_t)r->getParam("ch", true)->value().toInt();
+    if (ch == 0 || ch > 15 || g_dev.hw[ch].type == CH_NONE) {
+      r->send(400, "text/plain", "invalid ch"); return;
+    }
+    if (r->hasParam("on",  true))
+      setChannelOn(ch, r->getParam("on",  true)->value() == "1");
+    if (r->hasParam("br",  true))
+      setChannelBrightness(ch,  (uint8_t)constrain(r->getParam("br",  true)->value().toInt(), 0, 100));
+    if (r->hasParam("br2", true))
+      setChannelBrightness2(ch, (uint8_t)constrain(r->getParam("br2", true)->value().toInt(), 0, 100));
+    if (r->hasParam("r", true) && r->hasParam("g", true) && r->hasParam("b", true)) {
+      uint8_t rv = (uint8_t)r->getParam("r", true)->value().toInt();
+      uint8_t gv = (uint8_t)r->getParam("g", true)->value().toInt();
+      uint8_t bv = (uint8_t)r->getParam("b", true)->value().toInt();
+      setChannelColor(ch, ((uint32_t)rv << 16) | ((uint32_t)gv << 8) | bv);
+    }
+    r->send(200, "text/plain", "OK");
+  });
+
   server.onNotFound(serveixWifiManager);
   server.begin();
   LOG_I("[WEB] server started");

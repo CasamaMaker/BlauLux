@@ -61,3 +61,7 @@ function apiClearDeviceName()    { return fetch('/cleardevicename', {method:'POS
 function apiRestart()       { return fetch('/restart',       {method:'POST'}); }
 function apiClearConfig()   { return fetch('/clearconfig',   {method:'POST'}); }
 function apiClearHardware() { return fetch('/clearhardware', {method:'POST'}); }
+
+// Canals
+function apiGetChannels()        { return fetch('/channels').then(r => r.json()); }
+function apiSetChannel(ch, body) { return _postForm('/channel', 'ch=' + ch + '&' + body); }

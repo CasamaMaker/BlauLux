@@ -378,15 +378,8 @@ function confirmClearAltres() {
   }
 }
 
-// Detecta si hi ha triac_cycle (mosfet_pwm) standalone i mostra/oculta la secció de test
-function updateMosfetTest() {
-  const hasMosfetPwm = gpioState.some(function(s) { return s.func === 'triac_cycle'; });
-  const sec = document.getElementById('testMosfetSection');
-  if (sec) {
-    const ctrlVisible = document.getElementById('hwTestControls');
-    sec.style.display = (hasMosfetPwm && ctrlVisible && ctrlVisible.style.display !== 'none') ? 'flex' : 'none';
-  }
-}
+// Mosfet standalone: la visibilitat la gestiona fetchChannels() via el camp mosfet
+function updateMosfetTest() {}
 
 function handleMosfetDutyChange(slider) {
   document.getElementById('mosfetDutyValue').textContent = slider.value + '%';
@@ -395,48 +388,11 @@ function handleMosfetDutyChange(slider) {
 }
 
 function updateControlTypeUI() {
-  const ct = _currentMode;
-
-  document.getElementById('testDutySwitch').checked = false;
-
-  const noCt = (ct < 0);
-  document.getElementById('hwStatusRow').style.display    = noCt ? 'flex' : 'none';
-  document.getElementById('hwTestControls').style.display = noCt ? 'none' : 'flex';
-
-  if (noCt) { stopFreqPolling(); updateMosfetTest(); return; }
-
-  const testToggle  = document.getElementById('testToggleSection');
-  const testDigital = document.getElementById('testDigitalSection');
-  const testDuty    = document.getElementById('testDutySection');
-  const testDimmer  = document.getElementById('testDimmerSlider');
-  const testWW      = document.getElementById('testWWSlider');
-  const testCW      = document.getElementById('testCWSlider');
-  const testTriac   = document.getElementById('testTriacSlider');
-  const testTriacLED = document.getElementById('testTriacLEDSlider');
-
-  testToggle.style.display   = (ct === 0 || ct === 1) ? 'flex' : 'none';
-  testDigital.style.display  = (ct === 1)             ? 'flex' : 'none';
-  testDuty.style.display     = (ct >= 2 && ct <= 4)   ? 'flex' : 'none';
-  testDimmer.style.display   = (ct === 2)             ? 'flex' : 'none';
-  testWW.style.display       = (ct === 3)             ? 'flex' : 'none';
-  testCW.style.display       = (ct === 3)             ? 'flex' : 'none';
-  testTriac.style.display    = (ct === 4)             ? 'flex' : 'none';
-  testTriacLED.style.display = (ct === 4)             ? 'flex' : 'none';
-
   updateExtraParams();
   updateMosfetTest();
-
-  if (ct === 4) startFreqPolling(); else stopFreqPolling();
-  if (ct >= 1)  fetchBrightnessConfig();
+  if (_currentMode >= 1) fetchBrightnessConfig();
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('testToggleSection').style.display = 'none';
-  document.getElementById('testDigitalSection').style.display = 'none';
-  document.getElementById('testDutySection').style.display = 'none';
-  document.getElementById('testTriacSlider').style.display = 'none';
-  document.getElementById('testTriacLEDSlider').style.display = 'none';
-});
 
 let _currentMode = -1;
 let isInitialSetup = false;
@@ -627,6 +583,187 @@ function saveWifiCredentials() {
   }).catch(() => showToast(t('wifiError')));
 }
 
+// ── Canals (Fase 5) ───────────────────────────────────────────────
+
+let _chPollInterval = null;
+let _chDebounce = {};
+
+const _chTypeLabels = {
+  onoff: 'ON/OFF', pwm: 'PWM', pwm_cct: 'CCT',
+  neopixel: 'NeoPixel', triac_cycle: 'Triac', triac_phase: 'Triac φ'
+};
+
+function startChannelPolling() {
+  stopChannelPolling();
+  fetchChannels();
+  _chPollInterval = setInterval(fetchChannels, 3000);
+}
+
+function stopChannelPolling() {
+  if (_chPollInterval !== null) { clearInterval(_chPollInterval); _chPollInterval = null; }
+}
+
+function fetchChannels() {
+  apiGetChannels().then(function(data) {
+    renderChannelList(data.channels || []);
+    const mosfetSec = document.getElementById('testMosfetSection');
+    if (mosfetSec) {
+      const hasMosfet = data.mosfet >= 0;
+      mosfetSec.style.display = hasMosfet ? 'flex' : 'none';
+      if (hasMosfet) {
+        const slider = document.getElementById('mosfetDutySlider');
+        const valEl  = document.getElementById('mosfetDutyValue');
+        if (slider && !_chDebounce['mosfet']) { slider.value = data.mosfet; }
+        if (valEl  && !_chDebounce['mosfet']) { valEl.textContent = data.mosfet + '%'; }
+      }
+    }
+  }).catch(function() {});
+}
+
+function renderChannelList(channels) {
+  const list = document.getElementById('channelList');
+  if (!list) return;
+
+  const existing = {};
+  list.querySelectorAll('[data-ch]').forEach(function(el) { existing[el.dataset.ch] = el; });
+  const newIds = channels.map(function(c) { return String(c.id); });
+
+  Object.keys(existing).forEach(function(id) {
+    if (!newIds.includes(id)) existing[id].remove();
+  });
+
+  if (channels.length === 0) {
+    if (!list.querySelector('.ch-empty'))
+      list.innerHTML = '<span class="ch-empty" style="font-size:0.9em; color:#888;">' + t('channelsEmpty') + '</span>';
+    return;
+  }
+  list.querySelectorAll('.ch-empty').forEach(function(el) { el.remove(); });
+
+  channels.forEach(function(ch) {
+    if (existing[String(ch.id)]) {
+      _updateChannelCard(ch);
+    } else {
+      list.appendChild(_createChannelCard(ch));
+    }
+  });
+}
+
+function _createChannelCard(ch) {
+  const div = document.createElement('div');
+  div.dataset.ch = ch.id;
+  div.style.cssText = 'border:1px solid #eee; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px;';
+
+  const typeLbl = _chTypeLabels[ch.type] || ch.type;
+  let html = '<div style="display:flex; justify-content:space-between; align-items:center;">'
+           + '<span style="font-weight:600;">CH ' + ch.id
+           + ' <span style="font-size:0.78em; background:#e8f4fd; color:#2980b9; padding:1px 6px; border-radius:4px;">' + typeLbl + '</span></span>'
+           + '<label class="toggle-switch">'
+           + '<input type="checkbox" id="ch' + ch.id + '-sw"' + (ch.on ? ' checked' : '') + ' onchange="chSetOn(' + ch.id + ', this.checked)">'
+           + '<span class="toggle-slider"></span>'
+           + '</label></div>';
+
+  if (ch.hasBr) {
+    html += '<div style="display:flex; flex-direction:column; gap:4px;">'
+          + '<div style="display:flex; justify-content:space-between; align-items:center;">'
+          + '<label style="margin:0; font-size:0.85em;">' + t('labelBrightness') + '</label>'
+          + '<span id="ch' + ch.id + '-br-v" style="font-size:0.85em; font-weight:600; color:var(--primary-color);">' + ch.br + '%</span>'
+          + '</div>'
+          + '<input type="range" id="ch' + ch.id + '-br" min="0" max="100" value="' + ch.br + '" class="duty-slider" oninput="chSetBr(' + ch.id + ', this)">'
+          + '</div>';
+  }
+
+  if (ch.hasCCT) {
+    html += '<div style="display:flex; flex-direction:column; gap:4px;">'
+          + '<div style="display:flex; justify-content:space-between; align-items:center;">'
+          + '<label style="margin:0; font-size:0.85em;">' + t('labelBrightnessCWTest') + '</label>'
+          + '<span id="ch' + ch.id + '-br2-v" style="font-size:0.85em; font-weight:600; color:var(--primary-color);">' + ch.br2 + '%</span>'
+          + '</div>'
+          + '<input type="range" id="ch' + ch.id + '-br2" min="0" max="100" value="' + ch.br2 + '" class="duty-slider" oninput="chSetBr2(' + ch.id + ', this)">'
+          + '</div>';
+  }
+
+  if (ch.hasColor) {
+    const hex = '#' + (ch.color || 'ffffff').toLowerCase().padStart(6, '0');
+    html += '<div style="display:flex; justify-content:space-between; align-items:center;">'
+          + '<label style="margin:0; font-size:0.85em;">' + t('labelColor') + '</label>'
+          + '<input type="color" id="ch' + ch.id + '-color" value="' + hex + '" class="color-picker" oninput="chSetColor(' + ch.id + ', this)">'
+          + '</div>';
+  }
+
+  div.innerHTML = html;
+  return div;
+}
+
+function _updateChannelCard(ch) {
+  const sw = document.getElementById('ch' + ch.id + '-sw');
+  if (sw && !_chDebounce['on' + ch.id]) sw.checked = ch.on;
+
+  const brEl = document.getElementById('ch' + ch.id + '-br');
+  const brV  = document.getElementById('ch' + ch.id + '-br-v');
+  if (brEl && !_chDebounce['br' + ch.id]) {
+    brEl.value = ch.br;
+    if (brV) brV.textContent = ch.br + '%';
+  }
+
+  const br2El = document.getElementById('ch' + ch.id + '-br2');
+  const br2V  = document.getElementById('ch' + ch.id + '-br2-v');
+  if (br2El && !_chDebounce['br2' + ch.id]) {
+    br2El.value = ch.br2;
+    if (br2V) br2V.textContent = ch.br2 + '%';
+  }
+
+  if (ch.hasColor) {
+    const colorEl = document.getElementById('ch' + ch.id + '-color');
+    if (colorEl && !_chDebounce['color' + ch.id])
+      colorEl.value = '#' + (ch.color || 'ffffff').toLowerCase().padStart(6, '0');
+  }
+}
+
+function chSetOn(ch, on) {
+  DBG.hw('CH' + ch + ': ' + (on ? 'ON' : 'OFF'));
+  _chDebounce['on' + ch] = true;
+  apiSetChannel(ch, 'on=' + (on ? '1' : '0')).finally(function() {
+    delete _chDebounce['on' + ch];
+  });
+}
+
+function chSetBr(ch, slider) {
+  const v = slider.value;
+  const vEl = document.getElementById('ch' + ch + '-br-v');
+  if (vEl) vEl.textContent = v + '%';
+  clearTimeout(_chDebounce['br' + ch + '_t']);
+  _chDebounce['br' + ch] = true;
+  _chDebounce['br' + ch + '_t'] = setTimeout(function() {
+    DBG.hw('CH' + ch + ': brightness → ' + v + '%');
+    apiSetChannel(ch, 'br=' + v).finally(function() { delete _chDebounce['br' + ch]; });
+  }, 200);
+}
+
+function chSetBr2(ch, slider) {
+  const v = slider.value;
+  const vEl = document.getElementById('ch' + ch + '-br2-v');
+  if (vEl) vEl.textContent = v + '%';
+  clearTimeout(_chDebounce['br2' + ch + '_t']);
+  _chDebounce['br2' + ch] = true;
+  _chDebounce['br2' + ch + '_t'] = setTimeout(function() {
+    DBG.hw('CH' + ch + ': brightness2 → ' + v + '%');
+    apiSetChannel(ch, 'br2=' + v).finally(function() { delete _chDebounce['br2' + ch]; });
+  }, 200);
+}
+
+function chSetColor(ch, picker) {
+  const hex = picker.value;
+  clearTimeout(_chDebounce['color' + ch + '_t']);
+  _chDebounce['color' + ch] = true;
+  _chDebounce['color' + ch + '_t'] = setTimeout(function() {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    DBG.hw('CH' + ch + ': color → ' + hex);
+    apiSetChannel(ch, 'r=' + r + '&g=' + g + '&b=' + b).finally(function() { delete _chDebounce['color' + ch]; });
+  }, 200);
+}
+
 window.onload = function() {
   currentLang = detectLang();
   document.getElementById('langSelector').value = currentLang;
@@ -643,6 +780,8 @@ window.onload = function() {
 
   fetchMqttStatus();
   setInterval(fetchMqttStatus, 10000);
+
+  startChannelPolling();
 
   fetchFunclist().then(fetchTemplates).then(fetchGpioMap);
 }

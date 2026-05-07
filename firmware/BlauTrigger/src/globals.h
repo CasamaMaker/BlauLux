@@ -11,6 +11,8 @@
 #include <Adafruit_NeoPixel.h>
 #include <AsyncMqttClient.h>
 #include "config.h"
+#include "channel.h"
+#include "state.h"
 #include "log.h"
 
 // ── Tipus GPIO (runtime) ─────────────────────────────────────────
