@@ -1,65 +1,9 @@
 #pragma once
 
 // ════════════════════════════════════════════════════════════════
-//  SELECCIÓ DEL DISPOSITIU  (descomenta un sol)    -->>> està també definit al platformio.ini: ${hw_profile.flags}
-// ════════════════════════════════════════════════════════════════
-// #define SONOFF_BASIC_R4
-// #define PICO_CLICK
-#define ESP32_S3_ZERO
-// #define AC_REGULATOR
-
-// ════════════════════════════════════════════════════════════════
 //  PINOUT I CONFIGURACIÓ DE HARDWARE
 // ════════════════════════════════════════════════════════════════
 #define PIN_UNUSED  -1   // pin no connectat / no utilitzat
-
-#if defined(SONOFF_BASIC_R4)
-  #define PIN_BOTO        9   // GPIO0 (boot button)
-  #define PIN_RELE        4   // relé que activa la càrrega AC
-  #define PIN_LED         6   // led que segueix el relé
-  #define PIN_DIGITAL_LED PIN_UNUSED
-  #define HW_CONTROL_TYPE 0   // 0=On/Off
-  #define HW_PIN1         PIN_RELE
-  #define HW_PIN2         PIN_LED
-  #define HW_PIN3         PIN_UNUSED
-  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
-
-#elif defined(PICO_CLICK)
-  #define PIN_BOTO        5
-  #define PIN_DIGITAL_LED 6
-  #define PIN_RELE        PIN_UNUSED
-  #define PIN_LED         PIN_UNUSED
-  #define HW_CONTROL_TYPE 1   // 1=Digital led
-  #define HW_PIN1         PIN_DIGITAL_LED
-  #define HW_PIN2         PIN_UNUSED
-  #define HW_PIN3         PIN_UNUSED
-  #define BUTTON_PULLUP   0   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
-
-#elif defined(ESP32_S3_ZERO)
-  #define PIN_BOTO        0
-  #define PIN_DIGITAL_LED 21
-  #define PIN_RELE        PIN_UNUSED
-  #define PIN_LED         PIN_UNUSED
-  #define HW_CONTROL_TYPE 1   // 1=Digital led
-  #define HW_PIN1         PIN_DIGITAL_LED
-  #define HW_PIN2         PIN_UNUSED
-  #define HW_PIN3         PIN_UNUSED
-  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
-
-#elif defined(AC_REGULATOR)
-  #define PIN_BOTO        0
-  #define PIN_DIGITAL_LED 21
-  #define PIN_RELE        PIN_UNUSED
-  #define PIN_LED         PIN_UNUSED
-  #define HW_CONTROL_TYPE 1   // 1=Digital led
-  #define HW_PIN1         PIN_DIGITAL_LED
-  #define HW_PIN2         PIN_UNUSED
-  #define HW_PIN3         PIN_UNUSED
-  #define BUTTON_PULLUP   1   // 1=pull-up (premut=LOW), 0=pull-down (premut=HIGH)
-
-  #else
-  #error "Defineix una versió del dispositiu a config.h"
-#endif
 
 
 // ════════════════════════════════════════════════════════════════
@@ -177,12 +121,27 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
     {21, FUNC_NEOPIXEL, 0 }
   }, 2 },
   { "AC_REGULATOR", {
-    { 1, FUNC_BTN_INV,      0 },
+    { 1, FUNC_BTN_INV,  0 },
     { 0, FUNC_ZCD,      1 },
     { 4, FUNC_TRIAC,    1 },
-    {   5, FUNC_NEOPIXEL, 0 }
+    { 5, FUNC_NEOPIXEL, 0 }
   }, 4 },
+  { "AC_CYCLE", {
+    { 1, FUNC_BTN_INV,  0 },
+    { 4, FUNC_TRIAC,    1 },
+    { 5, FUNC_NEOPIXEL, 0 }
+  }, 3 },
 };
+
+
+// ════════════════════════════════════════════════════════════════
+//  TIPUS DE CONTROL (control_type)
+// ════════════════════════════════════════════════════════════════
+#define CTRL_TYPE_ONOFF        0  // Relé / LED / MOSFET (digital)
+#define CTRL_TYPE_NEOPIXEL     1  // LED digital WS2812/NeoPixel
+#define CTRL_TYPE_PWM          2  // PWM dimmer (1 canal o 2 canals WW+CW)
+#define CTRL_TYPE_TRIAC_CYCLE  3  // Triac per cicle a 50 Hz (sense ZCD)
+#define CTRL_TYPE_TRIAC_PHASE  4  // Triac per fase (amb ZCD)
 
 
 // ════════════════════════════════════════════════════════════════
