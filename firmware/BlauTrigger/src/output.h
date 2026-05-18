@@ -1,7 +1,7 @@
 #pragma once
 #include "globals.h"
 
-// ── OutputDriver — dispatch de sortida per control_type ──────────
+// ── OutputDriver (mantingut per compat amb mqtt, espnow) ─────────
 struct OutputDriver {
   void (*applyOutput)(bool on);
   void (*renderInici)();
@@ -10,21 +10,42 @@ struct OutputDriver {
   bool        hasBrightness;
   bool        hasCCT;
   const char* typeName;
-  const char* haDiscoveryType;  // "switch" o "light"
+  const char* haDiscoveryType;
 };
 
 extern const OutputDriver* g_driver;
 
-// ── Funcions públiques ────────────────────────────────────────────
-int   findGpio(GpioFunc func, uint8_t canal = 0);
-void  applyGpioConfig();
+// ── API per-GPIO (nova) ───────────────────────────────────────────
+int   findGpio(GpioFunc func);
+void  driverSetup(int gpio);
+void  driverSetupAll();
+void  driverApply(int gpio);
+void  driverToggle(int gpio);
+void  driverToggleAll();
+
+// ── Cleanup i mesura ─────────────────────────────────────────────
 void  cleanupTriac();
 void  cleanupTriacCycle();
-void  configuracioLlum();
-void  applyChannelOutput(uint8_t chan);
-void  applyOutput(bool on);
-void  toggleOutput();
-void  renderVisualFeedback(const char* mode);
-void  applyBrightness(int br);
 float getAcFreqHz();
-void  applyMosfetDuty(int duty);
+
+// ── API backward-compatible (main, mqtt, espnow, webserver) ──────
+void     applyGpioConfig();     // àlies → driverSetupAll()
+void     configuracioLlum();    // no-op (integrat a driverSetupAll)
+bool     getState();
+void     applyOutput(bool on);
+void     toggleOutput();
+void     renderVisualFeedback(const char* mode);
+void     applyBrightness(int br);
+void     applyMosfetDuty(int duty);
+int      getBotonPin();
+bool     getButtonPullup();
+int      getControlType();
+int      getPin1();
+int      getPin2();
+int      getPin3();
+int      getBrightnessForType(int ct);
+void     setBrightnessForType(int ct, int v);
+int      getBrightnessCW();
+void     setBrightnessCW(int v);
+uint32_t getCurrentColor();
+void     setCurrentColor(uint32_t c);

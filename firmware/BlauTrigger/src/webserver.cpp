@@ -48,7 +48,7 @@ void webServerSetup() {
     char buf[96];
     snprintf(buf, sizeof(buf),
              "{\"ct\":%d,\"type\":\"%s\",\"hasBr\":%s,\"hasCol\":%s,\"hasCCT\":%s}",
-             control_type,
+             getControlType(),
              g_driver ? g_driver->typeName       : "none",
              (g_driver && g_driver->hasBrightness) ? "true" : "false",
              (g_driver && g_driver->hasColor)       ? "true" : "false",
@@ -65,33 +65,29 @@ void webServerSetup() {
   });
 
   server.on("/pins", HTTP_POST, [](AsyncWebServerRequest *r) {
-    String sPin1 = (pin1 == PIN_UNUSED) ? "null" : String(pin1);
-    String sPin2 = (pin2 == PIN_UNUSED) ? "null" : String(pin2);
-    String sPin3 = (pin3 == PIN_UNUSED) ? "null" : String(pin3);
+    String sPin1 = (getPin1() == PIN_UNUSED) ? "null" : String(getPin1());
+    String sPin2 = (getPin2() == PIN_UNUSED) ? "null" : String(getPin2());
+    String sPin3 = (getPin3() == PIN_UNUSED) ? "null" : String(getPin3());
     r->send(200, "application/json",
       "{\"pin1\":" + sPin1 + ",\"pin2\":" + sPin2 + ",\"pin3\":" + sPin3 + "}");
   });
 
   server.on("/brightness", HTTP_POST, [](AsyncWebServerRequest *r) {
-    String json = "{\"b1\":" + String(brightness[1]) + ",\"b2\":" + String(brightness[2])
-                + ",\"b3\":" + String(brightness[3]) + ",\"b4\":" + String(brightness[4])
-                + ",\"bcw\":" + String(brightness_cw) + ",\"pf\":" + String(pwm_freq)
-                + ",\"pd\":" + String(pwm_duty) + "}";
+    String json = "{\"b1\":" + String(getBrightnessForType(1))
+                + ",\"b2\":" + String(getBrightnessForType(2))
+                + ",\"b3\":" + String(getBrightnessForType(3))
+                + ",\"bcw\":" + String(getBrightnessCW()) + "}";
     r->send(200, "application/json", json);
   });
 
-  server.on("/numLeds", HTTP_POST, [](AsyncWebServerRequest *r) {
-    r->send(200, "text/plain", String(num_leds));
-  });
-
   server.on("/boto", HTTP_POST, [](AsyncWebServerRequest *r) {
-    String b = (boto_pin == PIN_UNUSED) ? "null" : String(boto_pin);
+    String b = (getBotonPin() == PIN_UNUSED) ? "null" : String(getBotonPin());
     r->send(200, "application/json",
-      "{\"boto\":" + b + ",\"bpu\":" + String(button_pullup) + "}");
+      "{\"boto\":" + b + ",\"bpu\":" + String(getButtonPullup() ? 1 : 0) + "}");
   });
 
   server.on("/initialSetup", HTTP_POST, [](AsyncWebServerRequest *r) {
-    r->send(200, "text/plain", boto_pin == PIN_UNUSED ? "true" : "false");
+    r->send(200, "text/plain", getBotonPin() == PIN_UNUSED ? "true" : "false");
   });
 
   server.on("/version", HTTP_GET, [](AsyncWebServerRequest *r) {
@@ -113,27 +109,12 @@ void webServerSetup() {
       const AsyncWebParameter* p = r->getParam(i);
       if (p->isPost()) {
         if      (p->name() == "brightness")    newBrightness = p->value().toInt();
-        else if (p->name() == "brightness_cw") brightness_cw = p->value().toInt();
-        else if (p->name() == "num_leds")      { int v = p->value().toInt(); num_leds = v > 0 ? v : 1; }
-        else if (p->name() == "pwm_freq")      { int v = p->value().toInt(); if (v >= 100) pwm_freq = v; }
+        else if (p->name() == "brightness_cw") setBrightnessCW(p->value().toInt());
       }
     }
     if (newBrightness >= 0 && g_driver && g_driver->hasBrightness)
-      brightness[control_type] = newBrightness;
+      setBrightnessForType(getControlType(), newBrightness);
     saveConfig();
-    r->send(200, "text/plain", "OK");
-  });
-
-  server.on("/color", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (r->hasParam("r", true) && r->hasParam("g", true) && r->hasParam("b", true)) {
-      webTesting = true;
-      int rv = r->getParam("r", true)->value().toInt();
-      int gv = r->getParam("g", true)->value().toInt();
-      int bv = r->getParam("b", true)->value().toInt();
-      if (pin2 != PIN_UNUSED) digitalWrite(pin2, (rv == 0 && gv == 0 && bv == 0) ? LOW : HIGH);
-      for (int i = 0; i < num_leds; i++) strip.setPixelColor(i, strip.Color(rv, gv, bv));
-      strip.show();
-    }
     r->send(200, "text/plain", "OK");
   });
 
@@ -150,9 +131,8 @@ void webServerSetup() {
     if (r->hasParam("value", true)) {
       webTesting = true;
       int duty = r->getParam("value", true)->value().toInt();
-      if (g_driver && g_driver->hasBrightness) brightness[control_type] = duty;
-      state = (duty > 0);
-      applyOutput(state);
+      if (g_driver && g_driver->hasBrightness) setBrightnessForType(getControlType(), duty);
+      applyOutput(duty > 0);
     }
     r->send(200, "text/plain", "OK");
   });
@@ -160,8 +140,86 @@ void webServerSetup() {
   server.on("/duttyCW", HTTP_POST, [](AsyncWebServerRequest *r) {
     if (r->hasParam("value", true)) {
       webTesting = true;
-      brightness_cw = r->getParam("value", true)->value().toInt();
-      if (state) applyOutput(true);
+      setBrightnessCW(r->getParam("value", true)->value().toInt());
+      if (getState()) applyOutput(true);
+    }
+    r->send(200, "text/plain", "OK");
+  });
+
+  // ── Canals / estats en temps real ────────────────────────────
+
+  server.on("/channels", HTTP_GET, [](AsyncWebServerRequest *r) {
+    String json = "{\"channels\":[";
+    bool first = true;
+    for (int i = 0; i <= 21; i++) {
+      GpioFunc f = gpioMap[i].cfg.func;
+      if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;
+
+      const char* type   = "onoff";
+      bool hasBr         = false;
+      bool hasColor      = false;
+      uint32_t br        = 0;
+      uint32_t colorVal  = 0xFFFFFF;
+
+      switch (f) {
+        case FUNC_PWM:
+          type = "pwm"; hasBr = true; br = gpioMap[i].rt.param1; break;
+        case FUNC_DIGITAL_LED:
+          type = "neopixel"; hasBr = true; hasColor = true;
+          br = gpioMap[i].rt.param2; colorVal = gpioMap[i].rt.param1; break;
+        case FUNC_TRIAC_CYCLE:
+          type = "triac_cycle"; hasBr = true; br = gpioMap[i].rt.param1; break;
+        case FUNC_TRIAC_FASE:
+          type = "triac_phase"; hasBr = true; br = gpioMap[i].rt.param1; break;
+        default: break;
+      }
+
+      char colorHex[7];
+      snprintf(colorHex, sizeof(colorHex), "%06lx", (unsigned long)colorVal);
+
+      if (!first) json += ",";
+      first = false;
+      json += "{\"id\":"    + String(i)
+            + ",\"name\":\"" + String(gpioMap[i].cfg.name) + "\""
+            + ",\"type\":\"" + String(type) + "\""
+            + ",\"on\":"    + String(gpioMap[i].rt.state ? "true" : "false")
+            + ",\"br\":"    + String(br)
+            + ",\"color\":\"" + String(colorHex) + "\""
+            + ",\"hasBr\":" + String(hasBr    ? "true" : "false")
+            + ",\"hasColor\":" + String(hasColor ? "true" : "false")
+            + "}";
+    }
+    json += "],\"mosfet\":-1}";
+    r->send(200, "application/json", json);
+  });
+
+  server.on("/channel", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!r->hasParam("ch", true)) { r->send(400, "text/plain", "missing ch"); return; }
+    int ch = r->getParam("ch", true)->value().toInt();
+    if (ch < 0 || ch > 21) { r->send(400, "text/plain", "bad ch"); return; }
+
+    GpioFunc f = gpioMap[ch].cfg.func;
+    bool isOutput = (f == FUNC_ON_OFF || f == FUNC_PWM || f == FUNC_DIGITAL_LED ||
+                     f == FUNC_TRIAC_CYCLE || f == FUNC_TRIAC_FASE);
+    if (!isOutput) { r->send(400, "text/plain", "not output"); return; }
+
+    if (r->hasParam("on", true)) {
+      gpioMap[ch].rt.state        = r->getParam("on", true)->value() == "1";
+      gpioMap[ch].rt.lastChangeMs = (uint32_t)millis();
+      driverApply(ch);
+    }
+    if (r->hasParam("br", true)) {
+      int br = constrain(r->getParam("br", true)->value().toInt(), 0, 100);
+      if (f == FUNC_DIGITAL_LED) gpioMap[ch].rt.param2 = (uint16_t)br;
+      else                       gpioMap[ch].rt.param1 = (uint32_t)br;
+      driverApply(ch);
+    }
+    if (r->hasParam("r", true) && f == FUNC_DIGITAL_LED) {
+      int rv = constrain(r->getParam("r", true)->value().toInt(), 0, 255);
+      int gv = r->hasParam("g", true) ? constrain(r->getParam("g", true)->value().toInt(), 0, 255) : 0;
+      int bv = r->hasParam("b", true) ? constrain(r->getParam("b", true)->value().toInt(), 0, 255) : 0;
+      gpioMap[ch].rt.param1 = ((uint32_t)rv << 16) | ((uint32_t)gv << 8) | (uint32_t)bv;
+      driverApply(ch);
     }
     r->send(200, "text/plain", "OK");
   });
@@ -202,10 +260,10 @@ void webServerSetup() {
       prefs.putString("sta_pass", sta_pass);
       prefs.end();
       LOG_I("[WIFI] STA credentials saved: %s", sta_ssid.c_str());
-      WiFi.disconnect();
-      if (sta_ssid.length() > 0) WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     }
     r->send(200, "text/plain", "OK");
+    delay(500);
+    ESP.restart();
   });
 
   server.on("/clearwifi", HTTP_POST, [](AsyncWebServerRequest *r) {
@@ -213,9 +271,10 @@ void webServerSetup() {
     prefs.begin("blau", false);
     prefs.remove("sta_ssid"); prefs.remove("sta_pass");
     prefs.end();
-    WiFi.disconnect();
     LOG_I("[WIFI] Credencials WiFi esborrades");
     r->send(200, "text/plain", "OK");
+    delay(500);
+    ESP.restart();
   });
 
   // ── MQTT ─────────────────────────────────────────────────────
@@ -289,12 +348,17 @@ void webServerSetup() {
   server.on("/clearhardware", HTTP_POST, [](AsyncWebServerRequest *r) {
     prefs.begin("blau", false);
     char key[4];
-    for (int i = 0; i <= 21; i++) { snprintf(key, sizeof(key), "g%d", i); prefs.remove(key); }
-    prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3"); prefs.remove("b4");
-    prefs.remove("bcw"); prefs.remove("nl"); prefs.remove("pf"); prefs.remove("pd");
-    prefs.remove("color");
-    char nkey[4];
-    for (int i = 0; i <= 21; i++) { snprintf(nkey, sizeof(nkey), "n%d", i); prefs.remove(nkey); }
+    for (int i = 0; i <= 21; i++) {
+      snprintf(key, sizeof(key), "f%d", i); prefs.remove(key);
+      snprintf(key, sizeof(key), "a%d", i); prefs.remove(key);
+      snprintf(key, sizeof(key), "b%d", i); prefs.remove(key);
+      snprintf(key, sizeof(key), "c%d", i); prefs.remove(key);
+      snprintf(key, sizeof(key), "n%d", i); prefs.remove(key);
+      // snprintf(key, sizeof(key), "g%d", i); prefs.remove(key);  // clau antiga
+    }
+    // prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3");
+    // prefs.remove("bcw"); prefs.remove("pf"); prefs.remove("pd");
+    prefs.putUChar("schema", CONFIG_SCHEMA_VERSION);
     prefs.end();
     LOG_I("[CFG] Configuració hardware esborrada");
     r->send(200, "text/plain", "OK");
@@ -303,24 +367,22 @@ void webServerSetup() {
 
   server.on("/gpiomap", HTTP_GET, [](AsyncWebServerRequest *r) {
     String json = "{";
-    bool first = true;
+    char key[4];
     for (int i = 0; i <= 21; i++) {
-      if (!first) json += ",";
-      json += "\"g" + String(i) + "\":{\"func\":" + String((int)gpioMap[i].func)
-            + ",\"chan\":" + String((int)gpioMap[i].canal) + "}";
-      first = false;
+      if (i > 0) json += ",";
+      snprintf(key, sizeof(key), "f%d", i);
+      json += "\"" + String(key) + "\":" + String((int)gpioMap[i].cfg.func);
+      snprintf(key, sizeof(key), "a%d", i);
+      json += ",\"" + String(key) + "\":" + String(gpioMap[i].cfg.param1);
+      snprintf(key, sizeof(key), "b%d", i);
+      json += ",\"" + String(key) + "\":" + String(gpioMap[i].cfg.param2);
+      snprintf(key, sizeof(key), "c%d", i);
+      json += ",\"" + String(key) + "\":" + String(gpioMap[i].cfg.param3);
+      if (gpioMap[i].cfg.name[0]) {
+        snprintf(key, sizeof(key), "n%d", i);
+        json += ",\"" + String(key) + "\":\"" + String(gpioMap[i].cfg.name) + "\"";
+      }
     }
-    for (int i = 0; i <= 21; i++) {
-      if (gpio_names[i][0]) json += ",\"n" + String(i) + "\":\"" + String(gpio_names[i]) + "\"";
-    }
-    char colorHex[7];
-    snprintf(colorHex, sizeof(colorHex), "%06lX", (unsigned long)currentColor);
-    json += ",\"nl\":" + String(num_leds);
-    json += ",\"pf\":" + String(pwm_freq);
-    json += ",\"pd\":" + String(pwm_duty);
-    json += ",\"b1\":" + String(brightness[1]);
-    json += ",\"b4\":" + String(brightness[4]);
-    json += ",\"color\":\"" + String(colorHex) + "\"";
     json += "}";
     r->send(200, "application/json", json);
   });
@@ -328,35 +390,30 @@ void webServerSetup() {
   server.on("/gpiomap", HTTP_POST, [](AsyncWebServerRequest *r) {
     char key[4];
     for (int i = 0; i <= 21; i++) {
-      snprintf(key, sizeof(key), "g%d", i);
+      snprintf(key, sizeof(key), "f%d", i);
+      if (r->hasParam(key, true))
+        gpioMap[i].cfg.func = (GpioFunc)r->getParam(key, true)->value().toInt();
+      snprintf(key, sizeof(key), "a%d", i);
+      if (r->hasParam(key, true))
+        gpioMap[i].cfg.param1 = (uint32_t)r->getParam(key, true)->value().toInt();
+      snprintf(key, sizeof(key), "b%d", i);
+      if (r->hasParam(key, true))
+        gpioMap[i].cfg.param2 = (uint16_t)r->getParam(key, true)->value().toInt();
+      snprintf(key, sizeof(key), "c%d", i);
+      if (r->hasParam(key, true))
+        gpioMap[i].cfg.param3 = (uint16_t)r->getParam(key, true)->value().toInt();
+      snprintf(key, sizeof(key), "n%d", i);
       if (r->hasParam(key, true)) {
-        uint8_t packed = (uint8_t)r->getParam(key, true)->value().toInt();
-        gpioMap[i].func  = (GpioFunc)(packed & 0x0F);
-        gpioMap[i].canal = (packed >> 4) & 0x0F;
+        String nm = r->getParam(key, true)->value();
+        strncpy(gpioMap[i].cfg.name, nm.c_str(), 12);
+        gpioMap[i].cfg.name[12] = '\0';
       }
     }
-    if (r->hasParam("nl", true)) { int v = r->getParam("nl", true)->value().toInt(); if (v > 0) num_leds = v; }
-    if (r->hasParam("pf", true)) { int v = r->getParam("pf", true)->value().toInt(); if (v >= 100) pwm_freq = v; }
-    if (r->hasParam("pd", true)) { int v = r->getParam("pd", true)->value().toInt(); pwm_duty = constrain(v, 0, 100); }
-    if (r->hasParam("color", true)) {
-      String hex = r->getParam("color", true)->value();
-      if (hex.length() == 6) currentColor = (uint32_t)strtoul(hex.c_str(), NULL, 16);
-    }
-    char nkey[4];
-    for (int i = 0; i <= 21; i++) {
-      snprintf(nkey, sizeof(nkey), "n%d", i);
-      if (r->hasParam(nkey, true)) {
-        String nm = r->getParam(nkey, true)->value();
-        strncpy(gpio_names[i], nm.c_str(), 12);
-        gpio_names[i][12] = '\0';
-      }
-    }
+    if (r->hasParam("tmpl", true))
+      selectedTemplate = (int8_t)r->getParam("tmpl", true)->value().toInt();
     saveConfig();
-    applyGpioConfig();
-    configuracioLlum();
-    if (r->hasParam("b",   true)) { int v = r->getParam("b",   true)->value().toInt(); if (g_driver && g_driver->hasBrightness) brightness[control_type] = v; saveConfig(); }
-    if (r->hasParam("bcw", true)) { int v = r->getParam("bcw", true)->value().toInt(); brightness_cw = v; saveConfig(); }
-    LOG_I("[CFG] gpio_config actualitzat via /gpiomap");
+    driverSetupAll();
+    LOG_I("[CFG] gpioMap actualitzat via /gpiomap");
     r->send(200, "text/plain", "OK");
   });
 
@@ -366,7 +423,6 @@ void webServerSetup() {
       if (i > 0) json += ",";
       json += "{\"id\":\"" + String(FUNC_REGISTRY[i].id) + "\""
             + ",\"label\":\"" + String(FUNC_REGISTRY[i].label) + "\""
-            + ",\"needsChan\":" + (FUNC_REGISTRY[i].needsChan ? "true" : "false")
             + ",\"isInput\":" + (FUNC_REGISTRY[i].isInput ? "true" : "false") + "}";
     }
     json += "]";
@@ -382,12 +438,31 @@ void webServerSetup() {
       for (int p = 0; p < DEVICE_TEMPLATES[t].count; p++) {
         if (p > 0) json += ",";
         json += "{\"gpio\":" + String((int)DEVICE_TEMPLATES[t].pins[p].gpio)
-              + ",\"func\":" + String((int)DEVICE_TEMPLATES[t].pins[p].func)
-              + ",\"chan\":" + String((int)DEVICE_TEMPLATES[t].pins[p].canal) + "}";
+              + ",\"func\":" + String((int)DEVICE_TEMPLATES[t].pins[p].func) + "}";
       }
-      json += "]}";
+      json += "],\"select\":" + String(t == selectedTemplate ? "true" : "false") + "}";
     }
     json += "]";
+    Serial.println(json);
+    r->send(200, "application/json", json);
+  });
+
+  server.on("/gpiocaps", HTTP_GET, [](AsyncWebServerRequest *r) {
+    auto capsJson = [](const GpioCaps caps[], int n) {
+      String s = "[";
+      for (int i = 0; i < n; i++) {
+        if (i > 0) s += ",";
+        s += "{\"valid\":"     + String(caps[i].valid     ? "true" : "false")
+           + ",\"hasPwm\":"    + String(caps[i].hasPwm    ? "true" : "false")
+           + ",\"hasAdc\":"    + String(caps[i].hasAdc    ? "true" : "false")
+           + ",\"inputOnly\":" + String(caps[i].inputOnly ? "true" : "false") + "}";
+      }
+      return s + "]";
+    };
+    String json = "{"
+      "\"esp32c3\":{\"name\":\"ESP32-C3\",\"caps\":" + capsJson(ESP32C3_GPIO_CAPS, 22) + "},"
+      "\"esp32s3\":{\"name\":\"ESP32-S3\",\"caps\":" + capsJson(ESP32S3_GPIO_CAPS, 22) + "}"
+      "}";
     r->send(200, "application/json", json);
   });
 
@@ -430,61 +505,6 @@ void webServerSetup() {
   server.on("/clearconfig", HTTP_POST, [](AsyncWebServerRequest *r) {
     clearConfig();
     r->send(200, "text/plain", "OK"); delay(500); ESP.restart();
-  });
-
-  // ── Canals — estat (GET) ─────────────────────────────────────────
-
-  server.on("/channels", HTTP_GET, [](AsyncWebServerRequest *r) {
-    static const char* typeNames[] = {"none","onoff","pwm","pwm_cct","neopixel","triac_cycle","triac_phase"};
-    String json = "{\"channels\":[";
-    bool first = true;
-    for (uint8_t ch = 1; ch <= 15; ch++) {
-      if (g_dev.hw[ch].type == CH_NONE) continue;
-      const ChannelHW&    hw   = g_dev.hw[ch];
-      const ChannelState& s    = g_dev.state[ch];
-      ChannelCaps         caps = getChannelCaps(hw.type);
-      if (!first) json += ",";
-      first = false;
-      json += "{\"id\":"    + String(ch)
-            + ",\"type\":\"" + String(typeNames[(int)hw.type]) + "\""
-            + ",\"on\":"    + (s.on ? "true" : "false")
-            + ",\"br\":"    + String(s.brightness)
-            + ",\"br2\":"   + String(s.brightness2)
-            + ",\"hasBr\":" + (caps.hasBrightness ? "true" : "false")
-            + ",\"hasCCT\":" + (caps.hasCCT ? "true" : "false")
-            + ",\"hasColor\":" + (caps.hasColor ? "true" : "false");
-      if (caps.hasColor) {
-        char hex[7];
-        snprintf(hex, sizeof(hex), "%06lX", (unsigned long)s.color);
-        json += ",\"color\":\"" + String(hex) + "\"";
-      }
-      json += "}";
-    }
-    json += "],\"mosfet\":" + String(g_dev.mosfet_gpio >= 0 ? g_dev.mosfet_duty : -1) + "}";
-    r->send(200, "application/json", json);
-  });
-
-  // ── Canals — control (POST) ───────────────────────────────────────
-
-  server.on("/channel", HTTP_POST, [](AsyncWebServerRequest *r) {
-    if (!r->hasParam("ch", true)) { r->send(400, "text/plain", "missing ch"); return; }
-    uint8_t ch = (uint8_t)r->getParam("ch", true)->value().toInt();
-    if (ch == 0 || ch > 15 || g_dev.hw[ch].type == CH_NONE) {
-      r->send(400, "text/plain", "invalid ch"); return;
-    }
-    if (r->hasParam("on",  true))
-      setChannelOn(ch, r->getParam("on",  true)->value() == "1");
-    if (r->hasParam("br",  true))
-      setChannelBrightness(ch,  (uint8_t)constrain(r->getParam("br",  true)->value().toInt(), 0, 100));
-    if (r->hasParam("br2", true))
-      setChannelBrightness2(ch, (uint8_t)constrain(r->getParam("br2", true)->value().toInt(), 0, 100));
-    if (r->hasParam("r", true) && r->hasParam("g", true) && r->hasParam("b", true)) {
-      uint8_t rv = (uint8_t)r->getParam("r", true)->value().toInt();
-      uint8_t gv = (uint8_t)r->getParam("g", true)->value().toInt();
-      uint8_t bv = (uint8_t)r->getParam("b", true)->value().toInt();
-      setChannelColor(ch, ((uint32_t)rv << 16) | ((uint32_t)gv << 8) | bv);
-    }
-    r->send(200, "text/plain", "OK");
   });
 
   server.onNotFound(serveixWifiManager);

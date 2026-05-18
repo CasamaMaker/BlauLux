@@ -1,65 +1,14 @@
-// ── Perfils MCU (GPIOs 0-21 per defecte; ampliar quan el fw suporti més) ──
-const MCU_PROFILES = {
-  'esp32c3': {
-    name: 'ESP32-C3',
-    caps: [
-      {valid:true,  hasPwm:true,  hasAdc:true},   // 0
-      {valid:true,  hasPwm:true,  hasAdc:true},   // 1
-      {valid:true,  hasPwm:true,  hasAdc:true},   // 2
-      {valid:true,  hasPwm:true,  hasAdc:true},   // 3
-      {valid:true,  hasPwm:true,  hasAdc:true},   // 4
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 5
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 6
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 7
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 8
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 9
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 10
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 11 (flash CS)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 12 (flash CLK)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 13 (flash DIO)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 14 (flash DIO)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 15 (flash DIO)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 16 (flash DIO)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 17 (flash DIO)
-      {valid:false, hasPwm:false, hasAdc:false},  // 18 (USB D-)
-      {valid:false, hasPwm:false, hasAdc:false},  // 19 (USB D+)
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 20
-      {valid:true,  hasPwm:true,  hasAdc:false},  // 21
-    ]
-  },
-  'esp32s3': {
-    name: 'ESP32-S3',
-    caps: [
-      {valid:true, hasPwm:true,  hasAdc:false},  // 0  (strapping)
-      {valid:true, hasPwm:true,  hasAdc:true},   // 1
-      {valid:true, hasPwm:true,  hasAdc:true},   // 2
-      {valid:true, hasPwm:true,  hasAdc:true},   // 3
-      {valid:true, hasPwm:true,  hasAdc:true},   // 4
-      {valid:true, hasPwm:true,  hasAdc:true},   // 5
-      {valid:true, hasPwm:true,  hasAdc:true},   // 6
-      {valid:true, hasPwm:true,  hasAdc:true},   // 7
-      {valid:true, hasPwm:true,  hasAdc:true},   // 8
-      {valid:true, hasPwm:true,  hasAdc:true},   // 9
-      {valid:true, hasPwm:true,  hasAdc:true},   // 10
-      {valid:true, hasPwm:true,  hasAdc:false},  // 11
-      {valid:true, hasPwm:true,  hasAdc:false},  // 12
-      {valid:true, hasPwm:true,  hasAdc:false},  // 13
-      {valid:true, hasPwm:true,  hasAdc:false},  // 14
-      {valid:true, hasPwm:true,  hasAdc:false},  // 15
-      {valid:true, hasPwm:true,  hasAdc:false},  // 16
-      {valid:true, hasPwm:true,  hasAdc:false},  // 17
-      {valid:true, hasPwm:false, hasAdc:false},  // 18 (USB D-)
-      {valid:true, hasPwm:false, hasAdc:false},  // 19 (USB D+)
-      {valid:true, hasPwm:true,  hasAdc:false},  // 20
-      {valid:true, hasPwm:true,  hasAdc:false},  // 21
-    ]
-  },
-};
+let _mcuProfiles = {}; // perfils MCU carregats des del servidor (/gpiocaps)
+let _currentMcu  = null; // perfil MCU actiu (null = cap seleccionat)
 
-let _currentMcu = null; // perfil MCU actiu (null = cap seleccionat)
+function fetchGpioCaps() {
+  return apiGetGpioCaps().then(function(data) {
+    _mcuProfiles = data;
+  }).catch(function() { _mcuProfiles = {}; });
+}
 
 function selectMcu(mcuId) {
-  _currentMcu = MCU_PROFILES[mcuId] || null;
+  _currentMcu = _mcuProfiles[mcuId] || null;
   try { localStorage.setItem('blau_mcu', mcuId || ''); } catch(e) {}
   applyMcuProfile();
 }
@@ -73,7 +22,6 @@ function applyMcuProfile() {
     if (!row) continue;
     if (!cap || !cap.valid) {
       gpioState[g].func = 'none';
-      gpioState[g].chan  = 0;
       row.style.opacity = '0.35';
       row.title = 'GPIO no disponible en aquest MCU';
       row.querySelectorAll('select, input').forEach(function(el) { el.disabled = true; });
@@ -83,8 +31,6 @@ function applyMcuProfile() {
       row.title = '';
       if (gpioState[g].func !== 'zcd_reserved') {
         row.querySelectorAll('select, input').forEach(function(el) { el.disabled = false; });
-        const cInp = document.getElementById('gpio_chan_' + g);
-        if (cInp) cInp.disabled = !needsChan(gpioState[g].func);
       }
       if (sub) { sub.style.opacity = ''; sub.querySelectorAll('select, input').forEach(function(el) { el.disabled = false; }); }
     }
@@ -97,25 +43,22 @@ let _templates = [];
 
 // ── Model de dades intern ──
 const FUNC_DEFS = [
-  { id: 'none',        i18nKey: 'func_none',       firmwareId: 'none',       hasSubRow: false, needsChan: false },
-  { id: 'btn',         i18nKey: 'func_btn',         firmwareId: 'btn',        hasSubRow: false, needsChan: true  },
-  { id: 'btn_inv',     i18nKey: 'func_btn_inv',     firmwareId: 'btn_inv',    hasSubRow: false, needsChan: true  },
-  { id: 'relay',       i18nKey: 'func_relay_out',   firmwareId: 'relay',      hasSubRow: false, needsChan: true  },
-  { id: 'neopixel',    i18nKey: 'func_neopixel',    firmwareId: 'neopixel',   hasSubRow: true,  needsChan: true  },
-  { id: 'pwm',         i18nKey: 'func_pwm',         firmwareId: 'pwm',        hasSubRow: true,  needsChan: true  },
-  { id: 'triac_cycle', i18nKey: 'func_triac_cycle', firmwareId: 'mosfet_pwm', hasSubRow: true,  needsChan: true  },
-  { id: 'triac_phase', i18nKey: 'func_triac_phase', firmwareId: 'triac',      hasSubRow: true,  needsChan: true  },
+  { id: 'none',        i18nKey: 'func_none',       firmwareId: 'none',        hasSubRow: false },
+  { id: 'btn',         i18nKey: 'func_btn',         firmwareId: 'btn',         hasSubRow: false },
+  { id: 'btn_inv',     i18nKey: 'func_btn_inv',     firmwareId: 'btn_inv',     hasSubRow: false },
+  { id: 'relay',       i18nKey: 'func_relay_out',   firmwareId: 'on_off',      hasSubRow: false },
+  { id: 'neopixel',    i18nKey: 'func_neopixel',    firmwareId: 'digital_led', hasSubRow: true  },
+  { id: 'pwm',         i18nKey: 'func_pwm',         firmwareId: 'pwm',         hasSubRow: true  },
+  { id: 'triac_cycle', i18nKey: 'func_triac_cycle', firmwareId: 'triac_cycle', hasSubRow: true  },
+  { id: 'triac_phase', i18nKey: 'func_triac_phase', firmwareId: 'triac_fase',  hasSubRow: true  },
 ];
 
 let gpioState = Array.from({length: 22}, () =>
-  ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+  ({ name: '', func: 'none', params: {}, zcdGpio: null })
 );
 let zcdReserved = new Set();
 
-function needsChan(func) {
-  const fd = FUNC_DEFS.find(f => f.id === func);
-  return fd ? fd.needsChan : false;
-}
+function needsChan() { return false; }
 
 function defaultParams(func) {
   if (func === 'neopixel')    return { numLeds: 1, color: '#ffffff', brightness: 50 };
@@ -127,13 +70,14 @@ function defaultParams(func) {
 
 function mapFirmwareToUiFunc(fwId) {
   const map = {
-    relay: 'relay', led: 'relay', mosfet: 'relay',
-    neopixel: 'neopixel', pwm: 'pwm',
-    pwm_ww: 'pwm', pwm_cw: 'pwm',
-    triac: 'triac_phase', mosfet_pwm: 'triac_cycle',
-    zcd: 'none',
-    btn: 'btn', btn_inv: 'btn_inv',
     none: 'none', adc: 'none',
+    btn: 'btn', btn_inv: 'btn_inv',
+    on_off: 'relay', relay: 'relay', led: 'relay', mosfet: 'relay',
+    digital_led: 'neopixel', neopixel: 'neopixel',
+    pwm: 'pwm', pwm_ww: 'pwm', pwm_cw: 'pwm',
+    triac_fase: 'triac_phase', triac: 'triac_phase',
+    triac_cycle: 'triac_cycle', mosfet_pwm: 'triac_cycle',
+    zcd: 'zcd',
   };
   return map[fwId] || 'none';
 }
@@ -160,7 +104,12 @@ function populateTemplateSelect() {
     opt.value = i;
     opt.textContent = tmpl.name;
     sel.appendChild(opt);
+    if (tmpl.select) sel.value = i;
   });
+  if (sel.value !== '') {
+    const mcuSection = document.getElementById('mcuSection');
+    if (mcuSection) mcuSection.style.display = 'none';
+  }
 }
 
 function onTemplateChange(val) {
@@ -187,62 +136,50 @@ function buildGpioTable(gpiomap) {
   const tbody = document.getElementById('gpioTableBody');
   if (!tbody) return;
 
-  // Reinicialitzar estat
   gpioState = Array.from({length: 22}, () =>
-    ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+    ({ name: '', func: 'none', params: {}, zcdGpio: null })
   );
   zcdReserved.clear();
 
-  // Pas 1: decodificar totes les entrades del firmware
+  // Pas 1: decodificar funcs
   for (let g = 0; g <= 21; g++) {
-    const info = gpiomap['g' + g] || {func: 0, chan: 0};
-    const fwFuncDef = _funclist[info.func];
+    const funcIdx = gpiomap['f' + g] || 0;
+    const fwFuncDef = _funclist[funcIdx];
     const fwId = fwFuncDef ? fwFuncDef.id : 'none';
     gpioState[g].func = mapFirmwareToUiFunc(fwId);
-    gpioState[g].chan  = info.chan || 0;
     gpioState[g].params = defaultParams(gpioState[g].func);
   }
 
-  // Pas 2: reconstruir parelles triac_phase ↔ zcd
+  // Pas 2: llegir params per GPIO i reconstruir parelles triac_phase ↔ ZCD
   for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].func !== 'triac_phase') continue;
-    const ch = gpioState[g].chan;
-    for (let z = 0; z <= 21; z++) {
-      if (z === g) continue;
-      const info = gpiomap['g' + z] || {func: 0, chan: 0};
-      const fwFuncDef = _funclist[info.func];
-      if (fwFuncDef && fwFuncDef.id === 'zcd' && info.chan === ch) {
-        gpioState[g].zcdGpio = z;
-        gpioState[z].func = 'zcd_reserved';
-        zcdReserved.add(z);
+    const a = gpiomap['a' + g] || 0;
+    const b = gpiomap['b' + g] || 0;
+    const c = gpiomap['c' + g] || 0;
+    switch (gpioState[g].func) {
+      case 'neopixel':
+        gpioState[g].params.color      = '#' + a.toString(16).padStart(6, '0');
+        gpioState[g].params.brightness = b || 50;
+        gpioState[g].params.numLeds    = c || 1;
         break;
-      }
+      case 'pwm':
+        gpioState[g].params.duty = a || 50;
+        gpioState[g].params.freq = b || 5000;
+        break;
+      case 'triac_cycle':
+        gpioState[g].params.duty = a || 50;
+        break;
+      case 'triac_phase':
+        gpioState[g].params.duty = a || 50;
+        if (b > 0 && b <= 21) {
+          gpioState[g].zcdGpio = b;
+          gpioState[b].func = 'zcd_reserved';
+          zcdReserved.add(b);
+        }
+        break;
     }
   }
 
-  // Pas 3: semar params globals als GPIOs corresponents
-  for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].func === 'neopixel') {
-      if (gpiomap.nl    !== undefined) gpioState[g].params.numLeds   = gpiomap.nl;
-      if (gpiomap.b1    !== undefined) gpioState[g].params.brightness = gpiomap.b1;
-      if (gpiomap.color !== undefined) gpioState[g].params.color      = '#' + gpiomap.color;
-      break;
-    }
-  }
-  for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].func === 'pwm' || gpioState[g].func === 'triac_cycle') {
-      if (gpiomap.pf !== undefined) gpioState[g].params.freq = gpiomap.pf;
-      if (gpiomap.pd !== undefined) gpioState[g].params.duty = gpiomap.pd;
-      break;
-    }
-  }
-  for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].func === 'triac_phase') {
-      if (gpiomap.b4 !== undefined) gpioState[g].params.duty = gpiomap.b4;
-      break;
-    }
-  }
-  // Semar noms dels pins
+  // Pas 3: llegir noms
   for (let g = 0; g <= 21; g++) {
     const nm = gpiomap['n' + g];
     if (nm !== undefined) gpioState[g].name = nm;
@@ -321,24 +258,6 @@ function buildGpioRow(gpio) {
   tdFunc.appendChild(sel);
   tr.appendChild(tdFunc);
 
-  // Col 4: canal
-  const tdChan = document.createElement('td');
-  tdChan.style.cssText = 'padding:2px 4px; text-align:center;';
-  const chanInp = document.createElement('input');
-  chanInp.type = 'number';
-  chanInp.id = 'gpio_chan_' + gpio;
-  chanInp.min = 1; chanInp.max = 15;
-  chanInp.style.cssText = 'width:44px; text-align:center; font-size:0.82em;';
-  const hasCh = needsChan(state.func);
-  const isInputFunc = (state.func === 'btn' || state.func === 'btn_inv');
-  chanInp.disabled = !hasCh || isZcdReserved;
-  chanInp.min = isInputFunc ? 0 : 1;
-  chanInp.value = (hasCh && state.chan > 0) ? state.chan : '';
-  chanInp.placeholder = isInputFunc ? '—' : (hasCh ? '1' : '—');
-  chanInp.oninput = function() { onChanChange(gpio); };
-  tdChan.appendChild(chanInp);
-  tr.appendChild(tdChan);
-
   return tr;
 }
 
@@ -352,7 +271,7 @@ function buildSubRow(gpio) {
   tr.className = 'gpio-sub-row';
 
   const td = document.createElement('td');
-  td.colSpan = 4;
+  td.colSpan = 3;
   td.className = 'gpio-sub-cell';
 
   const inner = document.createElement('div');
@@ -489,18 +408,14 @@ function makeZcdSelect(ownerGpio) {
 
 function onZcdGpioChange(ownerGpio, newZcdGpio) {
   const oldZcdGpio = gpioState[ownerGpio].zcdGpio;
-  // Alliberar antic
   if (oldZcdGpio !== null) {
     gpioState[oldZcdGpio].func = 'none';
-    gpioState[oldZcdGpio].chan = 0;
     zcdReserved.delete(oldZcdGpio);
     refreshRow(oldZcdGpio);
   }
-  // Reservar nou
   gpioState[ownerGpio].zcdGpio = newZcdGpio;
   if (newZcdGpio !== null) {
     gpioState[newZcdGpio].func = 'zcd_reserved';
-    gpioState[newZcdGpio].chan = gpioState[ownerGpio].chan;
     zcdReserved.add(newZcdGpio);
     refreshRow(newZcdGpio);
   }
@@ -551,7 +466,6 @@ function onFuncChange(gpio) {
   if (oldFunc === 'triac_phase' && gpioState[gpio].zcdGpio !== null) {
     const oldZcd = gpioState[gpio].zcdGpio;
     gpioState[oldZcd].func = 'none';
-    gpioState[oldZcd].chan = 0;
     zcdReserved.delete(oldZcd);
     gpioState[gpio].zcdGpio = null;
     refreshRow(oldZcd);
@@ -560,15 +474,6 @@ function onFuncChange(gpio) {
   gpioState[gpio].func = newFunc;
   gpioState[gpio].params = defaultParams(newFunc);
   gpioState[gpio].zcdGpio = null;
-
-  if (!needsChan(newFunc)) {
-    gpioState[gpio].chan = 0;
-    const cInp = document.getElementById('gpio_chan_' + gpio);
-    if (cInp) { cInp.disabled = true; cInp.value = ''; }
-  } else {
-    const cInp = document.getElementById('gpio_chan_' + gpio);
-    if (cInp) cInp.disabled = false;
-  }
 
   // Actualitzar sub-row
   const existingSub = document.getElementById('gpio_sub_' + gpio);
@@ -584,23 +489,6 @@ function onFuncChange(gpio) {
     if (existingSub) existingSub.remove();
   }
 
-  validateGpioMap();
-}
-
-function onChanChange(gpio) {
-  const inp = document.getElementById('gpio_chan_' + gpio);
-  if (!inp) return;
-  const v = parseInt(inp.value);
-  const oldChan = gpioState[gpio].chan;
-  const isInput = (gpioState[gpio].func === 'btn' || gpioState[gpio].func === 'btn_inv');
-  gpioState[gpio].chan = isInput ? (v >= 0 && v <= 15 ? v : 0) : (v >= 1 && v <= 15 ? v : 0);
-  const gpioName = gpioState[gpio].name ? ` "${gpioState[gpio].name}"` : '';
-  DBG.change(`GPIO ${gpio}${gpioName}: canal  ${oldChan} → ${gpioState[gpio].chan}`);
-  // Propagar canal al GPIO ZCD si existeix
-  if (gpioState[gpio].func === 'triac_phase' && gpioState[gpio].zcdGpio !== null) {
-    gpioState[gpioState[gpio].zcdGpio].chan = gpioState[gpio].chan;
-    DBG.change(`GPIO ${gpioState[gpio].zcdGpio} (ZCD): canal propagat → ${gpioState[gpio].chan}`);
-  }
   validateGpioMap();
 }
 
@@ -633,7 +521,7 @@ function applyTemplate(idx) {
 
   // Reinicialitzar estat
   gpioState = Array.from({length: 22}, () =>
-    ({ name: '', func: 'none', chan: 0, params: {}, zcdGpio: null })
+    ({ name: '', func: 'none', params: {}, zcdGpio: null })
   );
   zcdReserved.clear();
 
@@ -643,17 +531,16 @@ function applyTemplate(idx) {
     if (!fwDef) return;
     const uiFunc = mapFirmwareToUiFunc(fwDef.id);
     gpioState[p.gpio].func = uiFunc;
-    gpioState[p.gpio].chan  = p.chan || 0;
     gpioState[p.gpio].params = defaultParams(uiFunc);
   });
 
-  // Reconstruir parelles triac ↔ zcd
+  // Reconstruir parelles triac ↔ zcd (parella pel primer ZCD trobat)
   for (let g = 0; g <= 21; g++) {
     if (gpioState[g].func !== 'triac_phase') continue;
-    const ch = gpioState[g].chan;
     tmpl.pins.forEach(function(p) {
+      if (gpioState[g].zcdGpio !== null) return;
       const fd = _funclist[p.func];
-      if (fd && fd.id === 'zcd' && p.chan === ch) {
+      if (fd && fd.id === 'zcd') {
         gpioState[g].zcdGpio = p.gpio;
         gpioState[p.gpio].func = 'zcd_reserved';
         zcdReserved.add(p.gpio);
@@ -694,14 +581,6 @@ function validateGpioMap() {
     const s = gpioState[g];
     if (s.func === 'zcd_reserved') continue;
     if (s.func === 'btn' || s.func === 'btn_inv') hasBtn = true;
-    if (s.func !== 'none') {
-      const isInput = (s.func === 'btn' || s.func === 'btn_inv');
-      // Inputs poden tenir chan=0 (controla tots els canals); outputs necessiten chan 1-15
-      if (!isInput && !(s.chan >= 1 && s.chan <= 15)) {
-        msgs.push('GPIO ' + g + ': ' + t('gpioValidNeedsChan'));
-        hasErrors = true;
-      }
-    }
     if (s.func === 'triac_phase' && s.zcdGpio === null) {
       msgs.push('GPIO ' + g + ': ' + t('gpioValidNeedsZcd'));
       hasErrors = true;
@@ -731,13 +610,12 @@ function debugLogGpioConfig() {
     const s = gpioState[g];
     if (s.func === 'none') continue;
     count++;
-    const nameStr  = s.name      ? ` "${s.name}"`                    : '';
-    const chanStr  = s.chan > 0  ? ` canal:${s.chan}`                 : '';
+    const nameStr  = s.name             ? ` "${s.name}"`                    : '';
     const zcdStr   = s.zcdGpio !== null ? ` ← ZCD:GPIO${s.zcdGpio}` : '';
     const ps       = Object.entries(s.params || {}).map(([k,v]) => `${k}:${v}`).join(', ');
-    const extraStr = ps          ? ` [${ps}]`                         : '';
+    const extraStr = ps                 ? ` [${ps}]`                         : '';
     const tag      = s.func === 'zcd_reserved' ? ' (ZCD reservat)' : '';
-    console.log(`  GPIO ${String(g).padStart(2)}${nameStr} → ${s.func}${chanStr}${zcdStr}${extraStr}${tag}`);
+    console.log(`  GPIO ${String(g).padStart(2)}${nameStr} → ${s.func}${zcdStr}${extraStr}${tag}`);
   }
   if (count === 0) console.log('  (cap GPIO configurat)');
   console.groupEnd();
@@ -746,56 +624,47 @@ function debugLogGpioConfig() {
 function saveGpioMap() {
   const params = new URLSearchParams();
 
-  // Pas 1: escriure tots els GPIOs (ZCD reservats → none provisionalment)
   for (let g = 0; g <= 21; g++) {
     const s = gpioState[g];
-    let firmwareId, chan;
+    let firmwareId, a = 0, b = 0, c = 0;
+
     if (s.func === 'zcd_reserved') {
-      firmwareId = 'none'; chan = 0;
+      firmwareId = 'zcd';
     } else {
       const fd = FUNC_DEFS.find(function(f) { return f.id === s.func; });
       firmwareId = fd ? fd.firmwareId : 'none';
-      chan = (s.func !== 'none') ? (s.chan || 0) : 0;
     }
+
+    switch (s.func) {
+      case 'neopixel':
+        a = parseInt((s.params.color || '#000000').replace('#', ''), 16) || 0;
+        b = s.params.brightness !== undefined ? s.params.brightness : 50;
+        c = s.params.numLeds || 1;
+        break;
+      case 'pwm':
+        a = s.params.duty !== undefined ? s.params.duty : 50;
+        b = s.params.freq || 5000;
+        break;
+      case 'triac_cycle':
+        a = s.params.duty !== undefined ? s.params.duty : 50;
+        break;
+      case 'triac_phase':
+        a = s.params.duty !== undefined ? s.params.duty : 50;
+        b = s.zcdGpio !== null ? s.zcdGpio : 0;
+        break;
+    }
+
     const funcIdx = _funclist.findIndex(function(f) { return f.id === firmwareId; });
-    const func = funcIdx >= 0 ? funcIdx : 0;
-    params.append('g' + g, ((chan & 0xF) << 4) | (func & 0xF));
+    params.append('f' + g, funcIdx >= 0 ? funcIdx : 0);
+    params.append('a' + g, a);
+    params.append('b' + g, b);
+    params.append('c' + g, c);
+    if (s.name) params.set('n' + g, s.name);
   }
 
-  // Pas 2: sobreescriure GPIOs ZCD amb FUNC_ZCD al canal del triac
-  for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].func !== 'triac_phase' || gpioState[g].zcdGpio === null) continue;
-    const zcdGpio = gpioState[g].zcdGpio;
-    const chan = gpioState[g].chan || 0;
-    const zcdIdx = _funclist.findIndex(function(f) { return f.id === 'zcd'; });
-    const zcdFunc = zcdIdx >= 0 ? zcdIdx : 0;
-    params.set('g' + zcdGpio, ((chan & 0xF) << 4) | (zcdFunc & 0xF));
-  }
-
-  // Params globals (backward compat amb el firmware)
-  const neopixelIdx = gpioState.findIndex(function(s) { return s.func === 'neopixel'; });
-  const triacIdx    = gpioState.findIndex(function(s) { return s.func === 'triac_phase'; });
-  const pwmIdx      = gpioState.findIndex(function(s) { return s.func === 'pwm' || s.func === 'triac_cycle'; });
-
-  if (neopixelIdx >= 0) {
-    const np = gpioState[neopixelIdx].params;
-    if (np.numLeds)                  params.set('nl', np.numLeds);
-    if (np.color)                    params.set('color', np.color.replace('#', ''));
-    if (np.brightness !== undefined) params.set(triacIdx >= 0 ? 'bcw' : 'b', np.brightness);
-  }
-  if (pwmIdx >= 0) {
-    const pp = gpioState[pwmIdx].params;
-    if (pp.freq)              params.set('pf', pp.freq);
-    if (pp.duty !== undefined) params.set('pd', pp.duty);
-  }
-  if (triacIdx >= 0 && gpioState[triacIdx].params.duty !== undefined) {
-    params.set('b', gpioState[triacIdx].params.duty);
-  }
-
-  // Noms dels pins
-  for (let g = 0; g <= 21; g++) {
-    if (gpioState[g].name) params.set('n' + g, gpioState[g].name);
-  }
+  const tmplSel = document.getElementById('templateSelect');
+  const tmplIdx = (tmplSel && tmplSel.value !== '') ? tmplSel.value : '-1';
+  params.append('tmpl', tmplIdx);
 
   debugLogGpioConfig();
   DBG.action('Enviant configuració GPIO al servidor...');

@@ -654,8 +654,9 @@ function _createChannelCard(ch) {
   div.style.cssText = 'border:1px solid #eee; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px;';
 
   const typeLbl = _chTypeLabels[ch.type] || ch.type;
+  const chLabel = ch.name ? ch.name : ('CH ' + ch.id);
   let html = '<div style="display:flex; justify-content:space-between; align-items:center;">'
-           + '<span style="font-weight:600;">CH ' + ch.id
+           + '<span style="font-weight:600;">' + chLabel
            + ' <span style="font-size:0.78em; background:#e8f4fd; color:#2980b9; padding:1px 6px; border-radius:4px;">' + typeLbl + '</span></span>'
            + '<label class="toggle-switch">'
            + '<input type="checkbox" id="ch' + ch.id + '-sw"' + (ch.on ? ' checked' : '') + ' onchange="chSetOn(' + ch.id + ', this.checked)">'
@@ -783,5 +784,5 @@ window.onload = function() {
 
   startChannelPolling();
 
-  fetchFunclist().then(fetchTemplates).then(fetchGpioMap);
+  fetchGpioCaps().then(fetchFunclist).then(fetchTemplates).then(fetchGpioMap);
 }

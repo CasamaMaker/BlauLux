@@ -8,35 +8,42 @@
 #include "ESPAsyncWebServer.h"
 #include "DNSServer.h"
 #include <Preferences.h>
-#include <Adafruit_NeoPixel.h>
 #include <AsyncMqttClient.h>
 #include "config.h"
-#include "channel.h"
-#include "state.h"
 #include "log.h"
 
-// ── Tipus GPIO (runtime) ─────────────────────────────────────────
-struct GpioAssign { GpioFunc func; uint8_t canal; };
+// ── Tipus GPIO ───────────────────────────────────────────────────
 
-// ── Mapa GPIO i noms ─────────────────────────────────────────────
-extern GpioAssign gpioMap[22];
-extern char       gpio_names[22][13];
+struct GpioConfig {       // persistent — guardat a NVS
+  char     name[13];
+  GpioFunc func;
+  uint32_t param1;
+  uint16_t param2;
+  uint16_t param3;
+};
 
-// ── Pins derivats i mode de control ─────────────────────────────
-extern int control_type;
-extern int pin1, pin2, pin3;
-extern int boto_pin, button_pullup, boto_canal;
-extern int num_leds, brightness_cw, pwm_freq, pwm_duty;
+struct GpioRuntime {      // volatile — només RAM
+  bool     initialized;   // si driverSetup() s'ha executat
+  bool     state;         // estat actual (on/off)
+  uint32_t lastChangeMs;  // ms de l'últim canvi
+  uint32_t param1;        // valors live (poden diferir del cfg fins que es guarda)
+  uint16_t param2;
+  uint16_t param3;
+  bool     dirty;         // true = pendent d'enviar a MQTT i web
+};
+
+struct Gpio {
+  GpioConfig  cfg;
+  GpioRuntime rt;
+};
+
+// ── Mapa GPIO ────────────────────────────────────────────────────
+extern Gpio gpioMap[22];
+
+// ── Configuració runtime ─────────────────────────────────────────
 extern String device_name;
 
-// ── Hardware ─────────────────────────────────────────────────────
-extern Adafruit_NeoPixel strip;
-extern int      brightness[5];
-extern int      pwmCh1, pwmCh2;
-extern uint32_t currentColor;
-
 // ── Estat ────────────────────────────────────────────────────────
-extern bool state;
 extern bool webTesting;
 
 // ── WiFi / AP ────────────────────────────────────────────────────
@@ -50,6 +57,9 @@ extern uint16_t        mqtt_port;
 extern String          mqttClientId, mqttWillTopic;
 extern AsyncMqttClient mqttClient;
 extern TimerHandle_t   mqttReconnectTimer;
+
+// ── Template seleccionat ─────────────────────────────────────────
+extern int8_t selectedTemplate;  // -1 = cap, 0..N = índex del template actiu
 
 // ── NVS ──────────────────────────────────────────────────────────
 extern Preferences prefs;

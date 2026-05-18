@@ -1,5 +1,5 @@
 #pragma once
-#include "globals.h"
+#include "output.h"
 
 struct ButtonState {
   bool     apActive        = false;
@@ -17,5 +17,5 @@ struct ButtonState {
 extern ButtonState btn;
 
 inline bool buttonPressed() {
-  return digitalRead(boto_pin) == (button_pullup ? LOW : HIGH);
+  return digitalRead(getBotonPin()) == (getButtonPullup() ? LOW : HIGH);
 }

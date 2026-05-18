@@ -31,8 +31,8 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
   if (pktType == TYPE_CMD) {
     switch (cmd) {
       case CMD_TOGGLE:           toggleOutput(); return ACK_OK;
-      case CMD_ON:   if (!state) { state = true;  applyOutput(true);  } return ACK_OK;
-      case CMD_OFF:  if ( state) { state = false; applyOutput(false); } return ACK_OK;
+      case CMD_ON:   if (!getState()) applyOutput(true);  return ACK_OK;
+      case CMD_OFF:  if ( getState()) applyOutput(false); return ACK_OK;
 
       case CMD_SET_BRIGHTNESS: {
         if (!g_driver || !g_driver->hasBrightness) return ACK_OK;
@@ -42,33 +42,33 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 
       case CMD_SET_RGB: {
         if (!g_driver || !g_driver->hasColor) return ACK_OK;
-        currentColor = strip.Color(p1, p2, p3);
-        if (state) applyOutput(true);
+        setCurrentColor(((uint32_t)p1 << 16) | ((uint32_t)p2 << 8) | p3);
+        if (getState()) applyOutput(true);
         return ACK_OK;
       }
 
       case CMD_SET_CCT: {
         if (!g_driver || !g_driver->hasCCT) return ACK_OK;
-        brightness[control_type] = constrain((int)p1, 0, 100);
-        brightness_cw            = constrain((int)p2, 0, 100);
-        if (state) applyOutput(true);
+        setBrightnessForType(getControlType(), constrain((int)p1, 0, 100));
+        setBrightnessCW(constrain((int)p2, 0, 100));
+        if (getState()) applyOutput(true);
         return ACK_OK;
       }
 
       case CMD_DIM_UP: {
         if (!g_driver || !g_driver->hasBrightness) return ACK_OK;
         int step = (p1 >= 1 && p1 <= 10) ? (int)p1 : 5;
-        applyBrightness(constrain(brightness[control_type] + step, 0, 100));
+        applyBrightness(constrain(getBrightnessForType(getControlType()) + step, 0, 100));
         return ACK_OK;
       }
 
       case CMD_DIM_DOWN: {
         if (!g_driver || !g_driver->hasBrightness) return ACK_OK;
         int step = (p1 >= 1 && p1 <= 10) ? (int)p1 : 5;
-        int br = constrain(brightness[control_type] - step, 0, 100);
-        brightness[control_type] = br;
-        if (br == 0 && state) { state = false; applyOutput(false); }
-        else if (state)       applyOutput(true);
+        int br = constrain(getBrightnessForType(getControlType()) - step, 0, 100);
+        setBrightnessForType(getControlType(), br);
+        if (br == 0 && getState()) applyOutput(false);
+        else if (getState())       applyOutput(true);
         return ACK_OK;
       }
 
@@ -82,13 +82,12 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
         if (p1 >= sizeof(scenes) / sizeof(scenes[0])) return ACK_ERROR;
         auto& sc = scenes[p1];
         if (p1 == 0) {
-          if (state) { state = false; applyOutput(false); }
+          if (getState()) applyOutput(false);
           return ACK_OK;
         }
-        if (g_driver && g_driver->hasBrightness) brightness[control_type] = sc.br;
-        if (g_driver && g_driver->hasColor)      currentColor = strip.Color(sc.r, sc.g, sc.b);
-        if (g_driver && g_driver->hasCCT)        brightness_cw = sc.cw;
-        state = true;
+        if (g_driver && g_driver->hasBrightness) setBrightnessForType(getControlType(), sc.br);
+        if (g_driver && g_driver->hasColor)      setCurrentColor(((uint32_t)sc.r << 16) | ((uint32_t)sc.g << 8) | sc.b);
+        if (g_driver && g_driver->hasCCT)        setBrightnessCW(sc.cw);
         applyOutput(true);
         return ACK_OK;
       }
@@ -103,11 +102,11 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 }
 
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
-  uint8_t br = (g_driver && g_driver->hasBrightness) ? (uint8_t)brightness[control_type] : 0;
+  uint8_t br = (g_driver && g_driver->hasBrightness) ? (uint8_t)getBrightnessForType(getControlType()) : 0;
   blau_trg_on_data_recv(mac, data, len,
                         &_ack_pending, (uint8_t*)_ack_mac, (BlauPacket_t*)&_ack_pkt,
                         handleAction,
-                        state, br, (uint8_t)(control_type < 0 ? 0 : control_type));
+                        getState(), br, (uint8_t)(getControlType() < 0 ? 0 : getControlType()));
 }
 
 void processEspNowPending() {

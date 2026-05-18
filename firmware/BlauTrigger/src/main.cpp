@@ -15,28 +15,14 @@
 // ════════════════════════════════════════════════════════════════
 //  DEFINICIONS DE VARIABLES GLOBALS (font de veritat única)
 // ════════════════════════════════════════════════════════════════
-GpioAssign gpioMap[22];
-char gpio_names[22][13];
-
-int control_type  = -1;
-int pin1 = PIN_UNUSED, pin2 = PIN_UNUSED, pin3 = PIN_UNUSED;
-int boto_pin = PIN_UNUSED, button_pullup = 1, boto_canal = 0;
-int num_leds = NUM_LEDS, brightness_cw = BRIGHTNESS_DEF, pwm_freq = PWM_FREQ, pwm_duty = PWM_DUTY_DEF;
+Gpio   gpioMap[22];
 String device_name = WIFI_SSID;
 
 AsyncWebServer server(HTTP_PORT);
 DNSServer      dnsServer;
 String macAP, macAPSuffix;
 
-Adafruit_NeoPixel strip(NUM_LEDS, PIN_UNUSED, NEO_GRB + NEO_KHZ800);
-int      brightness[5] = {0, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF, BRIGHTNESS_DEF};
-int      pwmCh1 = 0, pwmCh2 = 1;
-uint32_t currentColor = COLOR_LLUM;
-
-bool state      = false;
 bool webTesting = false;
-
-DeviceRuntime g_dev;
 
 String sta_ssid, sta_pass;
 String mqtt_host, mqtt_user, mqtt_pass;
@@ -88,44 +74,55 @@ void setup() {
   #ifdef CLEAR_CONFIG
     clearConfig();
   #endif
-  loadConfig();
-  applyGpioConfig();
+  loadConfig(); 
+  driverSetupAll();
 
-  if (boto_pin == PIN_UNUSED) {
-    LOG_I("[CFG] Boto no configurat, mode AP inicial");
-    configDeviceAP();
-    wifiApModeServer();
-    unsigned long apStart = millis();
-    while (boto_pin == PIN_UNUSED) {
-      wdtReset();
-      dnsServer.processNextRequest();
-      if (pin1 != PIN_UNUSED && control_type >= 0) renderVisualFeedback("wifiAP");
-      delay(DNS_POLL_MS);
-      if (millis() - apStart > WIFI_AP_TIMEOUT_MS) {
-        LOG_I("[AP] Temps excedit en setup inicial");
-        ESP.restart();
-      }
+  if (getBotonPin() == PIN_UNUSED) {
+    bool wifiOk = false;
+    #ifdef ENABLE_WIFI_STA
+    if (sta_ssid.length() > 0) {
+      WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
+      LOG_I("[CFG] Boto no configurat, provant WiFi: %s", sta_ssid.c_str());
+      unsigned long t = millis();
+      while (!WiFi.isConnected() && millis() - t < WIFI_STA_TIMEOUT_MS)
+        { wdtReset(); delay(500); }
+      wifiOk = WiFi.isConnected();
     }
-    delay(500);
-    ESP.restart();
+    #endif
+    if (!wifiOk) {
+      LOG_I("[CFG] Boto no configurat%s, mode AP inicial",
+            sta_ssid.length() > 0 ? ", WiFi no disponible" : "");
+      configDeviceAP();
+      wifiApModeServer();
+      unsigned long apStart = millis();
+      while (getBotonPin() == PIN_UNUSED) {
+        wdtReset();
+        dnsServer.processNextRequest();
+        if (getPin1() != PIN_UNUSED && getControlType() >= 0) renderVisualFeedback("wifiAP");
+        delay(DNS_POLL_MS);
+        // if (millis() - apStart > WIFI_AP_TIMEOUT_MS) {
+        //   LOG_I("[AP] Temps excedit en setup inicial");
+        //   ESP.restart();
+        // }
+      }
+      delay(500);
+      ESP.restart();
+    }
+    LOG_I("[CFG] WiFi ok, operacio normal (sense boto)");
   }
 
-  configuracioLlum();
   renderVisualFeedback("inici");
   configDeviceAP();
 
   if (!LittleFS.begin()) { LOG_E("[FS] Error muntant LittleFS"); }
   else { LOG_I("[WIFI] AP IP: %s", WiFi.softAPIP().toString().c_str()); webServerSetup(); }
 
-  if (boto_pin != PIN_UNUSED)
-    pinMode(boto_pin, button_pullup ? INPUT_PULLUP : INPUT_PULLDOWN);
-
   initEspNow();
   esp_now_register_send_cb(onDataSent);
   esp_now_register_recv_cb(onDataRecv);
 
 #ifdef ENABLE_WIFI_STA
-  if (sta_ssid.length() > 0) {
+  if (sta_ssid.length() > 0 && !WiFi.isConnected()) {
     WiFi.begin(sta_ssid.c_str(), sta_pass.c_str());
     LOG_I("[WIFI] STA connecting to: %s", sta_ssid.c_str());
   }
@@ -180,7 +177,7 @@ void loop() {
 #ifdef ENABLE_MQTT
   {
     static bool lastState = false;
-    if (lastState != state) { lastState = state; publishState(); }
+    if (lastState != getState()) { lastState = getState(); publishState(); }
   }
 #endif
 
@@ -234,7 +231,7 @@ void loop() {
   if (!pressed && btn.down) {
     if (millis() - btn.downTime < WIFI_AP_HOLD_MS) {
       LOG_I("[BTN] Click curt -> toggle");
-      toggleOutput();
+      driverToggleAll();
     }
     btn.down = false; btn.debouncing = true; btn.upTime = millis();
   }

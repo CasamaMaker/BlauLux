@@ -47,6 +47,7 @@ function apiSaveMqtt(host, port, client, topic, fulltopic, user, pass) {
 function apiClearMqtt() { return fetch('/clearmqtt', {method:'POST'}); }
 
 // GPIO / Hardware configuration
+function apiGetGpioCaps()       { return fetch('/gpiocaps').then(r => r.json()); }
 function apiGetFunclist()       { return fetch('/funclist').then(r => r.json()); }
 function apiGetTemplates()      { return fetch('/templates').then(r => r.json()); }
 function apiGetGpioMap()        { return fetch('/gpiomap').then(r => r.json()); }

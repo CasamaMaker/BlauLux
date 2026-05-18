@@ -37,6 +37,22 @@
     <!-- ═══════════════════ PÀGINA PRINCIPAL ═══════════════════ -->
     <div id="page-home" class="page">
 
+      <!-- Estats (sortides) -->
+      <div class="card" id="testCard">
+        <label class="section-label" data-i18n="labelChannels">Estats</label>
+        <div id="channelList" style="display:flex; flex-direction:column; gap:10px;"></div>
+
+        <!-- MOSFET autònom (canal 0) -->
+        <div id="testMosfetSection" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #eee; padding-top:12px; margin-top:4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="margin:0; font-weight:600;" data-i18n="labelMosfetTest">MOSFET PWM</label>
+            <span id="mosfetDutyValue" style="font-weight:600; color:var(--primary-color);">0%</span>
+          </div>
+          <input type="range" id="mosfetDutySlider" min="0" max="100" value="0" class="duty-slider"
+                 oninput="handleMosfetDutyChange(this)">
+        </div>
+      </div>
+
       <!-- MAC -->
       <div class="card">
         <label for="myMac" data-i18n="labelMyMac">La meva adreça MAC</label>
@@ -69,22 +85,6 @@
         </div>
         <div id="mqttTopicRow" style="display: none; font-size: 0.82em; color: #555;">
           <span data-i18n="mqttTopic">Topic base</span>: <span id="mqttTopic" style="font-weight: 600;"></span>
-        </div>
-      </div>
-
-      <!-- Canals -->
-      <div class="card" id="testCard">
-        <label class="section-label" data-i18n="labelChannels">Canals</label>
-        <div id="channelList" style="display:flex; flex-direction:column; gap:10px;"></div>
-
-        <!-- MOSFET autònom (canal 0) -->
-        <div id="testMosfetSection" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #eee; padding-top:12px; margin-top:4px;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <label style="margin:0; font-weight:600;" data-i18n="labelMosfetTest">MOSFET PWM</label>
-            <span id="mosfetDutyValue" style="font-weight:600; color:var(--primary-color);">0%</span>
-          </div>
-          <input type="range" id="mosfetDutySlider" min="0" max="100" value="0" class="duty-slider"
-                 oninput="handleMosfetDutyChange(this)">
         </div>
       </div>
 
@@ -255,7 +255,6 @@
                   <th style="text-align:left; padding:2px 3px; width:5em;" data-i18n="labelPinName">Nom</th>
                   <th style="text-align:center; padding:2px 4px; width:2em;">GPIO</th>
                   <th style="text-align:left; padding:2px 4px;" data-i18n="labelFunc">Funcio</th>
-                  <th style="text-align:center; padding:2px 4px; width:3.5em;" data-i18n="labelChan">Canal</th>
                 </tr>
               </thead>
               <tbody id="gpioTableBody"></tbody>

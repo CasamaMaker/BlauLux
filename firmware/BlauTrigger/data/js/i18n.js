@@ -123,8 +123,8 @@ const i18n = {
     func_pwm:           'Out. PWM',
     func_triac_cycle:   'Out. Triac (per cicles)',
     func_triac_phase:   'Out. Triac (per fase)',
-    labelChannels:      'Canals',
-    channelsEmpty:      'No hi ha canals configurats',
+    labelChannels:      'Estats',
+    channelsEmpty:      'No hi ha sortides configurades',
   },
   en: {
     pageTitle: 'BlauTrigger Configurator',
@@ -250,8 +250,8 @@ const i18n = {
     func_pwm:           'Out. PWM',
     func_triac_cycle:   'Out. Triac (by cycles)',
     func_triac_phase:   'Out. Triac (phase cut)',
-    labelChannels:      'Channels',
-    channelsEmpty:      'No channels configured',
+    labelChannels:      'States',
+    channelsEmpty:      'No outputs configured',
   },
   es: {
     pageTitle: 'Configurador BlauTrigger',
@@ -377,8 +377,8 @@ const i18n = {
     func_pwm:           'Out. PWM',
     func_triac_cycle:   'Out. Triac (por ciclos)',
     func_triac_phase:   'Out. Triac (por fase)',
-    labelChannels:      'Canales',
-    channelsEmpty:      'No hay canales configurados',
+    labelChannels:      'Estados',
+    channelsEmpty:      'No hay salidas configuradas',
   },
 };
 
