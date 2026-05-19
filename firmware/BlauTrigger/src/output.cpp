@@ -89,11 +89,13 @@ static portMUX_TYPE       _cycleMux   = portMUX_INITIALIZER_UNLOCKED;
 static int                _cycleGpio  = PIN_UNUSED;
 static bool               _cycleOn    = false;
 static int                _cyclePower = 0;
+static int                _cycleFreq  = 10;  // freq × 10: 5=0.5Hz, 10=1Hz, 50=5Hz
 
-static void _cycleSnapUpdate(bool on, int power) {
+static void _cycleSnapUpdate(bool on, int power, int freq) {
   portENTER_CRITICAL(&_cycleMux);
   _cycleOn    = on;
   _cyclePower = power;
+  _cycleFreq  = (freq >= 5 && freq <= 50) ? freq : 10;
   portEXIT_CRITICAL(&_cycleMux);
 }
 
@@ -102,14 +104,17 @@ static void cycleTimerCallback(void*) {
   portENTER_CRITICAL(&_cycleMux);
   bool on    = _cycleOn;
   int  power = _cyclePower;
+  int  freq  = _cycleFreq;
   portEXIT_CRITICAL(&_cycleMux);
-  if (!on || _cycleGpio == PIN_UNUSED || power <= 0) { counter = 0; return; }
-  if (++counter >= 100) counter = 0;
-  if ((int)counter < power) {
-    digitalWrite(_cycleGpio, HIGH);
-    delayMicroseconds(TRIAC_PULSE_US);
+  if (!on || _cycleGpio == PIN_UNUSED || power <= 0) {
     digitalWrite(_cycleGpio, LOW);
+    counter = 0;
+    return;
   }
+  uint32_t total = 1000u / (uint32_t)freq;   // 20..200 ticks
+  uint32_t onT   = total * (uint32_t)power / 100;
+  digitalWrite(_cycleGpio, counter < onT ? HIGH : LOW);
+  if (++counter >= total) counter = 0;
 }
 
 static void _initTriacCycle(int gpio) {
@@ -141,7 +146,8 @@ void cleanupTriacCycle() {
     esp_timer_delete(_cycleTimer);
     _cycleTimer = NULL;
   }
-  _cycleSnapUpdate(false, 0);
+  if (_cycleGpio != PIN_UNUSED) digitalWrite(_cycleGpio, LOW);
+  _cycleSnapUpdate(false, 0, 10);
   _cycleGpio = PIN_UNUSED;
 }
 
@@ -151,7 +157,7 @@ static void driverSetupZcd(int triacGpio, int zcdGpio) {
   _zcdPin       = zcdGpio;
   _zcdSemaphore = xSemaphoreCreateBinary();
   pinMode(zcdGpio, INPUT);
-  attachInterrupt(digitalPinToInterrupt(zcdGpio), zcdISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(zcdGpio), zcdISR, ZCD_FLAG_USED);
   xTaskCreatePinnedToCore(triacTask, "triac", 3072, NULL, 5, &_triacTaskHandle, 0);
 }
 
@@ -278,17 +284,25 @@ void driverApply(int gpio) {
   uint16_t p2 = gpioMap[gpio].rt.param2;
   uint16_t p3 = gpioMap[gpio].rt.param3;
 
+  LOG_D("[DRV] Driver actiu: gpio=%d func=%s p1=%lu p2=%u p3=%u", gpio, FUNC_REGISTRY[gpioMap[gpio].cfg.func].label, p1, p2, p3);
+
+
   switch (gpioMap[gpio].cfg.func) {
     case FUNC_ON_OFF:
       digitalWrite(gpio, on ? HIGH : LOW);
       break;
     case FUNC_PWM: {
-      int ch = ledcChannelFor(gpio);
-      if (ch >= 0) ledcWrite(ch, on ? (uint32_t)map(p1, 0, 100, 0, 255) : 0);
+      int lch = ledcChannelFor(gpio);
+      if (lch >= 0) {
+        uint32_t freq = p2 ? (uint32_t)p2 : PWM_FREQ;
+        ledcSetup(lch, freq, PWM_RESOLUTION);
+        ledcAttachPin(gpio, lch);
+        ledcWrite(lch, on ? (uint32_t)map(p1, 0, 100, 0, 255) : 0);
+      }
       break;
     }
     case FUNC_TRIAC_CYCLE:
-      _cycleSnapUpdate(on, (int)p1);
+      _cycleSnapUpdate(on, (int)p1, (int)p2);
       break;
     case FUNC_TRIAC_FASE:
       _triacSnapUpdate(on, (int)p1);

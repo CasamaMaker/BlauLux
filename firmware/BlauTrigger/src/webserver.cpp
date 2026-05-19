@@ -158,17 +158,25 @@ void webServerSetup() {
       const char* type   = "onoff";
       bool hasBr         = false;
       bool hasColor      = false;
+      bool hasFreq       = false;
       uint32_t br        = 0;
       uint32_t colorVal  = 0xFFFFFF;
+      uint32_t freq      = 0;
 
       switch (f) {
         case FUNC_PWM:
-          type = "pwm"; hasBr = true; br = gpioMap[i].rt.param1; break;
+          type = "pwm"; hasBr = true; hasFreq = true;
+          br = gpioMap[i].rt.param1;
+          freq = gpioMap[i].rt.param2 ? gpioMap[i].rt.param2 : PWM_FREQ;
+          break;
         case FUNC_DIGITAL_LED:
           type = "neopixel"; hasBr = true; hasColor = true;
           br = gpioMap[i].rt.param2; colorVal = gpioMap[i].rt.param1; break;
         case FUNC_TRIAC_CYCLE:
-          type = "triac_cycle"; hasBr = true; br = gpioMap[i].rt.param1; break;
+          type = "triac_cycle"; hasBr = true; hasFreq = true;
+          br = gpioMap[i].rt.param1;
+          freq = gpioMap[i].rt.param2 ? gpioMap[i].rt.param2 : 10;
+          break;
         case FUNC_TRIAC_FASE:
           type = "triac_phase"; hasBr = true; br = gpioMap[i].rt.param1; break;
         default: break;
@@ -184,8 +192,10 @@ void webServerSetup() {
             + ",\"type\":\"" + String(type) + "\""
             + ",\"on\":"    + String(gpioMap[i].rt.state ? "true" : "false")
             + ",\"br\":"    + String(br)
+            + ",\"freq\":"  + String(freq)
             + ",\"color\":\"" + String(colorHex) + "\""
             + ",\"hasBr\":" + String(hasBr    ? "true" : "false")
+            + ",\"hasFreq\":" + String(hasFreq  ? "true" : "false")
             + ",\"hasColor\":" + String(hasColor ? "true" : "false")
             + "}";
     }
@@ -212,6 +222,12 @@ void webServerSetup() {
       int br = constrain(r->getParam("br", true)->value().toInt(), 0, 100);
       if (f == FUNC_DIGITAL_LED) gpioMap[ch].rt.param2 = (uint16_t)br;
       else                       gpioMap[ch].rt.param1 = (uint32_t)br;
+      driverApply(ch);
+    }
+    if (r->hasParam("freq", true)) {
+      int fv = r->getParam("freq", true)->value().toInt();
+      if (f == FUNC_PWM)         gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 300, 40000);
+      if (f == FUNC_TRIAC_CYCLE) gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 5, 50);
       driverApply(ch);
     }
     if (r->hasParam("r", true) && f == FUNC_DIGITAL_LED) {

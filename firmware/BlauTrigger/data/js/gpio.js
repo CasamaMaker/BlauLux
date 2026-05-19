@@ -63,7 +63,7 @@ function needsChan() { return false; }
 function defaultParams(func) {
   if (func === 'neopixel')    return { numLeds: 1, color: '#ffffff', brightness: 50 };
   if (func === 'pwm')         return { freq: 5000, duty: 50 };
-  if (func === 'triac_cycle') return { duty: 50 };
+  if (func === 'triac_cycle') return { duty: 50, freq: 10 };
   if (func === 'triac_phase') return { duty: 50 };
   return {};
 }
@@ -167,6 +167,7 @@ function buildGpioTable(gpiomap) {
         break;
       case 'triac_cycle':
         gpioState[g].params.duty = a || 50;
+        gpioState[g].params.freq = b || 10;
         break;
       case 'triac_phase':
         gpioState[g].params.duty = a || 50;
@@ -295,7 +296,7 @@ function buildSubRow(gpio) {
       })));
   } else if (func === 'pwm') {
     inner.appendChild(makeSubField('labelPwmFreq',
-      makeNumberInput('sub_pf_' + gpio, params.freq || 5000, 100, 40000, 'Hz', function(v) {
+      makePwmFreqInput('sub_pf_' + gpio, params.freq || 5000, function(v) {
         DBG.change(`GPIO ${gpio} pwm: freq → ${v} Hz`);
         gpioState[gpio].params.freq = v;
       })));
@@ -305,6 +306,11 @@ function buildSubRow(gpio) {
         gpioState[gpio].params.duty = v;
       })));
   } else if (func === 'triac_cycle') {
+    inner.appendChild(makeSubField('labelCycleFreq',
+      makeCycleFreqInput('sub_cf_' + gpio, params.freq !== undefined ? params.freq : 10, function(v) {
+        DBG.change(`GPIO ${gpio} triac_cycle: freq → ${v} (${v/10} Hz)`);
+        gpioState[gpio].params.freq = v;
+      })));
     inner.appendChild(makeSubField('labelPwmDuty',
       makeSliderInput('sub_dc_' + gpio, params.duty !== undefined ? params.duty : 50, 0, 100, '%', function(v) {
         DBG.change(`GPIO ${gpio} triac_cycle: duty → ${v}%`);
@@ -349,6 +355,50 @@ function makeNumberInput(id, val, min, max, unit, onChange) {
     sp.style.cssText = 'font-weight:600; color:var(--primary-color);';
     wrap.appendChild(sp);
   }
+  return wrap;
+}
+
+// Input de freqüència per pwm: slider 300..40000 Hz
+function makePwmFreqInput(id, val, onChange) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; align-items:center; gap:6px; flex:1;';
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.id = id;
+  slider.min = 300; slider.max = 40000; slider.step = 100; slider.value = val;
+  slider.className = 'duty-slider';
+  slider.style.cssText = 'flex:1;';
+  const valSpan = document.createElement('span');
+  valSpan.textContent = val + ' Hz';
+  valSpan.style.cssText = 'min-width:5ch; font-weight:600; color:var(--primary-color); text-align:right;';
+  slider.oninput = function() {
+    const v = parseInt(slider.value);
+    valSpan.textContent = v + ' Hz';
+    onChange(v);
+  };
+  wrap.appendChild(slider);
+  wrap.appendChild(valSpan);
+  return wrap;
+}
+
+// Input de freqüència per triac_cycle: slider 5..50 (freq×10), mostra valor en Hz
+function makeCycleFreqInput(id, val, onChange) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; align-items:center; gap:6px; flex:1;';
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.id = id;
+  slider.min = 5; slider.max = 50; slider.step = 1; slider.value = val;
+  slider.className = 'duty-slider';
+  slider.style.cssText = 'flex:1;';
+  const valSpan = document.createElement('span');
+  valSpan.textContent = (val / 10).toFixed(1) + ' Hz';
+  valSpan.style.cssText = 'min-width:4ch; font-weight:600; color:var(--primary-color); text-align:right;';
+  slider.oninput = function() {
+    const v = parseInt(slider.value);
+    valSpan.textContent = (v / 10).toFixed(1) + ' Hz';
+    onChange(v);
+  };
+  wrap.appendChild(slider);
+  wrap.appendChild(valSpan);
   return wrap;
 }
 
@@ -647,6 +697,7 @@ function saveGpioMap() {
         break;
       case 'triac_cycle':
         a = s.params.duty !== undefined ? s.params.duty : 50;
+        b = s.params.freq !== undefined ? s.params.freq : 10;
         break;
       case 'triac_phase':
         a = s.params.duty !== undefined ? s.params.duty : 50;

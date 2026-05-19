@@ -663,6 +663,21 @@ function _createChannelCard(ch) {
            + '<span class="toggle-slider"></span>'
            + '</label></div>';
 
+  if (ch.hasFreq) {
+    const fMin  = ch.type === 'triac_cycle' ? 5   : 300;
+    const fMax  = ch.type === 'triac_cycle' ? 50  : 40000;
+    const fStep = ch.type === 'triac_cycle' ? 1   : 100;
+    const fDisp = ch.type === 'triac_cycle' ? (ch.freq / 10).toFixed(1) + ' Hz' : ch.freq + ' Hz';
+    const fLabel = ch.type === 'triac_cycle' ? t('labelCycleFreq') : t('labelPwmFreq');
+    html += '<div style="display:flex; flex-direction:column; gap:4px;">'
+          + '<div style="display:flex; justify-content:space-between; align-items:center;">'
+          + '<label style="margin:0; font-size:0.85em;">' + fLabel + '</label>'
+          + '<span id="ch' + ch.id + '-freq-v" style="font-size:0.85em; font-weight:600; color:var(--primary-color);">' + fDisp + '</span>'
+          + '</div>'
+          + '<input type="range" id="ch' + ch.id + '-freq" min="' + fMin + '" max="' + fMax + '" step="' + fStep + '" value="' + ch.freq + '" class="duty-slider" oninput="chSetFreq(' + ch.id + ', this, \'' + ch.type + '\')">'
+          + '</div>';
+  }
+
   if (ch.hasBr) {
     html += '<div style="display:flex; flex-direction:column; gap:4px;">'
           + '<div style="display:flex; justify-content:space-between; align-items:center;">'
@@ -699,6 +714,13 @@ function _updateChannelCard(ch) {
   const sw = document.getElementById('ch' + ch.id + '-sw');
   if (sw && !_chDebounce['on' + ch.id]) sw.checked = ch.on;
 
+  const freqEl = document.getElementById('ch' + ch.id + '-freq');
+  const freqV  = document.getElementById('ch' + ch.id + '-freq-v');
+  if (freqEl && !_chDebounce['freq' + ch.id]) {
+    freqEl.value = ch.freq;
+    if (freqV) freqV.textContent = ch.type === 'triac_cycle' ? (ch.freq / 10).toFixed(1) + ' Hz' : ch.freq + ' Hz';
+  }
+
   const brEl = document.getElementById('ch' + ch.id + '-br');
   const brV  = document.getElementById('ch' + ch.id + '-br-v');
   if (brEl && !_chDebounce['br' + ch.id]) {
@@ -726,6 +748,18 @@ function chSetOn(ch, on) {
   apiSetChannel(ch, 'on=' + (on ? '1' : '0')).finally(function() {
     delete _chDebounce['on' + ch];
   });
+}
+
+function chSetFreq(ch, slider, type) {
+  const v   = parseInt(slider.value);
+  const vEl = document.getElementById('ch' + ch + '-freq-v');
+  if (vEl) vEl.textContent = type === 'triac_cycle' ? (v / 10).toFixed(1) + ' Hz' : v + ' Hz';
+  clearTimeout(_chDebounce['freq' + ch + '_t']);
+  _chDebounce['freq' + ch] = true;
+  _chDebounce['freq' + ch + '_t'] = setTimeout(function() {
+    DBG.hw('CH' + ch + ': freq → ' + v);
+    apiSetChannel(ch, 'freq=' + v).finally(function() { delete _chDebounce['freq' + ch]; });
+  }, 200);
 }
 
 function chSetBr(ch, slider) {

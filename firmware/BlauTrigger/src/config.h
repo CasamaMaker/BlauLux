@@ -204,6 +204,7 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 #define TRIAC_PULSE_US       100   // durada del pols de dispar del triac (µs)
 #define AC_HALF_CYCLE_US   10000   // semiperíode de 50 Hz (µs)
 #define TRIAC_MIN_DELAY_US   500   // retard mínim de dispar després del ZCD (µs)
+#define ZCD_FLAG_USED    FALLING    // RISING OR FALLING  
 
 
 // ════════════════════════════════════════════════════════════════
