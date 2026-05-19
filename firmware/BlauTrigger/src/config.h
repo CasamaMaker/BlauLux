@@ -113,7 +113,8 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
     { 1, FUNC_BTN_INV   },
     { 0, FUNC_ZCD       },
     { 4, FUNC_TRIAC_FASE},
-  }, 3 },
+    { 5, FUNC_DIGITAL_LED},
+  }, 4 },
   { "AC_CYCLE", {
     { 1, FUNC_BTN_INV    },
     { 4, FUNC_TRIAC_CYCLE},

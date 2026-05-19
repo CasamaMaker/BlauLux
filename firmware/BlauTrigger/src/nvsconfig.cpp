@@ -115,4 +115,16 @@ void saveConfig() {
   prefs.putChar  ("sel_tmpl",      selectedTemplate);
   prefs.end();
   LOG_D("[CFG] Config guardada (schema v%d)", CONFIG_SCHEMA_VERSION);
+  for (int i = 0; i <= 21; i++) {
+    GpioFunc f = gpioMap[i].cfg.func;
+    if (f == FUNC_NONE) continue;
+    const char* fid = (f < FUNC_COUNT) ? FUNC_REGISTRY[f].id : "?";
+    if (gpioMap[i].cfg.name[0])
+      LOG_D("[CFG] GPIO%d: %s p1=%u p2=%u p3=%u nom='%s'", i, fid,
+            gpioMap[i].cfg.param1, gpioMap[i].cfg.param2, gpioMap[i].cfg.param3,
+            gpioMap[i].cfg.name);
+    else
+      LOG_D("[CFG] GPIO%d: %s p1=%u p2=%u p3=%u", i, fid,
+            gpioMap[i].cfg.param1, gpioMap[i].cfg.param2, gpioMap[i].cfg.param3);
+  }
 }

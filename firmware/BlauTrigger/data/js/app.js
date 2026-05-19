@@ -589,8 +589,8 @@ let _chPollInterval = null;
 let _chDebounce = {};
 
 const _chTypeLabels = {
-  onoff: 'ON/OFF', pwm: 'PWM', pwm_cct: 'CCT',
-  neopixel: 'NeoPixel', triac_cycle: 'Triac', triac_phase: 'Triac φ'
+  onoff: 'On/Off', pwm: 'PWM', pwm_cct: 'CCT',
+  neopixel: 'Led digital', triac_cycle: 'Triac/cicle', triac_phase: 'Triac/fase'
 };
 
 function startChannelPolling() {
@@ -653,11 +653,10 @@ function _createChannelCard(ch) {
   div.dataset.ch = ch.id;
   div.style.cssText = 'border:1px solid #eee; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:10px;';
 
-  const typeLbl = _chTypeLabels[ch.type] || ch.type;
-  const chLabel = ch.name ? ch.name : ('CH ' + ch.id);
+  const typeLbl  = _chTypeLabels[ch.type] || ch.type;
+  const nameBadge = ch.name ? ' <span style="font-size:0.78em; background:#e8f4fd; color:#2980b9; padding:1px 6px; border-radius:4px;">' + ch.name + '</span>' : '';
   let html = '<div style="display:flex; justify-content:space-between; align-items:center;">'
-           + '<span style="font-weight:600;">' + chLabel
-           + ' <span style="font-size:0.78em; background:#e8f4fd; color:#2980b9; padding:1px 6px; border-radius:4px;">' + typeLbl + '</span></span>'
+           + '<span style="font-weight:600;">' + typeLbl + nameBadge + '</span>'
            + '<label class="toggle-switch">'
            + '<input type="checkbox" id="ch' + ch.id + '-sw"' + (ch.on ? ' checked' : '') + ' onchange="chSetOn(' + ch.id + ', this.checked)">'
            + '<span class="toggle-slider"></span>'

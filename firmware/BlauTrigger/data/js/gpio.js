@@ -115,7 +115,26 @@ function populateTemplateSelect() {
 function onTemplateChange(val) {
   const mcuSection = document.getElementById('mcuSection');
   if (mcuSection) mcuSection.style.display = (val === '') ? '' : 'none';
-  applyTemplate(val);
+  if (val === '') {
+    clearGpioMap();
+  } else {
+    applyTemplate(val);
+  }
+}
+
+function clearGpioMap() {
+  gpioState = Array.from({length: 22}, () =>
+    ({ name: '', func: 'none', params: {}, zcdGpio: null })
+  );
+  zcdReserved.clear();
+  const tbody = document.getElementById('gpioTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  for (let g = 0; g <= 21; g++) {
+    tbody.appendChild(buildGpioRow(g));
+  }
+  applyMcuProfile();
+  validateGpioMap();
 }
 
 function fetchGpioMap() {
@@ -171,7 +190,7 @@ function buildGpioTable(gpiomap) {
         break;
       case 'triac_phase':
         gpioState[g].params.duty = a || 50;
-        if (b > 0 && b <= 21) {
+        if (b >= 0 && b <= 21 && (_funclist[gpiomap['f' + b] || 0] || {}).id === 'zcd') {
           gpioState[g].zcdGpio = b;
           gpioState[b].func = 'zcd_reserved';
           zcdReserved.add(b);
@@ -213,9 +232,9 @@ function buildGpioRow(gpio) {
   nameInp.type = 'text';
   nameInp.id = 'gpio_name_' + gpio;
   nameInp.value = state.name || '';
-  nameInp.placeholder = t('gpioNamePlaceholder');
+  nameInp.placeholder = '';
   nameInp.maxLength = 12;
-  nameInp.style.cssText = 'width:100%; font-size:0.82em; border:1px solid #ddd; border-radius:4px; padding:2px 4px; box-sizing:border-box;';
+  nameInp.style.cssText = 'width:12ch; font-size:0.82em; border:1px solid #ddd; border-radius:4px; padding:2px 4px; box-sizing:border-box;';
   if (isZcdReserved) nameInp.disabled = true;
   nameInp.oninput = function() { onNameChange(gpio); };
   tdName.appendChild(nameInp);
@@ -225,12 +244,12 @@ function buildGpioRow(gpio) {
   const tdGpio = document.createElement('td');
   tdGpio.textContent = gpio;
   tdGpio.style.cssText = 'text-align:center; font-weight:600; color:#555; padding:4px 2px; white-space:nowrap;';
-  if (isZcdReserved) {
-    const badge = document.createElement('span');
-    badge.textContent = ' ZCD';
-    badge.style.cssText = 'font-size:0.7em; color:#e67e22; font-weight:400;';
-    tdGpio.appendChild(badge);
-  }
+  // if (isZcdReserved) {
+  //   const badge = document.createElement('span');
+  //   badge.textContent = ' ZCD';
+  //   badge.style.cssText = 'font-size:0.7em; color:#e67e22; font-weight:400;';
+  //   tdGpio.appendChild(badge);
+  // }
   tr.appendChild(tdGpio);
 
   // Col 3: funció
