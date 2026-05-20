@@ -115,10 +115,11 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
     { 4, FUNC_TRIAC_FASE},
     { 5, FUNC_DIGITAL_LED},
   }, 4 },
-  { "AC_CYCLE", {
-    { 1, FUNC_BTN_INV    },
-    { 4, FUNC_TRIAC_CYCLE},
-  }, 2 },
+  { "GL-C-309WL", {
+    { 16, FUNC_DIGITAL_LED},
+    { 17, FUNC_BTN   },
+    { 18, FUNC_ON_OFF},
+  }, 3 },
 };
 
 

@@ -427,7 +427,7 @@ static inline void blau_trg_process_pending(volatile bool       *ack_pending,
         memcpy(p.peer_addr, ack_mac, 6);
         p.channel = 0;
         p.encrypt = false;
-        p.ifidx   = WIFI_IF_AP;
+        p.ifidx   = WIFI_IF_STA;
         esp_now_add_peer(&p);
     }
     esp_err_t r = esp_now_send(ack_mac, (const uint8_t *)ack_pkt, sizeof(BlauPacket_t));

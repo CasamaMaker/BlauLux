@@ -102,6 +102,8 @@ uint8_t handleAction(uint8_t pktType, uint8_t cmd,
 }
 
 void onDataRecv(const uint8_t *mac, const uint8_t *data, int len) {
+  LOG_I("[ESPNOW] RX mac=%02X:%02X:%02X:%02X:%02X:%02X len=%d",
+        mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], len);
   uint8_t br = (g_driver && g_driver->hasBrightness) ? (uint8_t)getBrightnessForType(getControlType()) : 0;
   blau_trg_on_data_recv(mac, data, len,
                         &_ack_pending, (uint8_t*)_ack_mac, (BlauPacket_t*)&_ack_pkt,
