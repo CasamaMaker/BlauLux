@@ -47,9 +47,10 @@ static void getMyMacAddress() {
 
 static void configDeviceAP() {
   WiFi.mode(WIFI_AP_STA);
+  delay(100);
   getMyMacAddress();
   String apSsid = device_name + "_" + macAPSuffix;
-  bool apOk = WiFi.softAP(apSsid, "", ESPNOW_CHANNEL);
+  bool apOk = WiFi.softAP(apSsid.c_str(), nullptr, ESPNOW_CHANNEL);
   if (!apOk) { LOG_E("[WIFI] AP Config failed"); }
   else { LOG_I("[WIFI] AP ok: %s ch=%d MAC=%s", apSsid.c_str(), WiFi.channel(), WiFi.softAPmacAddress().c_str()); }
 }

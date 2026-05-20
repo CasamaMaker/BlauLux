@@ -225,3 +225,4 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 #define INICI_BLINK_MS            500  // durada del parpelleig d'inici
 #define BUTTON_DEBOUNCE_MS        500  // debounce després de clic de botó
 #define BUTTON_RELEASE_DEBOUNCE_MS 200 // debounce detecció alliberament de botó
+#define LED_POWER_SETTLE_MS         5  // espera (ms) entre activar MOSFET alimentació i enviar dades NeoPixel

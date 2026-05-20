@@ -1,299 +1,438 @@
+<div align="center">
+
 # BlauTrigger
 
-**BlauTrigger** is a smart AC load controller built on the ESP32-C3. It acts as the receiver end of the **BlauLink ecosystem** — a battery-powered wireless button sends commands over ESP-NOW, and BlauTrigger controls the connected load in response.
+**Controlador intel·ligent de càrregues AC basat en ESP32**
 
-Supports relay switching, digital RGB LEDs (NeoPixel/WS2812), PWM dimming, dual warm/cold white temperature control, and phase-cut triac dimming for AC loads. Configuration is done entirely through a built-in web captive portal — no app required.
+[![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauTrigger.svg)](https://github.com/CasamaMaker/BlauTrigger/releases)
+[![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
+[![Framework](https://img.shields.io/badge/Framework-Arduino-00979D?logo=arduino)](https://www.arduino.cc/)
+[![License](https://img.shields.io/github/license/CasamaMaker/BlauTrigger)](LICENSE)
+[![ESP32-C3](https://img.shields.io/badge/ESP32--C3-RISC--V-blue)](https://www.espressif.com/en/products/socs/esp32-c3)
+[![Protocol](https://img.shields.io/badge/Protocol-ESP--NOW-informational)](https://www.espressif.com/en/solutions/low-power-solutions/esp-now)
+[![MQTT](https://img.shields.io/badge/MQTT-Home%20Assistant-41BDF5?logo=homeassistant)](https://www.home-assistant.io/)
 
 ---
 
-## Table of Contents
+<!--
+  📸 FOTO 1 — IMATGE PRINCIPAL DEL PROJECTE
+  Descripció: Fotografia del dispositiu BlauTrigger muntat i en funcionament.
+  Idealment: Placa ESP32-C3 amb el LED WS2812 encès (color verd o blanc),
+  connectada a una llum o tira LED. Format horitzontal, fons neutre o fosc.
+  Resolució recomanada: 1200×600 px o superior.
+  Col·loca la imatge a: docs/img/hero.jpg
+-->
+<!-- ![BlauTrigger](docs/img/hero.jpg) -->
 
-- [Features](#features)
+*Part receptora de l'ecosistema **BlauLink** — rep ordres sense fils d'un botó ESP-NOW i controla la càrrega connectada.*
+
+</div>
+
+---
+
+## Taula de continguts
+
+- [Ecosistema BlauLink](#ecosistema-blaulink)
+- [Característiques](#característiques)
+- [Modes de control](#modes-de-control)
 - [Hardware](#hardware)
-  - [Hardcoded Configuration](#hardcoded-configuration)
-  - [Wiring](#wiring)
-- [Getting Started](#getting-started)
-  - [Requirements](#requirements)
-  - [Build & Flash](#build--flash)
-  - [First-Time Setup](#first-time-setup)
-- [Configuration](#configuration)
-  - [Compile-Time (config.h)](#compile-time-configh)
-  - [Runtime (Web UI)](#runtime-web-ui)
-- [Usage](#usage)
-  - [Physical Button](#physical-button)
-  - [Remote Control via BlauLink](#remote-control-via-blaulink)
-  - [Web Interface](#web-interface)
-- [Control Modes](#control-modes)
+  - [Plantilles de dispositiu](#plantilles-de-dispositiu)
+  - [Connexions](#connexions)
+- [Primers passos](#primers-passos)
+  - [Requisits](#requisits)
+  - [Compilar i pujar](#compilar-i-pujar)
+  - [Configuració inicial](#configuració-inicial)
+- [Configuració](#configuració)
+  - [Temps de compilació (config.h)](#temps-de-compilació-configh)
+  - [Temps d'execució (Web UI)](#temps-dexecució-web-ui)
+- [Ús](#ús)
+  - [Botó físic](#botó-físic)
+  - [Control remot via BlauLink](#control-remot-via-blaulink)
+  - [Interfície web](#interfície-web)
+- [MQTT i Home Assistant](#mqtt-i-home-assistant)
 - [BlauProtocol](#blauprotocol)
-- [Project Structure](#project-structure)
-- [Troubleshooting](#troubleshooting)
+- [Estructura del projecte](#estructura-del-projecte)
+- [Resolució de problemes](#resolució-de-problemes)
+- [Projectes relacionats](#projectes-relacionats)
 
 ---
 
-## Features
+## Ecosistema BlauLink
 
-- **ESP-NOW receiver** — low-latency, connectionless protocol; no router needed
-- **5 control modes** — relay, digital RGB LED, single PWM dimmer, dual WW/CW PWM, phase-cut triac dimmer
-- **Full BlauProtocol command set** — toggle, on/off, set brightness, set RGB, set CCT, dim up/down, scenes
-- **ACK-based reliability** — acknowledges every received command back to the sender
-- **Captive portal** — web-based configuration and live testing over WiFi AP
-- **WiFi STA + MQTT** — optional home network connection with Home Assistant auto-discovery
-- **Physical button** — toggle the load or enter config mode with a long press
-- **Persistent configuration** — settings stored in NVS (survives power cycles)
-- **Deduplication** — ignores duplicate packets within a 2-second window
-- **Multi-language UI** — Catalan, English and Spanish web interface (JS i18n, single file)
+BlauTrigger és el **receptor** d'un sistema wireless complet per controlar llums i càrregues AC sense necessitat de router ni hub:
+
+```
+┌─────────────────┐    ESP-NOW (IEEE 802.11)   ┌──────────────────┐
+│   BlauLink      │ ─────────────────────────► │   BlauTrigger    │
+│  (botó sender)  │ ◄───────────── ACK ──────  │  (load receiver) │
+│  Bateria · BLE  │                            │  ESP32  ·   WiFi │
+└─────────────────┘                            └────────┬─────────┘
+                                                        │
+                                          ┌─────────────┼─────────────┐
+                                          ▼             ▼             ▼
+                                       Relé          LED RGB       Triac
+                                     (On/Off)      (NeoPixel)    (AC dimmer)
+```
+
+La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La latència és < 10 ms i el consum és mínim. Un sol BlauTrigger pot gestionar fins a **8 BlauLinks** simultàniament.
+
+<!--
+  📸 FOTO 2 — DIAGRAMA FÍSIC O MUNTATGE COMPLET
+  Descripció: Fotografia dels dos dispositius junts (BlauLink + BlauTrigger),
+  o bé un diagrama de blocs imprès / dibuixat a mà mostrant la connexió.
+  Format horitzontal. Fons blanc o clar per contrast.
+  Col·loca la imatge a: docs/img/ecosystem.jpg
+-->
+<!-- ![Ecosistema BlauLink + BlauTrigger](docs/img/ecosystem.jpg) -->
+
+---
+
+## Característiques
+
+| Categoria | Detall |
+|-----------|--------|
+| **Comunicació** | ESP-NOW (connectionless, no cal router) |
+| **Fiabilitat** | ACK per cada comanda + 3 reintents al sender |
+| **Deduplicació** | Descarta paquets duplicats dins una finestra de 2 s |
+| **Configuració** | Portal captiu web (CA / EN / ES) — sense app |
+| **Persistència** | Configuració guardada a NVS (sobreviu talls de corrent) |
+| **Domòtica** | WiFi STA + MQTT + autodescoberta Home Assistant |
+| **Botó físic** | Toggle ràpid i entrada a mode config per pulsació llarga |
+| **Multi-font** | Fins a 8 BlauLinks per un únic BlauTrigger |
+| **Plataformes** | ESP32-C3 · ESP32 · ESP32-S3 · ESP32-S2 · ESP32-C6 |
+| **Firmware** | v1.0 — PlatformIO + Arduino framework |
+
+---
+
+## Modes de control
+
+BlauTrigger suporta **4 tipus de control** seleccionables via la interfície web:
+
+| Mode  | Descripció | Hardware típic |
+|------|------------|----------------|
+| **On/Off**  | Sortida digital binària | Relé, MOSFET, LED |
+| **PWM**  | 1 canal LEDC (5 kHz / 8-bit) | Tira LED monocolor o dos WW+CW |
+| **Triac cicle**  | Control per cicle a 50 Hz (sense ZCD) | Dimmer AC senzill |
+| **Triac fase**  | Control de fase amb ZCD (H11AA4 + MOC3021S) | Dimmer AC de precisió |
+| **Led digital**  | Control de NeoPixel/WS2812 | Tira LED WS2812 |
+
 
 ---
 
 ## Hardware
 
-### Hardcoded Configuration
+### Plantilles de dispositiu
 
-If `HARDCODED_CONFIG` is defined in `src/config.h`, all hardware parameters are fixed at compile time and the web UI cannot modify them. The configurable parameters are:
+La interfície web ofereix **plantilles predefinides** per alguns dispositius:
 
-- `HW_CONTROL_TYPE` — control mode (0 = relay, 1 = digital LED, 2 = PWM, 3 = WW/CW, 4 = triac)
-- `HW_PIN1` — primary output GPIO (relay, NeoPixel data, or PWM channel 1)
-- `HW_PIN2` — secondary output GPIO (PWM channel 2 for WW/CW mode)
-- `PIN_BOTO` — button input GPIO
-- `BRIGHTNESS_DEF` — default brightness percentage (0–100)
-- `NUM_LEDS` — number of NeoPixel LEDs
+| Plantilla | GPIOs preconfigurats | Ús |
+|-----------|---------------------|-----|
+| `PICO-CLICK` | BTN\_INV→5 · LED→6 | Placa de prototipat genèrica |
+| `SONOFF_BASIC_R4` | BTN→9 · RELAY→4 · LED→6 | Interruptor Sonoff de paret |
+| `AC_REGULATOR` | BTN→1 · ZCD→0 · TRIAC→4 · LED→5 | Dimmer AC de fase |
 
-When `HARDCODED_CONFIG` is not defined, all these parameters are read from NVS and can be changed through the web interface.
 
-### Wiring
+### Connexions
 
-**PICO_CLICK (default):**
+**PICO-CLICK (per defecte):**
 ```
-GPIO 5  →  Button (pull-up, active LOW)
-GPIO 6  →  NeoPixel / WS2812 data line
+GPIO 5  →  Botó (pull-down, premut = HIGH)
+GPIO 6  →  Dades NeoPixel / WS2812
 ```
 
-**SONOFF_BASIC_R4:**
+**SONOFF BASIC R4:**
 ```
-GPIO 0  →  Onboard button (boot pin, active LOW)
-GPIO 4  →  Relay control
-GPIO 6  →  Status LED
+GPIO 9  →  Botó integrat (pull-up, premut = LOW)
+GPIO 4  →  Control de relé
+GPIO 6  →  LED d'estat
 ```
 
-For PWM modes (modes 2 and 3), `pin1` and `pin2` are assigned via the web UI and control LEDC channels at 5 kHz / 8-bit resolution.
+**Dimmer AC de fase (AC_REGULATOR):**
+```
+GPIO 0  →  ZCD — sortida optoacoblador H11AA4 (pols actiu HIGH al zero-crossing)
+GPIO 4  →  Porta triac — entrada optoacoblador MOC3021S (actiu HIGH per disparar)
+GPIO 5  →  WS2812 (LED d'estat — ambre proporcional a la potència)
+GPIO 1  →  Botó de configuració
+```
 
-**Triac phase control (mode 4):**
-```
-pin1  →  ZCD input — H11AA4 optocoupler output (active HIGH pulse at zero crossing)
-pin2  →  Triac gate — MOC3021S optocoupler input (active HIGH to fire)
-pin3  →  WS2812 data line (status LED — amber brightness indicates power level)
-```
-The firing angle is computed from the configured power level (0–100%). A FreeRTOS task waits for each zero-crossing pulse, delays by `(100 − power%) × 10 ms / 100`, then pulses the MOC3021S for 100 µs. Designed for 50 Hz AC mains.
+> El temps de dispar es calcula com: `retard = (100 − potència%) × 10 ms / 100`.
+> Dissenyat per a xarxa de 50 Hz. El pols de dispar del triac és de 100 µs.
+
+<!--
+  📸 FOTO 3 — ESQUEMA DE CONNEXIONS / WIRING
+  Descripció: Captura de pantalla de l'esquemàtic (Fritzing, KiCad, EasyEDA)
+  o fotografia del muntatge en protoboard mostrant les connexions clarament.
+  Per al mode triac: inclou el H11AA4 i el MOC3021S amb la xarxa RC snubber.
+  Format horitzontal. Etiquetes als pins visibles.
+  Col·loca la imatge a: docs/img/wiring.png
+-->
+<!-- ![Esquema de connexions](docs/img/wiring.png) -->
 
 ---
 
-## Getting Started
+## Primers passos
 
-### Requirements
+### Requisits
 
-- [PlatformIO](https://platformio.org/) (CLI or VSCode extension)
-- USB-C cable
-- ESP32-C3 development board (or compatible hardware)
-- USB-to-UART driver if needed (CH340, CP210x)
+- [PlatformIO](https://platformio.org/) (CLI o extensió VSCode)
+- Cable USB-C
+- Placa ESP32-C3 (o compatible — vegeu plantilles)
+- Driver USB-UART si cal (CH340, CP210x)
 
-### Build & Flash
+### Compilar i pujar
 
-1. Clone the repository:
+1. Clona el repositori:
    ```bash
-   git clone https://github.com/your-user/BlauTrigger.git
+   git clone https://github.com/CasamaMaker/BlauTrigger.git
    cd BlauTrigger/firmware/BlauTrigger
    ```
 
-2. (Optional) Edit `src/config.h` to select your hardware variant.
+2. (Opcional) Edita [`src/config.h`](src/config.h) per seleccionar el target o ajustar paràmetres.
 
-3. Build and upload:
+3. Compila i puja el firmware:
    ```bash
    pio run -e esp32c3 -t upload
    ```
 
-4. Upload the web UI filesystem:
+4. Puja el sistema de fitxers (interfície web):
    ```bash
    pio run -e esp32c3 -t uploadfs
    ```
 
-5. Open the serial monitor to verify boot output:
+5. Obre el monitor sèrie per verificar l'arrencada:
    ```bash
    pio device monitor -b 115200
    ```
 
-### First-Time Setup
+**Entorns disponibles:** `esp32c3` · `esp32` · `esp32s3` · `esp32s2` · `esp32c6`
 
-On first boot (or after clearing config), the device detects that no button GPIO is configured and enters WiFi AP mode automatically.
+### Configuració inicial
 
-1. Power on the BlauTrigger.
-2. On your phone or computer, connect to the WiFi network **`BlauTrigger_XXXX`** (last 4 characters of the MAC address).
-3. A captive portal opens automatically — or navigate to `http://192.168.4.1`.
-4. Select your control type, assign GPIO pins, and set brightness levels.
-5. Press **Save**. The device restarts and enters normal operation.
+Al primer arrencament (o després d'esborrar la config), el dispositiu detecta que no té cap GPIO de botó configurat i entra automàticament en mode AP:
 
----
+1. Encén el BlauTrigger.
+2. Des del mòbil o l'ordinador, connecta't a la xarxa **`BlauTrigger_XXXX`** (els 4 darrers caràcters de la MAC).
+3. S'obre el portal captiu automàticament — o navega a `http://192.168.4.1`.
+4. Selecciona el tipus de control, assigna els GPIOs i estableix la brillantor.
+5. Prem **Desa**. El dispositiu reinicia i entra en operació normal.
 
-## Configuration
-
-### Compile-Time (`config.h`)
-
-| Macro | Default | Description |
-|---|---|---|
-| `PICO_CLICK` / `SONOFF_BASIC_R4` | `PICO_CLICK` | Hardware pinout selection |
-| `HARDCODED_CONFIG` | *(commented)* | If defined, pins are fixed in code and the web UI cannot change them |
-| `CLEAR_CONFIG` | *(commented)* | If defined, clears all NVS on boot. Flash once, then comment out and reflash |
-| `WIFI_SSID` | `"BlauTrigger"` | AP name prefix (MAC suffix is appended automatically) |
-| `WIFI_PASSWORD` | `""` | AP password — empty for open network |
-| `NUM_LEDS` | `1` | Number of NeoPixel LEDs |
-| `BRIGHTNESS_DEF` | `15` | Default brightness percentage (0–100) |
-| `PWM_FREQ` | `5000` | LEDC PWM frequency in Hz |
-| `PWM_RESOLUTION` | `8` | PWM resolution in bits (8 → 0–255 range) |
-| `WIFI_AP_HOLD_MS` | `3000` | Button hold duration (ms) to enter config mode |
-| `WIFI_AP_TIMEOUT_MS` | `120000` | AP mode auto-timeout before restart |
-
-### Runtime (Web UI)
-
-When `HARDCODED_CONFIG` is not defined, all hardware settings can be changed through the web interface at `http://192.168.4.1`:
-
-- **Control type** — relay / digital LED / PWM / WW-CW / triac
-- **GPIO pins** — pin1 (output), pin2 (second output for WW/CW or triac gate), pin3 (WS2812 indicator for triac mode), button pin
-- **Brightness** — per control mode, 0–100%
-- **WiFi STA** — connect the device to a home router for MQTT support
-- **MQTT** — configure broker, credentials, and topic templates
-- **Live preview** — test color (RGB) or brightness before saving
+<!--
+  📸 FOTO 4 — PORTAL WEB DE CONFIGURACIÓ
+  Descripció: Captura de pantalla del portal captiu obert al mòbil o al navegador
+  d'escriptori. Ha de mostrar el formulari de configuració principal amb:
+  selecció de tipus de control, assignació de GPIOs, slider de brillantor.
+  Dues captures: una a mòbil (vista vertical) i una a escriptori (vista horitzontal).
+  Col·loca les imatges a: docs/img/portal_mobile.png i docs/img/portal_desktop.png
+-->
+<!-- ![Portal captiu — mòbil](docs/img/portal_mobile.png) -->
+<!-- ![Portal captiu — escriptori](docs/img/portal_desktop.png) -->
 
 ---
 
-## Usage
+## Configuració
 
-### Physical Button
+### Temps de compilació (`config.h`)
 
-| Action | Result |
-|---|---|
-| Short press | Toggle the load on/off |
-| Hold 3+ seconds | Enter WiFi AP configuration mode |
-| Double press (in AP mode) | Exit AP mode and restart |
+| Macro | Valor per defecte | Descripció |
+|-------|-------------------|------------|
+| `CLEAR_CONFIG` | *(comentat)* | Si es defineix, esborra tota la NVS a l'arrencada. Torna a comentar i repuja després. |
+| `WIFI_SSID` | `"BlauTrigger"` | Prefix del nom de la xarxa AP (s'afegeix el sufix MAC automàticament) |
+| `WIFI_PASSWORD` | `""` | Contrasenya de l'AP (buit = xarxa oberta) |
+| `BRIGHTNESS_DEF` | `15` | Brillantor per defecte (0–100 %) |
+| `PWM_FREQ` | `5000` | Freqüència LEDC en Hz |
+| `PWM_RESOLUTION` | `8` | Resolució PWM en bits (8 → rang 0–255) |
+| `WIFI_AP_HOLD_MS` | `3000` | Durada de pulsació (ms) per entrar a mode config |
+| `WIFI_AP_TIMEOUT_MS` | `120000` | Temps màxim en mode AP abans de reiniciar |
+| `ESPNOW_CHANNEL` | `1` | Canal WiFi per a ESP-NOW |
+| `ENABLE_WIFI_STA` | *(definit)* | Comenta per desactivar la connexió a xarxa domèstica |
+| `ENABLE_MQTT` | *(definit)* | Comenta per desactivar el client MQTT |
+| `LOG_LEVEL` | `3` | 0=silenci · 1=error · 2=info · 3=debug |
+| `CONFIG_SCHEMA_VERSION` | `4` | Incrementa quan canvies les claus NVS |
+| `FIRMWARE_VERSION` | `"1.0"` | Versió del firmware (cadena de text) |
 
-The AP mode has an automatic timeout of 2 minutes (`WIFI_AP_TIMEOUT_MS`).
+### Temps d'execució (Web UI)
 
-### Remote Control via BlauLink
+Quan `HARDCODED_CONFIG` **no** està definit, tots els paràmetres de hardware es poden canviar des de la interfície web (`http://192.168.4.1`):
 
-BlauTrigger listens for ESP-NOW packets from BlauLink sender devices. No pairing or router is required — communication is peer-to-peer at the WiFi MAC layer.
-
-On receiving a valid BlauProtocol packet, BlauTrigger:
-1. Validates the CRC-8 checksum.
-2. Discards duplicates (same source ID + sequence within 2 seconds).
-3. Executes the command (toggle, on, off, set brightness, set color...).
-4. Sends an ACK packet back to the sender with the current device state.
-
-### Web Interface
-
-The web interface is always accessible at `http://192.168.4.1` while in AP mode. It exposes the following HTTP endpoints:
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/` | `GET` / `POST` | Serve the configuration page / save new hardware config to NVS |
-| `/color` | `POST` | Preview RGB color (`r`, `g`, `b` params, 0–255) |
-| `/dutty` | `POST` | Preview brightness level (`value`, 0–100) |
-| `/duttyCW` | `POST` | Preview cold-white brightness (`value`, 0–100, mode 3/4) |
-| `/wifi` | `POST` | Save WiFi STA credentials and reconnect |
-| `/mqtt` | `POST` | Save MQTT broker settings and reconnect |
-| `/driverMode` | `POST` | Returns current control type (plain text) |
-| `/configMode` | `POST` | Returns `"hardcoded"` or `"web"` |
-| `/mymac` | `POST` | Returns AP MAC address |
-| `/pins` | `POST` | Returns GPIO assignments (JSON) |
-| `/brightness` | `POST` | Returns brightness per mode (JSON) |
-| `/numLeds` | `POST` | Returns number of NeoPixel LEDs |
-| `/boto` | `POST` | Returns button GPIO and pull-up setting (JSON) |
-| `/initialSetup` | `POST` | Returns `"true"` if no button GPIO is configured yet |
-| `/wifiStatus` | `POST` | Returns WiFi STA connection state (JSON) |
-| `/mqttStatus` | `POST` | Returns MQTT connection state and config (JSON) |
+- **Plantilla de dispositiu** — selecció predefinida de GPIO functions
+- **Assignació de GPIOs** — funció per a cada pin (BTN, ON\_OFF, PWM, ZCD, TRIAC...)
+- **Brillantor** — valor per defecte (0–100 %)
+- **WiFi STA** — connexió a la xarxa domèstica per activar MQTT
+- **MQTT** — broker, credencials i plantilles de topic
+- **Previsualització en viu** — prova el color RGB o la brillantor abans de desar
 
 ---
 
-## Control Modes
+## Ús
 
-| Mode | Value | Description |
-|---|---|---|
-| On/Off relay | `0` | Binary GPIO switching — relay or digital output |
-| Digital LED | `1` | Single NeoPixel/WS2812 with full RGB color support |
-| PWM dimmer | `2` | Single LEDC PWM channel for brightness control |
-| WW/CW | `3` | Dual LEDC channels for warm/cold white mixing |
-| Triac fase | `4` | Phase-cut AC dimmer — H11AA4 ZCD + MOC3021S + WS2812 status LED |
+### Botó físic
 
-The active mode is stored in NVS and applied on every boot.
+| Acció | Resultat |
+|-------|----------|
+| Pulsació curta | Toggle de la càrrega (on/off) |
+| Mantenir 3+ s | Entra al mode AP de configuració WiFi |
+| Doble pulsació (en mode AP) | Surt del mode AP i reinicia |
+
+El mode AP té un temps límit automàtic de 2 minuts (`WIFI_AP_TIMEOUT_MS`).
+
+### Control remot via BlauLink
+
+BlauTrigger escolta paquets ESP-NOW dels dispositius BlauLink. No cal cap parellament ni router — la comunicació és peer-to-peer a la capa MAC WiFi.
+
+En rebre un paquet BlauProtocol vàlid, BlauTrigger:
+
+1. Verifica el checksum CRC-8.
+2. Descarta duplicats (mateix `src_id` + `seq` dins de 2 segons).
+3. Executa la comanda (toggle, on, off, brillantor, color...).
+4. Envia un paquet ACK al sender amb l'estat actual del dispositiu.
+
+**Comandes suportades:** `TOGGLE` · `ON` · `OFF` · `SET_BRIGHTNESS` · `SET_RGB` · `SET_CCT` · `SET_SCENE` · `DIM_UP` · `DIM_DOWN`
+
+**Events de botó suportats:** `CLICK_1` (1 clic) · `CLICK_2` (doble clic) · `CLICK_3` (triple clic) · `LONG_START/END` (pulsació llarga)
+
+### Interfície web
+
+L'API HTTP és accessible a `http://192.168.4.1` mentre el dispositiu és en mode AP:
+
+| Endpoint | Mètode | Descripció |
+|----------|--------|------------|
+| `/` | `GET` / `POST` | Pàgina de configuració / desa nova config a NVS |
+| `/color` | `POST` | Previsualitza color RGB (`r`, `g`, `b`, 0–255) |
+| `/dutty` | `POST` | Previsualitza brillantor (`value`, 0–100) |
+| `/duttyCW` | `POST` | Previsualitza blanc fred (`value`, 0–100, mode 3/4) |
+| `/wifi` | `POST` | Desa credencials WiFi STA i reconnecta |
+| `/mqtt` | `POST` | Desa configuració MQTT i reconnecta |
+| `/mymac` | `POST` | Retorna la MAC de l'AP |
+| `/pins` | `POST` | Retorna l'assignació de GPIOs (JSON) |
+| `/brightness` | `POST` | Retorna la brillantor per mode (JSON) |
+| `/wifiStatus` | `POST` | Retorna l'estat de connexió WiFi STA (JSON) |
+| `/mqttStatus` | `POST` | Retorna l'estat i la config MQTT (JSON) |
+| `/initialSetup` | `POST` | Retorna `"true"` si no hi ha cap GPIO de botó configurat |
+
+---
+
+## MQTT i Home Assistant
+
+Quan es configura una xarxa WiFi STA, BlauTrigger es connecta a un broker MQTT i publica/subscriu als topics definits a `config.h`:
+
+```
+blautrigger/<topic>/state      ← estat actual (ON / OFF, brillantor, color)
+blautrigger/<topic>/cmnd/...   ← comandes entrants
+blautrigger/<topic>/tele/...   ← telemetria (LWT, IP, MAC, RSSI)
+```
+
+On `%id%` es resol automàticament com els **darrers 4 caràcters de la MAC** (ex: `A1B2`), fent que cada dispositiu tingui topics únics sense configuració addicional.
+
+> **Home Assistant:** BlauTrigger publica el payload d'autodescoberta MQTT estàndard perquè el dispositiu aparegui automàticament a HA sense cap configuració manual.
+
+<!--
+  📸 FOTO 5 — HOME ASSISTANT
+  Descripció: Captura de pantalla del panell de Home Assistant mostrant
+  el dispositiu BlauTrigger integrat: entitats (light, switch), historial,
+  o el dashboard amb el control de llum.
+  Col·loca la imatge a: docs/img/homeassistant.png
+-->
+<!-- ![Integració Home Assistant](docs/img/homeassistant.png) -->
 
 ---
 
 ## BlauProtocol
 
-BlauTrigger uses **BlauProtocol v1** — a compact 10-byte binary protocol designed for ESP-NOW:
+BlauTrigger utilitza **BlauProtocol v1** — un protocol binari compacte de **10 bytes** dissenyat per a ESP-NOW:
 
 ```
-[ VER | TYPE | SEQ | SRC_ID (2B) | CMD | P1 | P2 | P3 | CRC8 ]
+Byte:  0      1      2      3-4        5      6    7    8    9
+      [VER | TYPE | SEQ | SRC_ID(2B) | CMD | P1 | P2 | P3 | CRC8]
 ```
 
-| Field | Size | Description |
-|---|---|---|
-| `VER` | 1 B | Protocol version |
-| `TYPE` | 1 B | Message type (event, command, ACK, ping…) |
-| `SEQ` | 1 B | Sequence number for deduplication |
-| `SRC_ID` | 2 B | Sender device identifier |
-| `CMD` | 1 B | Command or event code |
-| `P1–P3` | 3 B | Command parameters (brightness, R, G, B…) |
-| `CRC8` | 1 B | CRC-8 checksum of bytes 0–8 |
+| Camp | Mida | Descripció |
+|------|------|------------|
+| `VER` | 1 B | Versió del protocol (`0x01`) |
+| `TYPE` | 1 B | Tipus de missatge (EVENT, CMD, ACK, PING...) |
+| `SEQ` | 1 B | Número de seqüència circular (0–255) per deduplicació |
+| `SRC_ID` | 2 B | Identificador del sender (darrers 2 bytes de la MAC) |
+| `CMD` | 1 B | Codi de comanda o event |
+| `P1–P3` | 3 B | Paràmetres (brillantor, R/G/B, WW/CW...) |
+| `CRC8` | 1 B | CRC-8 (polinomi 0x07) dels bytes 0–8 |
 
-**Message types:** `TYPE_EVENT`, `TYPE_CMD`, `TYPE_ACK`, `TYPE_PING`, `TYPE_PONG`, `TYPE_STATUS_REQ`, `TYPE_STATUS_RSP`
+**Tipus de missatge:** `TYPE_EVENT` · `TYPE_CMD` · `TYPE_ACK` · `TYPE_PING` · `TYPE_PONG` · `TYPE_STATUS_REQ` · `TYPE_STATUS_RSP`
 
-**Event codes:** `EVT_CLICK_1/2/3` (single/double/triple tap), `EVT_LONG_START/END` (long press)
+**Codis ACK:** `ACK_OK` · `ACK_ERROR` · `ACK_DUPLICATE` · `ACK_UNAUTHORIZED` · `ACK_BAD_VERSION` · `ACK_BAD_CRC`
 
-**Command codes:** `CMD_TOGGLE`, `CMD_ON`, `CMD_OFF`, `CMD_SET_BRIGHTNESS`, `CMD_SET_RGB`, `CMD_SET_CCT`, `CMD_SET_SCENE`, `CMD_DIM_UP`, `CMD_DIM_DOWN`
+**Temporitzacions:**
 
-See [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/blauprotocol.h) for the full specification.
+| Constant | Valor | Descripció |
+|----------|-------|------------|
+| `BLAU_ACK_TIMEOUT_MS` | 50 ms | Temps d'espera de l'ACK per intent |
+| `BLAU_MAX_RETRIES` | 3 | Reintents màxims sense ACK |
+| `BLAU_CLICK_WINDOW_MS` | 400 ms | Finestra de detecció de multi-clic |
+| `BLAU_LONG_PRESS_MS` | 800 ms | Llindar de pulsació llarga |
+| `BLAU_DEDUP_WINDOW_MS` | 2000 ms | Finestra de deduplicació al Trigger |
+| `BLAU_MAX_SOURCES` | 8 | Màxim de BlauLinks per Trigger |
+| `BLAU_MAX_TARGETS` | 4 | Màxim de Triggers per BlauLink |
+
+Especificació completa: [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/blauprotocol.h)
 
 ---
 
-## Project Structure
+## Estructura del projecte
 
 ```
 BlauTrigger/
 ├── src/
-│   ├── main.cpp          # Application logic, web server, ESP-NOW handler
-│   └── config.h          # Hardware pinout & compile-time settings
+│   ├── main.cpp          # Lògica principal, setup, loop
+│   ├── config.h          # Pinout, macros de compilació, constants
+│   ├── globals.h         # Declaració de variables globals
+│   ├── nvsconfig.h/.cpp  # Persistència NVS (Preferences)
+│   ├── output.h/.cpp     # Control de sortides (relay, PWM, NeoPixel, triac)
+│   ├── espnow.h/.cpp     # Receptor ESP-NOW i processament BlauProtocol
+│   ├── webserver.h/.cpp  # Servidor HTTP i portal captiu
+│   ├── mqtt.h/.cpp       # Client MQTT i autodescoberta HA
+│   ├── button.h/.cpp     # Gestió del botó (debounce, multi-clic, long press)
+│   └── watchdog.h/.cpp   # Watchdog i log del motiu de reset
 ├── lib/
 │   └── BlauProtocol/
-│       ├── blauprotocol.h        # Packet structure, types, constants
-│       ├── blauprotocol.cpp      # CRC-8, packet init
-│       ├── blauprotocol_trg.h    # BlauTrigger helpers: parse, dedup, ACK build
-│       └── blauprotocol_link.h   # BlauLink helpers (sender side)
+│       ├── blauprotocol.h        # Estructura del paquet, tipus, constants
+│       ├── blauprotocol.cpp      # CRC-8, inicialització de paquets
+│       ├── blauprotocol_trg.h    # Helpers pel Trigger (parse, dedup, ACK)
+│       └── blauprotocol_link.h   # Helpers pel Link (sender)
 ├── data/
-│   ├── wifimanager.html   # Multilingual web UI (CA / EN / ES via JS i18n)
-│   └── style.css          # Web interface styles
-└── platformio.ini         # PlatformIO build configuration
+│   ├── wifimanager.html   # UI web multilingüe (CA / EN / ES via JS i18n)
+│   └── style.css          # Estils de la interfície web
+└── platformio.ini         # Configuració PlatformIO (multi-target)
 ```
 
 ---
 
-## Troubleshooting
+## Resolució de problemes
 
-| Problem | Likely Cause | Solution |
-|---|---|---|
-| Stuck in AP mode at every boot | Button GPIO not configured | Connect to portal and save pin assignments |
-| Can't connect to portal | Captive portal blocked | Navigate manually to `http://192.168.4.1` |
-| LED doesn't light | Wrong pin or control type | Verify GPIO in `config.h` or web UI matches hardware |
-| No ACK reaching BlauLink | Dedup window expired or packet lost | BlauLink retries within 2 s; check ESP-NOW channel match |
-| Config not saving | NVS full or corrupted | Define `CLEAR_CONFIG`, flash once, remove it, reflash |
-| Compilation error | Missing library | Run `pio pkg install` to fetch dependencies |
-| USB port not detected | Missing USB driver | Install the CH340 or CP210x driver for your OS |
-
----
-
-## Related Projects
-
-- **[BlauLink](../BlauLink)** — Battery-powered wireless button (sender side of the BlauLink ecosystem)
+| Problema | Causa probable | Solució |
+|----------|---------------|---------|
+| Sempre en mode AP a l'arrencada | GPIO del botó no configurat | Connecta't al portal i desa l'assignació de pins |
+| No s'obre el portal captiu | Bloquejat per xarxa o DNS | Navega manualment a `http://192.168.4.1` |
+| El LED no s'encén | Pin o mode de control incorrecte | Verifica el GPIO i el mode al portal web |
+| No arriba ACK al BlauLink | Finestra de dedup expirada o paquet perdut | BlauLink reintenta fins a 3 vegades; comprova que el canal ESP-NOW coincideix (`ESPNOW_CHANNEL`) |
+| La config no es desa | NVS plena o corrupte | Defineix `CLEAR_CONFIG`, puja el firmware, torna a comentar-ho i repuja |
+| Error de compilació | Llibreria no trobada | Executa `pio pkg install` per descarregar les dependències |
+| Port USB no detectat | Driver absent | Instal·la el driver CH340 o CP210x pel teu sistema operatiu |
+| El dispositiu reinicia sol | Watchdog timeout | Consulta el serial monitor per veure el motiu del reset (`logResetReason`) |
 
 ---
 
-## License
+## Projectes relacionats
 
-This project is open source. See [LICENSE](LICENSE) for details.
+- **[BlauLink](https://github.com/CasamaMaker/BlauLink)** — Botó wireless amb bateria (sender de l'ecosistema)
+
+---
+
+## Llicència
+
+Aquest projecte és de codi obert. Vegeu [LICENSE](LICENSE) per als detalls.
+
+---
+
+<div align="center">
+
+Fet amb ❤️ per [CasamaMaker](https://github.com/CasamaMaker)
+
+</div>

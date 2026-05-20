@@ -219,9 +219,15 @@ void driverSetup(int gpio) {
   gpioMap[gpio].rt.lastChangeMs = 0;
 
   switch (gpioMap[gpio].cfg.func) {
+    // case FUNC_BTN:
+    // case FUNC_BTN_INV:
+    //   pinMode(gpio, INPUT);
+    //   break;
     case FUNC_BTN:
+      pinMode(gpio, INPUT_PULLUP);
+      break;
     case FUNC_BTN_INV:
-      pinMode(gpio, INPUT);
+      pinMode(gpio, INPUT_PULLDOWN);
       break;
     case FUNC_ON_OFF:
       pinMode(gpio, OUTPUT);
@@ -290,6 +296,7 @@ void driverApply(int gpio) {
   switch (gpioMap[gpio].cfg.func) {
     case FUNC_ON_OFF:
       digitalWrite(gpio, on ? HIGH : LOW);
+      Serial.printf(">> %d, %d\n", gpio, on);
       break;
     case FUNC_PWM: {
       int lch = ledcChannelFor(gpio);
@@ -338,10 +345,23 @@ void driverToggle(int gpio) {
 }
 
 void driverToggleAll() {
+  bool powerOn = false;
+  bool hasLed  = false;
+
+  // Passada 1: tot excepte DIGITAL_LED
   for (int i = 0; i <= 21; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
-    if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;    // descarta si és una d'aquestes funcions
+    if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;
+    if (f == FUNC_DIGITAL_LED) { hasLed = true; continue; }
     driverToggle(i);
+    if (f == FUNC_ON_OFF && gpioMap[i].rt.state) powerOn = true;
+  }
+
+  if (powerOn && hasLed) delay(LED_POWER_SETTLE_MS);
+
+  // Passada 2: DIGITAL_LED
+  for (int i = 0; i <= 21; i++) {
+    if (gpioMap[i].cfg.func == FUNC_DIGITAL_LED) driverToggle(i);
   }
 }
 
@@ -372,9 +392,23 @@ bool getState() {
 }
 
 void applyOutput(bool on) {
+  bool powerOn = false;
+
+  // Passada 1: tot excepte DIGITAL_LED
   for (int i = 0; i <= 21; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
-    if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;
+    if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD || f == FUNC_DIGITAL_LED) continue;
+    gpioMap[i].rt.state        = on;
+    gpioMap[i].rt.lastChangeMs = (uint32_t)millis();
+    driverApply(i);
+    if (f == FUNC_ON_OFF && on) powerOn = true;
+  }
+
+  if (powerOn && findGpio(FUNC_DIGITAL_LED) != PIN_UNUSED) delay(LED_POWER_SETTLE_MS);
+
+  // Passada 2: DIGITAL_LED
+  for (int i = 0; i <= 21; i++) {
+    if (gpioMap[i].cfg.func != FUNC_DIGITAL_LED) continue;
     gpioMap[i].rt.state        = on;
     gpioMap[i].rt.lastChangeMs = (uint32_t)millis();
     driverApply(i);
@@ -384,31 +418,31 @@ void applyOutput(bool on) {
 void toggleOutput() { driverToggleAll(); }
 
 void renderVisualFeedback(const char* mode) {
-  for (int i = 0; i <= 21; i++) {
-    GpioFunc f = gpioMap[i].cfg.func;
-    if (f == FUNC_PWM) {
-      int ch = ledcChannelFor(i);
-      if (ch < 0) break;
-      if (strcmp(mode, "inici") == 0) {
-        ledcWrite(ch, map(gpioMap[i].rt.param1, 0, 100, 0, 255));
-        delay(INICI_BLINK_MS);
-        ledcWrite(ch, 0);
-      } else if (strcmp(mode, "wifiAP") == 0) {
-        uint16_t osc    = (uint16_t)((millis() / 2) % 510);
-        uint8_t  bright = osc < 255 ? (uint8_t)osc : (uint8_t)(510 - osc);
-        ledcWrite(ch, bright);
-      }
-      return;
-    }
-    if (f == FUNC_ON_OFF) {
-      if (strcmp(mode, "inici") == 0) {
-        digitalWrite(i, HIGH); delay(INICI_BLINK_MS); digitalWrite(i, LOW);
-      } else if (strcmp(mode, "wifiAP") == 0) {
-        digitalWrite(i, (millis() / 500) % 2 ? HIGH : LOW);
-      }
-      return;
-    }
-  }
+  // for (int i = 0; i <= 21; i++) {
+  //   GpioFunc f = gpioMap[i].cfg.func;
+  //   if (f == FUNC_PWM) {
+  //     int ch = ledcChannelFor(i);
+  //     if (ch < 0) break;
+  //     if (strcmp(mode, "inici") == 0) {
+  //       ledcWrite(ch, map(gpioMap[i].rt.param1, 0, 100, 0, 255));
+  //       delay(INICI_BLINK_MS);
+  //       ledcWrite(ch, 0);
+  //     } else if (strcmp(mode, "wifiAP") == 0) {
+  //       uint16_t osc    = (uint16_t)((millis() / 2) % 510);
+  //       uint8_t  bright = osc < 255 ? (uint8_t)osc : (uint8_t)(510 - osc);
+  //       ledcWrite(ch, bright);
+  //     }
+  //     return;
+  //   }
+  //   if (f == FUNC_ON_OFF) {
+  //     if (strcmp(mode, "inici") == 0) {
+  //       digitalWrite(i, HIGH); delay(INICI_BLINK_MS); digitalWrite(i, LOW);
+  //     } else if (strcmp(mode, "wifiAP") == 0) {
+  //       digitalWrite(i, (millis() / 500) % 2 ? HIGH : LOW);
+  //     }
+  //     return;
+  //   }
+  // }
 }
 
 int  getBotonPin()    { int g = findGpio(FUNC_BTN); return g != PIN_UNUSED ? g : findGpio(FUNC_BTN_INV); }
