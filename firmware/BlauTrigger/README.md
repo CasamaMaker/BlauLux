@@ -130,6 +130,7 @@ La interfície web ofereix **plantilles predefinides** per alguns dispositius:
 | `PICO-CLICK` | BTN\_INV→5 · LED→6 | Placa de prototipat genèrica |
 | `SONOFF_BASIC_R4` | BTN→9 · RELAY→4 · LED→6 | Interruptor Sonoff de paret |
 | `AC_REGULATOR` | BTN→1 · ZCD→0 · TRIAC→4 · LED→5 | Dimmer AC de fase |
+| `GL-C-309WL` | BTN→17 · LED→16 · ON\_OFF→18 | Control tira llums digitals
 
 
 ### Connexions
@@ -208,12 +209,12 @@ GPIO 1  →  Botó de configuració
 
 ### Configuració inicial
 
-Al primer arrencament (o després d'esborrar la config), el dispositiu detecta que no té cap GPIO de botó configurat i entra automàticament en mode AP:
+Al primer arrencament (o després d'esborrar la config), el dispositiu detecta que no té cap GPIO de botó ni wifi configurats i entra automàticament en mode AP:
 
 1. Encén el BlauTrigger.
 2. Des del mòbil o l'ordinador, connecta't a la xarxa **`BlauTrigger_XXXX`** (els 4 darrers caràcters de la MAC).
 3. S'obre el portal captiu automàticament — o navega a `http://192.168.4.1`.
-4. Selecciona el tipus de control, assigna els GPIOs i estableix la brillantor.
+4. Selecciona el tipus de control, assigna les funcions als GPIOs i els paràmetres extra.
 5. Prem **Desa**. El dispositiu reinicia i entra en operació normal.
 
 <!--
@@ -252,7 +253,7 @@ Al primer arrencament (o després d'esborrar la config), el dispositiu detecta q
 
 ### Temps d'execució (Web UI)
 
-Quan `HARDCODED_CONFIG` **no** està definit, tots els paràmetres de hardware es poden canviar des de la interfície web (`http://192.168.4.1`):
+Tots els paràmetres de hardware es poden canviar des de la interfície web (`http://192.168.4.1`):
 
 - **Plantilla de dispositiu** — selecció predefinida de GPIO functions
 - **Assignació de GPIOs** — funció per a cada pin (BTN, ON\_OFF, PWM, ZCD, TRIAC...)
@@ -288,7 +289,7 @@ En rebre un paquet BlauProtocol vàlid, BlauTrigger:
 
 **Comandes suportades:** `TOGGLE` · `ON` · `OFF` · `SET_BRIGHTNESS` · `SET_RGB` · `SET_CCT` · `SET_SCENE` · `DIM_UP` · `DIM_DOWN`
 
-**Events de botó suportats:** `CLICK_1` (1 clic) · `CLICK_2` (doble clic) · `CLICK_3` (triple clic) · `LONG_START/END` (pulsació llarga)
+<!-- **Events de botó suportats:** `CLICK_1` (1 clic) · `CLICK_2` (doble clic) · `CLICK_3` (triple clic) · `LONG_START/END` (pulsació llarga) -->
 
 ### Interfície web
 
