@@ -2,19 +2,8 @@
 #include <esp_timer.h>
 #include <Adafruit_NeoPixel.h>
 
-// ── Canal LEDC per GPIO ──────────────────────────────────────────
-static int8_t _ledcCh[22];
-static int    _nextLedcCh = 0;
-
 // ── NeoPixel per GPIO ────────────────────────────────────────────
 static Adafruit_NeoPixel* _neoPixel[22] = {};
-
-static int ledcChannelFor(int gpio) {
-  if (gpio < 0 || gpio > 21) return -1;
-  if (_ledcCh[gpio] >= 0) return _ledcCh[gpio];
-  _ledcCh[gpio] = (int8_t)(_nextLedcCh++);
-  return _ledcCh[gpio];
-}
 
 // ── Triac fase (ZCD + FreeRTOS task) ────────────────────────────
 static SemaphoreHandle_t _zcdSemaphore    = NULL;
@@ -243,13 +232,9 @@ void driverSetup(int gpio) {
       break;
     }
     case FUNC_PWM: {
-      int      ch   = ledcChannelFor(gpio);
       uint32_t freq = gpioMap[gpio].rt.param2 ? (uint32_t)gpioMap[gpio].rt.param2 : PWM_FREQ;
-      if (ch >= 0) {
-        ledcSetup(ch, freq, PWM_RESOLUTION);
-        ledcAttachPin(gpio, ch);
-        ledcWrite(ch, 0);
-      }
+      ledcAttach(gpio, freq, PWM_RESOLUTION);
+      ledcWrite(gpio, 0);
       break;
     }
     case FUNC_TRIAC_CYCLE:
@@ -273,8 +258,6 @@ void driverSetup(int gpio) {
 
 // ── driverSetupAll ───────────────────────────────────────────────
 void driverSetupAll() {
-  memset(_ledcCh, -1, sizeof(_ledcCh));   //omplir tota la memòria de _ledcCh amb el valor 0xFF
-  _nextLedcCh = 0;
   cleanupTriac();
   cleanupTriacCycle();
   for (int i = 0; i <= 21; i++) driverSetup(i);
@@ -299,13 +282,9 @@ void driverApply(int gpio) {
       Serial.printf(">> %d, %d\n", gpio, on);
       break;
     case FUNC_PWM: {
-      int lch = ledcChannelFor(gpio);
-      if (lch >= 0) {
-        uint32_t freq = p2 ? (uint32_t)p2 : PWM_FREQ;
-        ledcSetup(lch, freq, PWM_RESOLUTION);
-        ledcAttachPin(gpio, lch);
-        ledcWrite(lch, on ? (uint32_t)map(p1, 0, 100, 0, 255) : 0);
-      }
+      uint32_t freq = p2 ? (uint32_t)p2 : PWM_FREQ;
+      ledcAttach(gpio, freq, PWM_RESOLUTION);
+      ledcWrite(gpio, on ? (uint32_t)map(p1, 0, 100, 0, 255) : 0);
       break;
     }
     case FUNC_TRIAC_CYCLE:
