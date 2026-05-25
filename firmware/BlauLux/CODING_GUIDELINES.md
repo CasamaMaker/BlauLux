@@ -1,7 +1,7 @@
-# Coding Guidelines
-## BlauLink / BlauTrigger — ESP32-C3 Arduino Project
+﻿# Coding Guidelines
+## BlauLink / BlauLux — ESP32-C3 Arduino Project
 
-> These guidelines apply to both **BlauLink** (battery sender) and **BlauTrigger** (AC receiver).  
+> These guidelines apply to both **BlauLink** (battery sender) and **BlauLux** (AC receiver).  
 > They are written for AI agents and human developers alike.
 
 ---
@@ -19,12 +19,12 @@
 ## 2. Architecture Rules
 
 - **BlauLink** is always the initiator (sender). It sends TYPE_EVENT or TYPE_CMD and expects an ACK.
-- **BlauTrigger** is always the responder. It receives, deduplicates, acts, and sends an ACK from `loop()` — never from the ISR callback.
+- **BlauLux** is always the responder. It receives, deduplicates, acts, and sends an ACK from `loop()` — never from the ISR callback.
 - **Callbacks (`OnDataRecv`, `OnDataSent`) MUST NOT** perform any blocking operations, allocations, or slow I/O. Set flags or copy data only.
 - **ACK responses** MUST be queued (`_ack_pending = true`) and sent from `loop()`, never from within `OnDataRecv`.
 - **The BlauProtocol library** (`lib/BlauProtocol/`) is shared between both devices. Changes to it affect both — treat it as a stable API.
 - **Hardware variants** (BLAULINK_V1, BLAULINK_V2, SONOFF_BASIC_R4) are resolved at compile time via `#ifdef`. Do not add runtime hardware detection.
-- **WiFi mode**: BlauLink uses `WIFI_STA`; BlauTrigger uses `WIFI_AP`. Never switch modes at runtime.
+- **WiFi mode**: BlauLink uses `WIFI_STA`; BlauLux uses `WIFI_AP`. Never switch modes at runtime.
 
 ---
 
@@ -38,7 +38,7 @@ lib/BlauProtocol/
   blauprotocol.h        — Packet struct, all constants (TYPE_*, CMD_*, EVT_*, ACK_*, BLAU_*)
   blauprotocol.cpp      — CRC-8, blau_init_packet(), blau_check_crc(), blau_fill_crc()
   blauprotocol_link.h   — BlauLink-side helpers: build packets, check ACK
-  blauprotocol_trg.h    — BlauTrigger-side helpers: parse, deduplicate, build ACK/PONG/STATUS
+  blauprotocol_trg.h    — BlauLux-side helpers: parse, deduplicate, build ACK/PONG/STATUS
 
 data/
   index.html            — Captive portal UI
@@ -93,7 +93,7 @@ bool _ack_received = false;
 
 - **ADC on ESP32-C3**: Enable/disable the voltage divider via the enable pin before and after every ADC read. Average multiple samples (minimum 5, currently 10).
 - **LittleFS**: Always check `LittleFS.begin()` return value before serving files.
-- **`esp_deep_sleep_start()`**: Called only from BlauLink, never from BlauTrigger.
+- **`esp_deep_sleep_start()`**: Called only from BlauLink, never from BlauLux.
 - **`ledcSetup()` / `ledcAttachPin()`**: Required for PWM on ESP32-C3. Do not use `analogWrite()`.
 - **`esp_now_send()`**: Returns immediately. Delivery confirmation comes via `OnDataSent` callback — do not assume success from the return value alone.
 - **Watchdog**: Do not use blocking `while(true)` without `yield()` or `delay()` calls; this will trigger the hardware watchdog.
@@ -127,7 +127,7 @@ typedef struct __attribute__((packed)) {
 
 - BlauLink generates: `blau_seq = millis() & 0xFF` — assigns a new seq per transmission session (not per retry).
 - Retries of the same event **MUST** reuse the same seq number. This is critical for deduplication.
-- BlauTrigger returns the confirmed seq in the `cmd` field of the ACK packet.
+- BlauLux returns the confirmed seq in the `cmd` field of the ACK packet.
 - BlauLink validates ACK with `blau_is_ack_for(&pkt, seq)`.
 
 ### Retry and ACK Strategy
@@ -144,9 +144,9 @@ return false on exhaustion
 - **MUST NOT** increase `BLAU_MAX_RETRIES` beyond 3 or `BLAU_ACK_TIMEOUT_MS` beyond 50ms without power budget analysis. These directly impact battery life.
 - **ACK_DUPLICATE is a success**: the action was already executed. BlauLink MUST treat it as `ACK_OK`.
 
-### Deduplication (BlauTrigger)
+### Deduplication (BlauLux)
 
-- BlauTrigger maintains a table of `(src_id, last_seq, timestamp)` for up to `BLAU_MAX_SOURCES` (8) senders.
+- BlauLux maintains a table of `(src_id, last_seq, timestamp)` for up to `BLAU_MAX_SOURCES` (8) senders.
 - Same `(src_id, seq)` pair within `BLAU_DEDUP_WINDOW_MS` (2000ms) → send `ACK_DUPLICATE`, do NOT execute action.
 - When the table is full, the oldest entry is evicted (LRU).
 - **MUST NOT** extend `BLAU_DEDUP_WINDOW_MS` beyond what the BlauLink retry window covers.
@@ -154,7 +154,7 @@ return false on exhaustion
 ### Adding New Commands
 
 1. Define the constant in `blauprotocol.h` under `CMD_*` or `EVT_*`.
-2. Add the handler in BlauTrigger's `OnDataRecv()` switch/case.
+2. Add the handler in BlauLux's `OnDataRecv()` switch/case.
 3. If the command has parameters, document the `p1`/`p2`/`p3` meaning in `blauprotocol.h`.
 4. If unimplemented, send `ACK_ERROR` and log `"CMD no implementat: 0x..."`.
 
@@ -171,11 +171,11 @@ return false on exhaustion
 ### Logging Format
 
 ```cpp
-Serial.printf("[BlauTrigger] OnDataRecv: from %02X:%02X, seq=%d, type=0x%02X\n",
+Serial.printf("[BlauLux] OnDataRecv: from %02X:%02X, seq=%d, type=0x%02X\n",
               mac[4], mac[5], pkt.seq, pkt.type);
 ```
 
-- Use `Serial.printf()` for all debug output. Prefix with `[BlauLink]` or `[BlauTrigger]`.
+- Use `Serial.printf()` for all debug output. Prefix with `[BlauLink]` or `[BlauLux]`.
 - **MUST NOT** leave `Serial.print()` calls in hot paths (e.g., inside retry loops or ISR callbacks) in production builds.
 - Use `#ifdef DEBUG` guards if adding verbose logging.
 
@@ -192,7 +192,7 @@ Serial.printf("[BlauTrigger] OnDataRecv: from %02X:%02X, seq=%d, type=0x%02X\n",
 - AP config mode MUST auto-exit after 60 seconds (`CONFIG_TIMEOUT_MS`).
 - **MUST NOT** initialize FastLED, open LittleFS, or start a web server unless that code path is actually needed (AP mode only).
 
-### BlauTrigger (AC-Powered)
+### BlauLux (AC-Powered)
 
 - No deep sleep. Loop runs continuously.
 - **MUST NOT** use `delay()` in `loop()`. Use non-blocking timing with `millis()`.
@@ -227,11 +227,11 @@ if (pkt.version != BLAU_PROTO_VERSION) return false;
 
 - **Serial monitor**: 115200 baud. Always include log lines at send, receive, ACK, and error points.
 - **Smoke test after changes**:
-  1. Flash BlauLink → press button → BlauTrigger toggles output → LED turns green on BlauLink.
-  2. Repeat 5 times quickly → no duplicate actions on BlauTrigger.
-  3. Power-cycle BlauTrigger → BlauLink can still pair and trigger.
-- **Duplicate detection test**: Send the same `(src_id, seq)` twice within 2 seconds. BlauTrigger MUST send `ACK_DUPLICATE` the second time and NOT toggle the output.
-- **CRC test**: Corrupt one byte in a packet. BlauTrigger MUST silently drop it.
+  1. Flash BlauLink → press button → BlauLux toggles output → LED turns green on BlauLink.
+  2. Repeat 5 times quickly → no duplicate actions on BlauLux.
+  3. Power-cycle BlauLux → BlauLink can still pair and trigger.
+- **Duplicate detection test**: Send the same `(src_id, seq)` twice within 2 seconds. BlauLux MUST send `ACK_DUPLICATE` the second time and NOT toggle the output.
+- **CRC test**: Corrupt one byte in a packet. BlauLux MUST silently drop it.
 - **No unit test framework is in place.** Tests are manual via Serial logs and hardware observation.
 - **Simulating deep sleep during development**: Comment out `esp_deep_sleep_start()` temporarily. Revert before committing.
 
@@ -252,7 +252,7 @@ if (pkt.version != BLAU_PROTO_VERSION) return false;
 
 - **Preserve the BlauPacket_t wire format.** Any change to field order, size, or type breaks communication between devices.
 - **Preserve existing constant values** in `TYPE_*`, `CMD_*`, `EVT_*`, `ACK_*`. Renaming is safe; changing the numeric value is not.
-- **Keep the shared BlauProtocol library identical** between BlauLink and BlauTrigger. If you change it in one, note that the other must be updated too.
+- **Keep the shared BlauProtocol library identical** between BlauLink and BlauLux. If you change it in one, note that the other must be updated too.
 - **Do not change hardware pin assignments** unless explicitly asked. These are validated against physical PCB layouts.
 
 ### Protocol Rules (Non-Negotiable)
@@ -268,7 +268,7 @@ if (pkt.version != BLAU_PROTO_VERSION) return false;
 - **Comments in Catalan.** Do not write English comments unless explicitly asked.
 - **No dynamic allocation** (`new`, `malloc`, `std::vector`) in runtime paths.
 - **No `String` class** in protocol or callback code.
-- **No `delay()`** in `loop()` on BlauTrigger.
+- **No `delay()`** in `loop()` on BlauLux.
 - **All ISR-shared variables must be `volatile`.**
 
 ### When Uncertain
@@ -289,4 +289,4 @@ if (pkt.version != BLAU_PROTO_VERSION) return false;
 - [ ] No dynamic allocation
 - [ ] No magic numbers — named constants used
 - [ ] Comments in Catalan
-- [ ] Both BlauLink and BlauTrigger affected if BlauProtocol was changed
+- [ ] Both BlauLink and BlauLux affected if BlauProtocol was changed

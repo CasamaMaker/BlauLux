@@ -1,4 +1,4 @@
-// BlauTrigger — firmware per controlar càrregues AC (bombeta, tira PWM, CW/WW, RGB, relé, triac)
+// BlauLux — firmware per controlar càrregues AC (bombeta, tira PWM, CW/WW, RGB, relé, triac)
 // Plataformes suportades: ESP32-C3 / ESP32-S3
 
 #include "globals.h"
@@ -160,11 +160,8 @@ void loop() {
     static bool lastWifiConnected = false;
     bool wifiNow = WiFi.isConnected();
     if (wifiNow && !lastWifiConnected) {
-      int staCh = WiFi.channel();
-      LOG_I("[WIFI] STA connected, IP: %s, canal STA: %d", WiFi.localIP().toString().c_str(), staCh);
-      esp_err_t chErr = esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
-      LOG_I("[WIFI] esp_wifi_set_channel(%d) -> %s (canal actual: %d)",
-        ESPNOW_CHANNEL, chErr == ESP_OK ? "OK" : "FAIL (radio bloquejada al canal STA)", staCh);
+      LOG_I("[WIFI] STA connectat, IP: %s, canal: %d (ESP-NOW segueix aquest canal)",
+        WiFi.localIP().toString().c_str(), WiFi.channel());
       if (mqtt_host.length() > 0 && !mqttClient.connected()) connectMqtt();
     }
     if (!wifiNow && lastWifiConnected) {

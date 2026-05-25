@@ -1,8 +1,8 @@
-# Projecte:
-Blautrigger
+﻿# Projecte:
+BlauLux
 
 # Descripció:
-Blautrigger forma part del sistema Blau, el qual es compón de dos dispositius, BlauLink i BlauTrigger. BlauLink és un interruptor que va amb bateria i la seva funció és disparàr l'acció, que es transmet per ESPNOW amb el protocol BlauProtocol al receptor BlauTrigger. I BlauTrigger és el que executa l'acció d'encendre o aparar la llum/s configurada/es.
+BlauLux forma part del sistema Blau, el qual es compón de dos dispositius, BlauLink i BlauLux. BlauLink és un interruptor que va amb bateria i la seva funció és disparàr l'acció, que es transmet per ESPNOW amb el protocol BlauProtocol al receptor BlauLux. I BlauLux és el que executa l'acció d'encendre o aparar la llum/s configurada/es.
 
 # Objectiu principal:
 Controlar la/es llum/s via espnow/blauprotocol
@@ -165,8 +165,8 @@ triac_fase(gpio, state){
 exemple:
 ```
 [D] [WIFI] MAC AP: 6055F969B3DD
-[I] [WIFI] AP ok: BlauTrigger_B3DD
-[D] [WIFI] AP ok: BlauTrigger_B3DD, ch=1, MAC=60:55:F9:69:B3:DD, 192.168.4.1
+[I] [WIFI] AP ok: BlauLux_B3DD
+[D] [WIFI] AP ok: BlauLux_B3DD, ch=1, MAC=60:55:F9:69:B3:DD, 192.168.4.1
 
 [I] [WIFI] STA connected to: CanGoita
 [D] [WIFI] STA connected to: CanGoita, IP: 192.168.1.138, canal STA: 11
@@ -233,7 +233,7 @@ parametre3[gpio] = xp3x
 ### 9. Comportament del sistema
 - Seqüència d'arrencada (boot → loadConfig → initGPIOs → ESPNOW → WiFi → MQTT → loop)
 - Mode AP: s'activa si no hi ha botó configurat (o premunt 3s)
-  - SSID: `BlauTrigger_{últims4MAC}`
+  - SSID: `BlauLux_{últims4MAC}`
   - IP: 192.168.4.1
   - Timeout: 120 s → reinici automàtic
 - Mode STA: opcional, connexió a xarxa domèstica

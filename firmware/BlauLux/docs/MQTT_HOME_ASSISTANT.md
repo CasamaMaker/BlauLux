@@ -1,4 +1,4 @@
-# MQTT i Home Assistant — Pla d'implementació
+﻿# MQTT i Home Assistant — Pla d'implementació
 
 ## Estat actual del firmware
 
@@ -11,7 +11,7 @@
 | Protocol | Mode | Ús |
 |----------|------|----|
 | ESP-NOW | AP canal 1 | Rep comandes del BlauLink (botó sense fils) |
-| WiFi AP | `BlauTrigger_XXXX` | Portal de configuració web (192.168.4.1) |
+| WiFi AP | `BlauLux_XXXX` | Portal de configuració web (192.168.4.1) |
 | HTTP | AsyncWebServer | Configuració de pins, mode, colors, brillantor |
 
 **No hi ha WiFi STA ni client MQTT.**
@@ -27,14 +27,14 @@
 
 ### Fitxers clau
 ```
-firmware/BlauTrigger/
+firmware/BlauLux/
 ├── src/
 │   ├── main.cpp              # Lògica principal (~785 línies)
 │   └── config.h              # Definicions hardware compile-time
 ├── lib/BlauProtocol/
 │   ├── blauprotocol.h        # Estructura de paquet 10 bytes + CRC-8
 │   ├── blauprotocol.cpp      # CRC-8, inicialització de paquets
-│   ├── blauprotocol_trg.h    # Helpers del receptor (BlauTrigger)
+│   ├── blauprotocol_trg.h    # Helpers del receptor (BlauLux)
 │   └── blauprotocol_link.h   # Helpers del emissor (BlauLink)
 ├── data/
 │   ├── wifimanager_CAT.html  # Portal web en català
@@ -55,7 +55,7 @@ L'ESP-NOW opera al canal 1 perquè el dispositiu és AP pur. En mode **AP+STA si
 
 ## Fase 1 — WiFi STA + credencials
 
-**Objectiu:** Connectar el BlauTrigger a la xarxa domèstica sense trencar el portal web ni l'ESP-NOW.
+**Objectiu:** Connectar el BlauLux a la xarxa domèstica sense trencar el portal web ni l'ESP-NOW.
 
 ### Canvis a `platformio.ini`
 Sense canvis de dependències en aquesta fase.
@@ -127,23 +127,23 @@ lib_deps =
 #define NVS_MQTT_PORT   "mqtt_port"    // default 1883
 #define NVS_MQTT_USER   "mqtt_user"
 #define NVS_MQTT_PASS   "mqtt_pass"
-#define NVS_MQTT_ID     "mqtt_id"      // default BlauTrigger_{mac}
+#define NVS_MQTT_ID     "mqtt_id"      // default BlauLux_{mac}
 ```
 
 ### Topics MQTT
 
-**Identificador base:** `blautrigger/{id}` on `{id}` = últims 4 caràcters de la MAC.
+**Identificador base:** `BlauLux/{id}` on `{id}` = últims 4 caràcters de la MAC.
 
 | Topic | Direcció | Valor | Quan |
 |-------|----------|-------|------|
-| `blautrigger/{id}/state` | Publish | `ON` / `OFF` | En cada canvi d'estat |
-| `blautrigger/{id}/brightness` | Publish | `0`-`100` | En canvi de brillantor |
-| `blautrigger/{id}/rgb` | Publish | `R,G,B` | En canvi de color RGB |
-| `blautrigger/{id}/cct` | Publish | `warm,cold` | En canvi CCT |
-| `blautrigger/{id}/set` | Subscribe | `ON` / `OFF` | Comanda on/off |
-| `blautrigger/{id}/brightness/set` | Subscribe | `0`-`100` | Comanda brillantor |
-| `blautrigger/{id}/rgb/set` | Subscribe | `R,G,B` | Comanda color |
-| `blautrigger/{id}/available` | Publish LWT | `online` / `offline` | Connexió/desconnexió |
+| `BlauLux/{id}/state` | Publish | `ON` / `OFF` | En cada canvi d'estat |
+| `BlauLux/{id}/brightness` | Publish | `0`-`100` | En canvi de brillantor |
+| `BlauLux/{id}/rgb` | Publish | `R,G,B` | En canvi de color RGB |
+| `BlauLux/{id}/cct` | Publish | `warm,cold` | En canvi CCT |
+| `BlauLux/{id}/set` | Subscribe | `ON` / `OFF` | Comanda on/off |
+| `BlauLux/{id}/brightness/set` | Subscribe | `0`-`100` | Comanda brillantor |
+| `BlauLux/{id}/rgb/set` | Subscribe | `R,G,B` | Comanda color |
+| `BlauLux/{id}/available` | Publish LWT | `online` / `offline` | Connexió/desconnexió |
 
 ### Estructura del codi (`main.cpp`)
 
@@ -152,10 +152,10 @@ lib_deps =
 AsyncMqttClient mqttClient;
 
 void onMqttConnect(bool sessionPresent) {
-    mqttClient.subscribe("blautrigger/{id}/set", 1);
-    mqttClient.subscribe("blautrigger/{id}/brightness/set", 1);
-    mqttClient.subscribe("blautrigger/{id}/rgb/set", 1);
-    mqttClient.publish("blautrigger/{id}/available", 1, true, "online");
+    mqttClient.subscribe("BlauLux/{id}/set", 1);
+    mqttClient.subscribe("BlauLux/{id}/brightness/set", 1);
+    mqttClient.subscribe("BlauLux/{id}/rgb/set", 1);
+    mqttClient.publish("BlauLux/{id}/available", 1, true, "online");
     publishState();  // Publicar estat actual en connectar
 }
 
@@ -165,7 +165,7 @@ void onMqttMessage(char* topic, char* payload, ...) {
 }
 
 void publishState() {
-    mqttClient.publish("blautrigger/{id}/state", 1, true, state ? "ON" : "OFF");
+    mqttClient.publish("BlauLux/{id}/state", 1, true, state ? "ON" : "OFF");
     // + brillantor, RGB, etc. segons el mode actiu
 }
 ```
@@ -190,22 +190,22 @@ Els payloads es publiquen amb `retain: true`.
 
 ```json
 {
-  "name": "BlauTrigger Sala",
-  "unique_id": "blautrigger_XXXX",
-  "state_topic": "blautrigger/XXXX/state",
-  "command_topic": "blautrigger/XXXX/set",
-  "brightness_state_topic": "blautrigger/XXXX/brightness",
-  "brightness_command_topic": "blautrigger/XXXX/brightness/set",
+  "name": "BlauLux Sala",
+  "unique_id": "BlauLux_XXXX",
+  "state_topic": "BlauLux/XXXX/state",
+  "command_topic": "BlauLux/XXXX/set",
+  "brightness_state_topic": "BlauLux/XXXX/brightness",
+  "brightness_command_topic": "BlauLux/XXXX/brightness/set",
   "brightness_scale": 100,
-  "rgb_state_topic": "blautrigger/XXXX/rgb",
-  "rgb_command_topic": "blautrigger/XXXX/rgb/set",
-  "availability_topic": "blautrigger/XXXX/available",
+  "rgb_state_topic": "BlauLux/XXXX/rgb",
+  "rgb_command_topic": "BlauLux/XXXX/rgb/set",
+  "availability_topic": "BlauLux/XXXX/available",
   "payload_available": "online",
   "payload_not_available": "offline",
   "device": {
-    "identifiers": ["blautrigger_XXXX"],
-    "name": "BlauTrigger",
-    "model": "BlauTrigger v1",
+    "identifiers": ["BlauLux_XXXX"],
+    "name": "BlauLux",
+    "model": "BlauLux v1",
     "manufacturer": "Blau",
     "sw_version": "1.0.0"
   }
@@ -216,13 +216,13 @@ Els payloads es publiquen amb `retain: true`.
 
 ```json
 {
-  "name": "BlauTrigger Relay",
-  "unique_id": "blautrigger_XXXX",
-  "state_topic": "blautrigger/XXXX/state",
-  "command_topic": "blautrigger/XXXX/set",
+  "name": "BlauLux Relay",
+  "unique_id": "BlauLux_XXXX",
+  "state_topic": "BlauLux/XXXX/state",
+  "command_topic": "BlauLux/XXXX/set",
   "payload_on": "ON",
   "payload_off": "OFF",
-  "availability_topic": "blautrigger/XXXX/available",
+  "availability_topic": "BlauLux/XXXX/available",
   "device": { ... }
 }
 ```
@@ -236,10 +236,10 @@ void publishHADiscovery() {
     String payload;
 
     if (control_type == 0) {
-        topic = "homeassistant/switch/blautrigger_" + id + "/config";
+        topic = "homeassistant/switch/BlauLux_" + id + "/config";
         // construir payload switch...
     } else {
-        topic = "homeassistant/light/blautrigger_" + id + "/config";
+        topic = "homeassistant/light/BlauLux_" + id + "/config";
         // construir payload light (incloure brightness, rgb segons mode)
     }
     mqttClient.publish(topic.c_str(), 1, true, payload.c_str());
@@ -265,7 +265,7 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 ### LWT (Last Will Testament)
 Configurar en la connexió inicial perquè el broker publiqui `offline` automàticament si el dispositiu perd connexió:
 ```cpp
-mqttClient.setWill("blautrigger/{id}/available", 1, true, "offline");
+mqttClient.setWill("BlauLux/{id}/available", 1, true, "offline");
 ```
 
 ### OTA (opcional)

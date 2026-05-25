@@ -57,15 +57,15 @@ static const GpioCaps ESP32C3_GPIO_CAPS[22] = {
   {  true,  true, false,  false },  //  8
   {  true,  true, false,  false },  //  9
   {  true,  true, false,  false },  // 10
-  { false,  true, false,  false },  // 11 (flash CS, amb precaucio)
-  { false,  true, false,  false },  // 12 (flash CLK, amb precaucio)
-  { false,  true, false,  false },  // 13 (flash DIO, amb precaucio)
-  { false,  true, false,  false },  // 14 (flash DIO, amb precaucio)
-  { false,  true, false,  false },  // 15 (flash DIO, amb precaucio)
-  { false,  true, false,  false },  // 16 (flash DIO, amb precaucio)
-  { false,  true, false,  false },  // 17 (flash DIO, amb precaucio)
-  { false, false, false,  false },  // 18 (USB D-)
-  { false, false, false,  false },  // 19 (USB D+)
+  {  true,  true, false,  false },  // 11 (flash CS, amb precaucio)
+  {  true,  true, false,  false },  // 12 (flash CLK, amb precaucio)
+  {  true,  true, false,  false },  // 13 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 14 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 15 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 16 (flash DIO, amb precaucio)
+  {  true,  true, false,  false },  // 17 (flash DIO, amb precaucio)
+  {  true, false, false,  false },  // 18 (USB D-)
+  {  true, false, false,  false },  // 19 (USB D+)
   {  true,  true, false,  false },  // 20
   {  true,  true, false,  false },  // 21
 };
@@ -144,7 +144,7 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 // ════════════════════════════════════════════════════════════════
 //  WIFI  (Access Point del portal de configuració)
 // ════════════════════════════════════════════════════════════════
-#define WIFI_SSID      "BlauTrigger"
+#define WIFI_SSID      "BlauLux"
 #define WIFI_PASSWORD  ""
 
 
@@ -161,9 +161,9 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 //  MQTT  (valors per defecte — configurables via web i guardats a NVS)
 //  Wildcards: %id% → últims 4 caràcters de la MAC  |  %topic% → valor resolt de HC_MQTT_TOPIC
 // ════════════════════════════════════════════════════════════════
-#define HC_MQTT_CLIENT    "BlauTrigger_%id%"     // client ID  (ex: BlauTrigger_A1B2)
-#define HC_MQTT_TOPIC     "%id%"                 // topic curt del dispositiu  (ex: A1B2)
-#define HC_MQTT_FULLTOPIC "blautrigger/%topic%"  // prefix complet dels topics (ex: blautrigger/A1B2)
+#define HC_MQTT_CLIENT    "BlauLux_%id%"     // client ID  (ex: BlauLux_A1B2)
+#define HC_MQTT_TOPIC     "%id%"             // topic curt del dispositiu  (ex: A1B2)
+#define HC_MQTT_FULLTOPIC "blaulux/%topic%"  // prefix complet dels topics (ex: blaulux/A1B2)
 #define HC_MQTT_PORT      1883
 
 

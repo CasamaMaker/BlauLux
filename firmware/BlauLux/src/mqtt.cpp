@@ -49,13 +49,13 @@ void publishState() {
 
 // ── Discovery Home Assistant ──────────────────────────────────────
 
-// Bloc de dispositiu compartit per totes les entitats del mateix BlauTrigger.
+// Bloc de dispositiu compartit per totes les entitats del mateix BlauLux.
 static String _deviceBlock(const String& id) {
-  String uid  = "blautrigger_" + id;
-  String name = "BlauTrigger " + id;
+  String uid  = "blaulux_" + id;
+  String name = "BlauLux " + id;
   return "\"device\":{\"identifiers\":[\"" + uid + "\"],"
          "\"name\":\"" + name + "\","
-         "\"model\":\"BlauTrigger v1\","
+         "\"model\":\"BlauLux v1\","
          "\"manufacturer\":\"Blau\"}";
 }
 
@@ -63,8 +63,8 @@ void publishHADiscovery() {
   if (!mqttClient.connected()) return;
   String id   = macAPSuffix;
   String base = mqttBaseTopic();
-  String uid  = "blautrigger_" + id;
-  String name = "BlauTrigger " + id;
+  String uid  = "blaulux_" + id;
+  String name = "BlauLux " + id;
   String dev  = _deviceBlock(id);
 
   String topic, payload;

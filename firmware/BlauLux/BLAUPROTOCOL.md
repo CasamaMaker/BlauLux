@@ -1,11 +1,11 @@
-# BlauProtocol v1
-**Protocol de comunicació ESP-NOW per al sistema BlauLink ↔ BlauTrigger**
+﻿# BlauProtocol v1
+**Protocol de comunicació ESP-NOW per al sistema BlauLink ↔ BlauLux**
 
 ---
 
 ## 1. Resum executiu
 
-BlauProtocol és un protocol binari lleuger dissenyat per a la comunicació directa entre dispositius **BlauLink** (polsador alimentat per bateria) i **BlauTrigger** (controlador de càrrega) via **ESP-NOW**.
+BlauProtocol és un protocol binari lleuger dissenyat per a la comunicació directa entre dispositius **BlauLink** (polsador alimentat per bateria) i **BlauLux** (controlador de càrrega) via **ESP-NOW**.
 
 L'objectiu principal és maximitzar la fiabilitat i minimitzar el temps de ràdio activa, ja que cada mil·lisegon addicional impacta directament en l'autonomia de la bateria del BlauLink.
 
@@ -36,9 +36,9 @@ ESP-NOW ja usa la MAC com a adreça de lliurament, però incloure els últims 2 
 - Logs humans llegibles de forma compacta.
 
 ### 2.3 ACK d'aplicació vs ACK de capa MAC
-ESP-NOW ofereix `OnDataSent` callback amb `ESP_NOW_SEND_SUCCESS/FAIL`, que confirma lliurament a capa MAC (capa 2). Això **no garanteix** que el BlauTrigger hagi processat l'ordre (pot estar ocupat, reiniciant, etc.).
+ESP-NOW ofereix `OnDataSent` callback amb `ESP_NOW_SEND_SUCCESS/FAIL`, que confirma lliurament a capa MAC (capa 2). Això **no garanteix** que el BlauLux hagi processat l'ordre (pot estar ocupat, reiniciant, etc.).
 
-BlauProtocol afegeix un **ACK d'aplicació** opcional: el BlauTrigger respon amb un paquet `TYPE_ACK` que confirma execució. BlauLink espera aquest ACK abans de dormir; si no arriba, reintenta.
+BlauProtocol afegeix un **ACK d'aplicació** opcional: el BlauLux respon amb un paquet `TYPE_ACK` que confirma execució. BlauLink espera aquest ACK abans de dormir; si no arriba, reintenta.
 
 ---
 
@@ -87,17 +87,17 @@ Un receptor que rebi un `version` desconegut **ha de descartar** el paquet silen
 |---|---|---|---|
 | `TYPE_EVENT` | `0x01` | Event de polsador (clic, longpress…) | BlauLink |
 | `TYPE_CMD` | `0x02` | Comanda directa (control de llum) | BlauLink o futur hub |
-| `TYPE_ACK` | `0x03` | Confirmació d'execució | BlauTrigger |
+| `TYPE_ACK` | `0x03` | Confirmació d'execució | BlauLux |
 | `TYPE_PING` | `0x04` | Comprovació de presència | Qualsevol |
 | `TYPE_PONG` | `0x05` | Resposta al ping | Qualsevol |
-| `TYPE_STATUS_REQ` | `0x06` | Sol·licitud d'estat del BlauTrigger | Qualsevol |
-| `TYPE_STATUS_RSP` | `0x07` | Resposta amb estat actual | BlauTrigger |
+| `TYPE_STATUS_REQ` | `0x06` | Sol·licitud d'estat del BlauLux | Qualsevol |
+| `TYPE_STATUS_RSP` | `0x07` | Resposta amb estat actual | BlauLux |
 
 ### 4.3 `seq` (byte 2) — Número de seqüència
 
 Comptador incremental de 0 a 255 (circular). El BlauLink l'incrementa en cada nou event; els reintents del **mateix** event reutilitzen el mateix `seq`.
 
-El BlauTrigger guarda l'últim `seq` rebut per `src_id` i **descarta duplicats** (paquet amb el mateix `seq` i `src_id` rebut dins d'una finestra de 2 segons).
+El BlauLux guarda l'últim `seq` rebut per `src_id` i **descarta duplicats** (paquet amb el mateix `seq` i `src_id` rebut dins d'una finestra de 2 segons).
 
 ### 4.4 `src_id` (bytes 3–4) — Identificador del remitent
 
@@ -110,7 +110,7 @@ WiFi.macAddress(mac);
 uint16_t src_id = ((uint16_t)mac[4] << 8) | mac[5];
 ```
 
-Permet al BlauTrigger gestionar múltiples BlauLinks sense comparar MACs completes.
+Permet al BlauLux gestionar múltiples BlauLinks sense comparar MACs completes.
 
 ### 4.5 `cmd` (byte 5) — Comanda o codi d'event
 
@@ -126,7 +126,7 @@ El significat depèn del camp `type`:
 | `EVT_LONG_START` | `0x21` | Inici de pulsació llarga (>1s) |
 | `EVT_LONG_END` | `0x22` | Fi de pulsació llarga |
 
-El BlauTrigger **decideix localment** quina acció fer per a cada event (configurable per EEPROM). Aquesta separació manté el BlauLink simple i agnòstic del tipus de càrrega.
+El BlauLux **decideix localment** quina acció fer per a cada event (configurable per EEPROM). Aquesta separació manté el BlauLink simple i agnòstic del tipus de càrrega.
 
 **Quan `type == TYPE_CMD`** — Comanda directa de control:
 
@@ -193,7 +193,7 @@ bool valid = (crc8_calc((uint8_t*)&pkt, sizeof(pkt) - 1) == pkt.crc8);
 ### 5.1 Flux normal: 1 clic → toggle
 
 ```
-BlauLink                                    BlauTrigger
+BlauLink                                    BlauLux
     |                                            |
     |  [Desperta de deep sleep]                  |
     |  [Detecta 1 clic]                          |
@@ -207,14 +207,14 @@ BlauLink                                    BlauTrigger
 ```
 
 **Temporització:**
-- Tx BlauLink → Rx BlauTrigger: ~1–3 ms
-- Processament BlauTrigger + Tx ACK: ~5–10 ms
+- Tx BlauLink → Rx BlauLux: ~1–3 ms
+- Processament BlauLux + Tx ACK: ~5–10 ms
 - Temps total awake BlauLink (mínim): ~15–25 ms
 
 ### 5.2 Flux amb reintents (no ACK rebut)
 
 ```
-BlauLink                                    BlauTrigger
+BlauLink                                    BlauLux
     |                                            |
     |--- TYPE_EVENT, EVT_CLICK_1, seq=N -------> |  (perdut)
     |                                            |
@@ -227,12 +227,12 @@ BlauLink                                    BlauTrigger
     |                                            |
 ```
 
-El BlauTrigger detecta el duplicat (`seq=N` ja processat) però envia ACK igualment perquè el BlauLink no sap que el primer ha arribat.
+El BlauLux detecta el duplicat (`seq=N` ja processat) però envia ACK igualment perquè el BlauLink no sap que el primer ha arribat.
 
 ### 5.3 Flux amb parell de clics (doble clic)
 
 ```
-BlauLink                                    BlauTrigger
+BlauLink                                    BlauLux
     |                                            |
     |  [Detecta 2 clics dins 400ms]              |
     |--- TYPE_EVENT, EVT_CLICK_2, seq=N+1 -----> |
@@ -244,7 +244,7 @@ BlauLink                                    BlauTrigger
 ### 5.4 Flux de ping (comprovació de presència)
 
 ```
-BlauLink                                    BlauTrigger
+BlauLink                                    BlauLux
     |                                            |
     |--- TYPE_PING, cmd=0x00, seq=N -----------> |
     |<-- TYPE_PONG, cmd=0x00, seq=N ----------- |
@@ -274,7 +274,7 @@ bool sendWithAck(BlauPacket_t *pkt) {
 }
 ```
 
-### 6.2 Deduplicació al BlauTrigger
+### 6.2 Deduplicació al BlauLux
 
 ```c
 #define MAX_SOURCES 8
@@ -309,7 +309,7 @@ bool isDuplicate(uint16_t src_id, uint8_t seq) {
 
 ### 6.3 Validació de CRC al receptor
 
-El receptor (BlauTrigger i BlauLink) **sempre** verifica el CRC8 com a primer pas. Si el CRC no coincideix, el paquet es descarta silenciosament (sense enviar ACK ni log d'error actiu).
+El receptor (BlauLux i BlauLink) **sempre** verifica el CRC8 com a primer pas. Si el CRC no coincideix, el paquet es descarta silenciosament (sense enviar ACK ni log d'error actiu).
 
 ### 6.4 Filtre de versió
 
@@ -339,34 +339,34 @@ Boot
 
 | Paràmetre | Valor | Justificació |
 |---|---|---|
-| `ACK_TIMEOUT_MS` | 50 ms | Suficient per a temps de processament del BlauTrigger |
+| `ACK_TIMEOUT_MS` | 50 ms | Suficient per a temps de processament del BlauLux |
 | `MAX_RETRIES` | 3 | Equilibri entre fiabilitat i consum |
 | `CLICK_WINDOW_MS` | 400 ms | Finestra de detecció de multi-clic |
 | `LONG_PRESS_MS` | 800 ms | Umbral de pulsació llarga |
 
 ### Canal WiFi fix
 
-El Blautrigger hauria d'operar sempre al **mateix canal WiFi** (p.ex. canal 1). Això evita que el BlauLink hagi d'escanejar canals per trobar el receptor, reduint significativament el temps d'inicialització.
+El BlauLux hauria d'operar sempre al **mateix canal WiFi** (p.ex. canal 1). Això evita que el BlauLink hagi d'escanejar canals per trobar el receptor, reduint significativament el temps d'inicialització.
 
 ```c
-// BlauTrigger: forçar canal 1
+// BlauLux: forçar canal 1
 WiFi.softAP(ssid, "", 1);  // tercer paràmetre = canal
 
 // BlauLink: configurar ESP-NOW al canal del peer
 esp_now_peer_info_t peer;
-peer.channel = 1;  // Ha de coincidir amb el BlauTrigger
+peer.channel = 1;  // Ha de coincidir amb el BlauLux
 ```
 
 ---
 
-## 8. Escalabilitat: múltiples BlauLinks → múltiples BlauTriggers
+## 8. Escalabilitat: múltiples BlauLinks → múltiples BlauLuxs
 
 ### 8.1 Vinculació N:1 (múltiples botons, un receptor)
 
-El BlauTrigger manté una taula de `src_id` autoritzats a la EEPROM. Qualsevol BlauLink de la taula pot controlar-lo.
+El BlauLux manté una taula de `src_id` autoritzats a la EEPROM. Qualsevol BlauLink de la taula pot controlar-lo.
 
 ```c
-// EEPROM BlauTrigger: llista de src_ids autoritzats
+// EEPROM BlauLux: llista de src_ids autoritzats
 uint16_t authorizedSources[8];
 ```
 
@@ -381,7 +381,7 @@ uint8_t receiverMacs[4][6];  // Fins a 4 receptors
 
 ### 8.3 Topologia multicast
 
-ESP-NOW suporta enviar a la **MAC de broadcast** (`FF:FF:FF:FF:FF:FF`). Útil per a escenaris on un botó ha de notificar tots els BlauTriggers de la xarxa simultàniament. En broadcast no hi ha ACK de capa MAC, per la qual cosa s'han de fer més reintents o acceptar-ne la pèrdua.
+ESP-NOW suporta enviar a la **MAC de broadcast** (`FF:FF:FF:FF:FF:FF`). Útil per a escenaris on un botó ha de notificar tots els BlauLuxs de la xarxa simultàniament. En broadcast no hi ha ACK de capa MAC, per la qual cosa s'han de fer més reintents o acceptar-ne la pèrdua.
 
 ```c
 // dst_id = 0xFFFF al payload indica que és un broadcast
@@ -414,7 +414,7 @@ Per migrar des de l'estructura `struct_message` actual:
 | **Seguretat / xifratge** | Afegir camp `nonce` de 4 bytes i xifrar `cmd+p1+p2+p3` amb AES-128-CCM |
 | **OTA trigger** | Nou `TYPE_OTA_NOTIFY` per notificar disponibilitat de firmware |
 | **Telemetria de bateria** | Camp `p3` del paquet `TYPE_EVENT` = nivell de bateria `0–100` |
-| **Feedback hàptic/visual** | `TYPE_CMD` + `CMD_ACK_BLINK` des del BlauTrigger cap al BlauLink |
+| **Feedback hàptic/visual** | `TYPE_CMD` + `CMD_ACK_BLINK` des del BlauLux cap al BlauLink |
 | **Hub MQTT** | Passarel·la que escolta ESP-NOW i re-publica via MQTT; el protocol no canvia |
 
 ---
@@ -488,4 +488,4 @@ typedef struct __attribute__((packed)) {
 
 ---
 
-*BlauProtocol v1 — Documentació generada per al projecte BlauLink/BlauTrigger*
+*BlauProtocol v1 — Documentació generada per al projecte BlauLink/BlauLux*

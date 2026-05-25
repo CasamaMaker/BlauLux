@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" type="text/css" href="style.css" />
-  <title>Configurador BlauTrigger</title>
+  <title>Configurador BlauLux</title>
   <script src="/js/i18n.js"></script>
   <script src="/js/debug.js"></script>
   <script src="/js/api.js"></script>
@@ -15,7 +15,7 @@
   <div class="container">
     <header>
       <div class="header-title">
-        <h1 data-i18n="h1">Configurador BlauTrigger</h1>
+        <h1 data-i18n="h1">Configurador BlauLux</h1>
         <p id="deviceNameSubtitle" style="margin: 4px 0 0; font-size: 1.05em; color: #aaa; font-weight: 400;"></p>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
@@ -26,7 +26,7 @@
           <option value="en">EN</option>
           <option value="es">ES</option>
         </select>
-        <a href="https://github.com/CasamaMaker/BlauTrigger" class="github-link" target="_blank">
+        <a href="https://github.com/CasamaMaker/BlauLux" class="github-link" target="_blank">
           <svg class="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
           </svg>
@@ -185,7 +185,7 @@
           </div>
           <div>
             <label for="mqttClientInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttClient">Client ID</label>
-            <input type="text" id="mqttClientInput" placeholder="BlauTrigger_%id%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+            <input type="text" id="mqttClientInput" placeholder="BlauLux_%id%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
           </div>
           <div>
             <label for="mqttTopicInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttTopicField">Topic del dispositiu</label>
@@ -193,7 +193,7 @@
           </div>
           <div>
             <label for="mqttFulltopicInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="mqttFulltopic">Full topic</label>
-            <input type="text" id="mqttFulltopicInput" placeholder="blautrigger/%topic%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
+            <input type="text" id="mqttFulltopicInput" placeholder="blaulux/%topic%" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom: 0;">
             <span style="font-size: 0.78em; color: #888; margin-top: 3px; display: block;" data-i18n="mqttPlaceholderHint">%id% = últims 4 caràcters de la MAC  ·  %topic% = topic resolt</span>
           </div>
           <div>
@@ -302,7 +302,7 @@
         <div style="display: flex; flex-direction: column; gap: 10px;">
           <div>
             <label for="deviceNameInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="altresName">Nom</label>
-            <input type="text" id="deviceNameInput" placeholder="BlauTrigger" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="32" style="margin-bottom: 0;">
+            <input type="text" id="deviceNameInput" placeholder="BlauLux" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="32" style="margin-bottom: 0;">
             <span style="font-size: 0.78em; color: #888; margin-top: 3px; display: block;" data-i18n="altresHint">Nom usat com a base del SSID de l'AP (ex: Nom_XXXX)</span>
           </div>
           <button type="button" onclick="saveDeviceName()" data-i18n="altresSaveBtn">Guardar</button>
@@ -318,12 +318,12 @@
   </div><!-- /container -->
 
   <footer>
-    <p data-i18n="footer">BlauTrigger | Martí Casamayor</p>
+    <p data-i18n="footer">BlauLux | Martí Casamayor</p>
     <p style="display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 5px;">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
       </svg>
-      CasamaMaker/BlauTrigger
+      CasamaMaker/BlauLux
     </p>
   </footer>
   <div id="toast"></div>

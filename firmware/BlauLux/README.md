@@ -1,13 +1,13 @@
-<div align="center">
+﻿<div align="center">
 
-# BlauTrigger
+# BlauLux
 
 **Controlador intel·ligent de càrregues AC basat en ESP32**
 
-[![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauTrigger.svg)](https://github.com/CasamaMaker/BlauTrigger/releases)
+[![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauLux.svg)](https://github.com/CasamaMaker/BlauLux/releases)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![Framework](https://img.shields.io/badge/Framework-Arduino-00979D?logo=arduino)](https://www.arduino.cc/)
-[![License](https://img.shields.io/github/license/CasamaMaker/BlauTrigger)](LICENSE)
+[![License](https://img.shields.io/github/license/CasamaMaker/BlauLux)](LICENSE)
 [![ESP32-C3](https://img.shields.io/badge/ESP32--C3-RISC--V-blue)](https://www.espressif.com/en/products/socs/esp32-c3)
 [![Protocol](https://img.shields.io/badge/Protocol-ESP--NOW-informational)](https://www.espressif.com/en/solutions/low-power-solutions/esp-now)
 [![MQTT](https://img.shields.io/badge/MQTT-Home%20Assistant-41BDF5?logo=homeassistant)](https://www.home-assistant.io/)
@@ -16,13 +16,13 @@
 
 <!--
   📸 FOTO 1 — IMATGE PRINCIPAL DEL PROJECTE
-  Descripció: Fotografia del dispositiu BlauTrigger muntat i en funcionament.
+  Descripció: Fotografia del dispositiu BlauLux muntat i en funcionament.
   Idealment: Placa ESP32-C3 amb el LED WS2812 encès (color verd o blanc),
   connectada a una llum o tira LED. Format horitzontal, fons neutre o fosc.
   Resolució recomanada: 1200×600 px o superior.
   Col·loca la imatge a: docs/img/hero.jpg
 -->
-<!-- ![BlauTrigger](docs/img/hero.jpg) -->
+<!-- ![BlauLux](docs/img/hero.jpg) -->
 
 *Part receptora de l'ecosistema **BlauLink** — rep ordres sense fils d'un botó ESP-NOW i controla la càrrega connectada.*
 
@@ -59,11 +59,11 @@
 
 ## Ecosistema BlauLink
 
-BlauTrigger és el **receptor** d'un sistema wireless complet per controlar llums i càrregues AC sense necessitat de router ni hub:
+BlauLux és el **receptor** d'un sistema wireless complet per controlar llums i càrregues AC sense necessitat de router ni hub:
 
 ```
 ┌─────────────────┐    ESP-NOW (IEEE 802.11)   ┌──────────────────┐
-│   BlauLink      │ ─────────────────────────► │   BlauTrigger    │
+│   BlauLink      │ ─────────────────────────► │   BlauLux    │
 │  (botó sender)  │ ◄───────────── ACK ──────  │  (load receiver) │
 │  Bateria · BLE  │                            │  ESP32  ·   WiFi │
 └─────────────────┘                            └────────┬─────────┘
@@ -74,16 +74,16 @@ BlauTrigger és el **receptor** d'un sistema wireless complet per controlar llum
                                      (On/Off)      (NeoPixel)    (AC dimmer)
 ```
 
-La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La latència és < 10 ms i el consum és mínim. Un sol BlauTrigger pot gestionar fins a **8 BlauLinks** simultàniament.
+La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La latència és < 10 ms i el consum és mínim. Un sol BlauLux pot gestionar fins a **8 BlauLinks** simultàniament.
 
 <!--
   📸 FOTO 2 — DIAGRAMA FÍSIC O MUNTATGE COMPLET
-  Descripció: Fotografia dels dos dispositius junts (BlauLink + BlauTrigger),
+  Descripció: Fotografia dels dos dispositius junts (BlauLink + BlauLux),
   o bé un diagrama de blocs imprès / dibuixat a mà mostrant la connexió.
   Format horitzontal. Fons blanc o clar per contrast.
   Col·loca la imatge a: docs/img/ecosystem.jpg
 -->
-<!-- ![Ecosistema BlauLink + BlauTrigger](docs/img/ecosystem.jpg) -->
+<!-- ![Ecosistema BlauLink + BlauLux](docs/img/ecosystem.jpg) -->
 
 ---
 
@@ -98,7 +98,7 @@ La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La 
 | **Persistència** | Configuració guardada a NVS (sobreviu talls de corrent) |
 | **Domòtica** | WiFi STA + MQTT + autodescoberta Home Assistant |
 | **Botó físic** | Toggle ràpid i entrada a mode config per pulsació llarga |
-| **Multi-font** | Fins a 8 BlauLinks per un únic BlauTrigger |
+| **Multi-font** | Fins a 8 BlauLinks per un únic BlauLux |
 | **Plataformes** | ESP32-C3 · ESP32 · ESP32-S3 · ESP32-S2 · ESP32-C6 |
 | **Firmware** | v1.0 — PlatformIO + Arduino framework |
 
@@ -106,7 +106,7 @@ La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La 
 
 ## Modes de control
 
-BlauTrigger suporta **4 tipus de control** seleccionables via la interfície web:
+BlauLux suporta **4 tipus de control** seleccionables via la interfície web:
 
 | Mode  | Descripció | Hardware típic |
 |------|------------|----------------|
@@ -184,8 +184,8 @@ GPIO 1  →  Botó de configuració
 
 1. Clona el repositori:
    ```bash
-   git clone https://github.com/CasamaMaker/BlauTrigger.git
-   cd BlauTrigger/firmware/BlauTrigger
+   git clone https://github.com/CasamaMaker/BlauLux.git
+   cd BlauLux/firmware/BlauLux
    ```
 
 2. (Opcional) Edita [`src/config.h`](src/config.h) per seleccionar el target o ajustar paràmetres.
@@ -211,8 +211,8 @@ GPIO 1  →  Botó de configuració
 
 Al primer arrencament (o després d'esborrar la config), el dispositiu detecta que no té cap GPIO de botó ni wifi configurats i entra automàticament en mode AP:
 
-1. Encén el BlauTrigger.
-2. Des del mòbil o l'ordinador, connecta't a la xarxa **`BlauTrigger_XXXX`** (els 4 darrers caràcters de la MAC).
+1. Encén el BlauLux.
+2. Des del mòbil o l'ordinador, connecta't a la xarxa **`BlauLux_XXXX`** (els 4 darrers caràcters de la MAC).
 3. S'obre el portal captiu automàticament — o navega a `http://192.168.4.1`.
 4. Selecciona el tipus de control, assigna les funcions als GPIOs i els paràmetres extra.
 5. Prem **Desa**. El dispositiu reinicia i entra en operació normal.
@@ -237,7 +237,7 @@ Al primer arrencament (o després d'esborrar la config), el dispositiu detecta q
 | Macro | Valor per defecte | Descripció |
 |-------|-------------------|------------|
 | `CLEAR_CONFIG` | *(comentat)* | Si es defineix, esborra tota la NVS a l'arrencada. Torna a comentar i repuja després. |
-| `WIFI_SSID` | `"BlauTrigger"` | Prefix del nom de la xarxa AP (s'afegeix el sufix MAC automàticament) |
+| `WIFI_SSID` | `"BlauLux"` | Prefix del nom de la xarxa AP (s'afegeix el sufix MAC automàticament) |
 | `WIFI_PASSWORD` | `""` | Contrasenya de l'AP (buit = xarxa oberta) |
 | `BRIGHTNESS_DEF` | `15` | Brillantor per defecte (0–100 %) |
 | `PWM_FREQ` | `5000` | Freqüència LEDC en Hz |
@@ -278,9 +278,9 @@ El mode AP té un temps límit automàtic de 2 minuts (`WIFI_AP_TIMEOUT_MS`).
 
 ### Control remot via BlauLink
 
-BlauTrigger escolta paquets ESP-NOW dels dispositius BlauLink. No cal cap parellament ni router — la comunicació és peer-to-peer a la capa MAC WiFi.
+BlauLux escolta paquets ESP-NOW dels dispositius BlauLink. No cal cap parellament ni router — la comunicació és peer-to-peer a la capa MAC WiFi.
 
-En rebre un paquet BlauProtocol vàlid, BlauTrigger:
+En rebre un paquet BlauProtocol vàlid, BlauLux:
 
 1. Verifica el checksum CRC-8.
 2. Descarta duplicats (mateix `src_id` + `seq` dins de 2 segons).
@@ -314,22 +314,22 @@ L'API HTTP és accessible a `http://192.168.4.1` mentre el dispositiu és en mod
 
 ## MQTT i Home Assistant
 
-Quan es configura una xarxa WiFi STA, BlauTrigger es connecta a un broker MQTT i publica/subscriu als topics definits a `config.h`:
+Quan es configura una xarxa WiFi STA, BlauLux es connecta a un broker MQTT i publica/subscriu als topics definits a `config.h`:
 
 ```
-blautrigger/<topic>/state      ← estat actual (ON / OFF, brillantor, color)
-blautrigger/<topic>/cmnd/...   ← comandes entrants
-blautrigger/<topic>/tele/...   ← telemetria (LWT, IP, MAC, RSSI)
+BlauLux/<topic>/state      ← estat actual (ON / OFF, brillantor, color)
+BlauLux/<topic>/cmnd/...   ← comandes entrants
+BlauLux/<topic>/tele/...   ← telemetria (LWT, IP, MAC, RSSI)
 ```
 
 On `%id%` es resol automàticament com els **darrers 4 caràcters de la MAC** (ex: `A1B2`), fent que cada dispositiu tingui topics únics sense configuració addicional.
 
-> **Home Assistant:** BlauTrigger publica el payload d'autodescoberta MQTT estàndard perquè el dispositiu aparegui automàticament a HA sense cap configuració manual.
+> **Home Assistant:** BlauLux publica el payload d'autodescoberta MQTT estàndard perquè el dispositiu aparegui automàticament a HA sense cap configuració manual.
 
 <!--
   📸 FOTO 5 — HOME ASSISTANT
   Descripció: Captura de pantalla del panell de Home Assistant mostrant
-  el dispositiu BlauTrigger integrat: entitats (light, switch), historial,
+  el dispositiu BlauLux integrat: entitats (light, switch), historial,
   o el dashboard amb el control de llum.
   Col·loca la imatge a: docs/img/homeassistant.png
 -->
@@ -339,7 +339,7 @@ On `%id%` es resol automàticament com els **darrers 4 caràcters de la MAC** (e
 
 ## BlauProtocol
 
-BlauTrigger utilitza **BlauProtocol v1** — un protocol binari compacte de **10 bytes** dissenyat per a ESP-NOW:
+BlauLux utilitza **BlauProtocol v1** — un protocol binari compacte de **10 bytes** dissenyat per a ESP-NOW:
 
 ```
 Byte:  0      1      2      3-4        5      6    7    8    9
@@ -379,7 +379,7 @@ Especificació completa: [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/bl
 ## Estructura del projecte
 
 ```
-BlauTrigger/
+BlauLux/
 ├── src/
 │   ├── main.cpp          # Lògica principal, setup, loop
 │   ├── config.h          # Pinout, macros de compilació, constants

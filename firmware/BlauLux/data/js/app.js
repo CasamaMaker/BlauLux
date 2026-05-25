@@ -10,7 +10,7 @@ function fetchVersion() {
   apiGetVersion().then(v => {
       FW_VER = v.trim();
       Object.keys(i18n).forEach(lang => {
-        i18n[lang].footer = 'BlauTrigger ' + FW_VER + ' | Martí Casamayor';
+        i18n[lang].footer = 'BlauLux ' + FW_VER + ' | Martí Casamayor';
       });
       applyTranslations(currentLang);
     })
