@@ -103,7 +103,7 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
   { "SONOFF_BASIC_R4", {
     { 9, FUNC_BTN        },
     { 4, FUNC_ON_OFF     },
-    { 6, FUNC_DIGITAL_LED}
+    { 6, FUNC_ON_OFF     }
   }, 3 },
     { "PICO-CLICK", {
     { 5, FUNC_BTN_INV    },

@@ -1,6 +1,6 @@
-﻿<div align="center">
+<div align="center">
 
-# BlauLux
+# BlauLux ⚡
 
 **Controlador intel·ligent de càrregues AC basat en ESP32**
 
@@ -30,34 +30,11 @@
 
 ---
 
-## Taula de continguts
-
-- [Ecosistema BlauLink](#ecosistema-blaulink)
-- [Característiques](#característiques)
-- [Modes de control](#modes-de-control)
-- [Hardware](#hardware)
-  - [Plantilles de dispositiu](#plantilles-de-dispositiu)
-  - [Connexions](#connexions)
-- [Primers passos](#primers-passos)
-  - [Requisits](#requisits)
-  - [Compilar i pujar](#compilar-i-pujar)
-  - [Configuració inicial](#configuració-inicial)
-- [Configuració](#configuració)
-  - [Temps de compilació (config.h)](#temps-de-compilació-configh)
-  - [Temps d'execució (Web UI)](#temps-dexecució-web-ui)
-- [Ús](#ús)
-  - [Botó físic](#botó-físic)
-  - [Control remot via BlauLink](#control-remot-via-blaulink)
-  - [Interfície web](#interfície-web)
-- [MQTT i Home Assistant](#mqtt-i-home-assistant)
-- [BlauProtocol](#blauprotocol)
-- [Estructura del projecte](#estructura-del-projecte)
-- [Resolució de problemes](#resolució-de-problemes)
-- [Projectes relacionats](#projectes-relacionats)
+[🌐 Ecosistema](#ecosistema-blaulink) · [✨ Característiques](#característiques) · [🎛️ Modes](#modes-de-control) · [🔌 Hardware](#hardware) · [🚀 Primers passos](#primers-passos) · [⚙️ Configuració](#configuració) · [📖 Ús](#ús) · [🏠 MQTT & HA](#mqtt-i-home-assistant) · [📡 Protocol](#blauprotocol) · [📁 Estructura](#estructura-del-projecte) · [🔧 Resolució](#resolució-de-problemes) · [🔗 Relacionats](#projectes-relacionats)
 
 ---
 
-## Ecosistema BlauLink
+## 🌐 Ecosistema BlauLink
 
 BlauLux és el **receptor** d'un sistema wireless complet per controlar llums i càrregues AC sense necessitat de router ni hub:
 
@@ -87,24 +64,22 @@ La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La 
 
 ---
 
-## Característiques
+## ✨ Característiques
 
-| Categoria | Detall |
-|-----------|--------|
-| **Comunicació** | ESP-NOW (connectionless, no cal router) |
-| **Fiabilitat** | ACK per cada comanda + 3 reintents al sender |
-| **Deduplicació** | Descarta paquets duplicats dins una finestra de 2 s |
-| **Configuració** | Portal captiu web (CA / EN / ES) — sense app |
-| **Persistència** | Configuració guardada a NVS (sobreviu talls de corrent) |
-| **Domòtica** | WiFi STA + MQTT + autodescoberta Home Assistant |
-| **Botó físic** | Toggle ràpid i entrada a mode config per pulsació llarga |
-| **Multi-font** | Fins a 8 BlauLinks per un únic BlauLux |
-| **Plataformes** | ESP32-C3 · ESP32 · ESP32-S3 · ESP32-S2 · ESP32-C6 |
-| **Firmware** | v1.0 — PlatformIO + Arduino framework |
+- 📡 **Comunicació** ESP-NOW peer-to-peer sense router (latència < 10 ms)
+- ✅ **Fiabilitat** ACK per cada comanda + 3 reintents automàtics al sender
+- 🔁 **Deduplicació** descarta paquets duplicats dins una finestra de 2 s
+- 🌐 **Configuració** portal captiu web (CA / EN / ES) sense app
+- 💾 **Persistència** configuració guardada a NVS (sobreviu talls de corrent)
+- 🏠 **Domòtica** WiFi STA + MQTT + autodescoberta Home Assistant
+- 🔘 **Botó físic** toggle ràpid i entrada a mode config per pulsació llarga
+- 👥 **Multi-font** fins a 8 BlauLinks per un únic BlauLux
+- 🖥️ **Plataformes** ESP32-C3 · ESP32 · ESP32-S3 · ESP32-S2 · ESP32-C6
+- 🔧 **Firmware** v1.0 — PlatformIO + Arduino framework
 
 ---
 
-## Modes de control
+## 🎛️ Modes de control
 
 BlauLux suporta **4 tipus de control** seleccionables via la interfície web:
 
@@ -116,12 +91,11 @@ BlauLux suporta **4 tipus de control** seleccionables via la interfície web:
 | **Triac fase**  | Control de fase amb ZCD (H11AA4 + MOC3021S) | Dimmer AC de precisió |
 | **Led digital**  | Control de NeoPixel/WS2812 | Tira LED WS2812 |
 
-
 ---
 
-## Hardware
+## 🔌 Hardware
 
-### Plantilles de dispositiu
+### 📋 Plantilles de dispositiu
 
 La interfície web ofereix **plantilles predefinides** per alguns dispositius:
 
@@ -132,8 +106,7 @@ La interfície web ofereix **plantilles predefinides** per alguns dispositius:
 | `AC_REGULATOR` | BTN→1 · ZCD→0 · TRIAC→4 · LED→5 | Dimmer AC de fase |
 | `GL-C-309WL` | BTN→17 · LED→16 · ON\_OFF→18 | Control tira llums digitals
 
-
-### Connexions
+### 🔧 Connexions
 
 **PICO-CLICK (per defecte):**
 ```
@@ -171,16 +144,16 @@ GPIO 1  →  Botó de configuració
 
 ---
 
-## Primers passos
+## 🚀 Primers passos
 
-### Requisits
+### 📦 Requisits
 
 - [PlatformIO](https://platformio.org/) (CLI o extensió VSCode)
 - Cable USB-C
 - Placa ESP32-C3 (o compatible — vegeu plantilles)
 - Driver USB-UART si cal (CH340, CP210x)
 
-### Compilar i pujar
+### 💾 Compilar i pujar
 
 1. Clona el repositori:
    ```bash
@@ -207,7 +180,7 @@ GPIO 1  →  Botó de configuració
 
 **Entorns disponibles:** `esp32c3` · `esp32` · `esp32s3` · `esp32s2` · `esp32c6`
 
-### Configuració inicial
+### 🔑 Configuració inicial
 
 Al primer arrencament (o després d'esborrar la config), el dispositiu detecta que no té cap GPIO de botó ni wifi configurats i entra automàticament en mode AP:
 
@@ -230,9 +203,9 @@ Al primer arrencament (o després d'esborrar la config), el dispositiu detecta q
 
 ---
 
-## Configuració
+## ⚙️ Configuració
 
-### Temps de compilació (`config.h`)
+### 🕐 Temps de compilació (`config.h`)
 
 | Macro | Valor per defecte | Descripció |
 |-------|-------------------|------------|
@@ -251,7 +224,7 @@ Al primer arrencament (o després d'esborrar la config), el dispositiu detecta q
 | `CONFIG_SCHEMA_VERSION` | `4` | Incrementa quan canvies les claus NVS |
 | `FIRMWARE_VERSION` | `"1.0"` | Versió del firmware (cadena de text) |
 
-### Temps d'execució (Web UI)
+### 🌍 Temps d'execució (Web UI)
 
 Tots els paràmetres de hardware es poden canviar des de la interfície web (`http://192.168.4.1`):
 
@@ -264,9 +237,9 @@ Tots els paràmetres de hardware es poden canviar des de la interfície web (`ht
 
 ---
 
-## Ús
+## 📖 Ús
 
-### Botó físic
+### 🔘 Botó físic
 
 | Acció | Resultat |
 |-------|----------|
@@ -276,7 +249,7 @@ Tots els paràmetres de hardware es poden canviar des de la interfície web (`ht
 
 El mode AP té un temps límit automàtic de 2 minuts (`WIFI_AP_TIMEOUT_MS`).
 
-### Control remot via BlauLink
+### 📡 Control remot via BlauLink
 
 BlauLux escolta paquets ESP-NOW dels dispositius BlauLink. No cal cap parellament ni router — la comunicació és peer-to-peer a la capa MAC WiFi.
 
@@ -291,7 +264,7 @@ En rebre un paquet BlauProtocol vàlid, BlauLux:
 
 <!-- **Events de botó suportats:** `CLICK_1` (1 clic) · `CLICK_2` (doble clic) · `CLICK_3` (triple clic) · `LONG_START/END` (pulsació llarga) -->
 
-### Interfície web
+### 🌐 Interfície web
 
 L'API HTTP és accessible a `http://192.168.4.1` mentre el dispositiu és en mode AP:
 
@@ -312,7 +285,7 @@ L'API HTTP és accessible a `http://192.168.4.1` mentre el dispositiu és en mod
 
 ---
 
-## MQTT i Home Assistant
+## 🏠 MQTT i Home Assistant
 
 Quan es configura una xarxa WiFi STA, BlauLux es connecta a un broker MQTT i publica/subscriu als topics definits a `config.h`:
 
@@ -337,7 +310,7 @@ On `%id%` es resol automàticament com els **darrers 4 caràcters de la MAC** (e
 
 ---
 
-## BlauProtocol
+## 📡 BlauProtocol
 
 BlauLux utilitza **BlauProtocol v1** — un protocol binari compacte de **10 bytes** dissenyat per a ESP-NOW:
 
@@ -376,7 +349,7 @@ Especificació completa: [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/bl
 
 ---
 
-## Estructura del projecte
+## 📁 Estructura del projecte
 
 ```
 BlauLux/
@@ -405,7 +378,7 @@ BlauLux/
 
 ---
 
-## Resolució de problemes
+## 🔧 Resolució de problemes
 
 | Problema | Causa probable | Solució |
 |----------|---------------|---------|
@@ -420,13 +393,13 @@ BlauLux/
 
 ---
 
-## Projectes relacionats
+## 🔗 Projectes relacionats
 
 - **[BlauLink](https://github.com/CasamaMaker/BlauLink)** — Botó wireless amb bateria (sender de l'ecosistema)
 
 ---
 
-## Llicència
+## 📜 Llicència
 
 Aquest projecte és de codi obert. Vegeu [LICENSE](LICENSE) per als detalls.
 
