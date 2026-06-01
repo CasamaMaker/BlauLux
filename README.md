@@ -204,6 +204,10 @@ On first boot (or after clearing the config), the device detects that no button 
 <!-- ![Captive portal — mobile](docs/img/portal_mobile.png) -->
 <!-- ![Captive portal — desktop](docs/img/portal_desktop.png) -->
 
+<p align="center">
+  <img src="docs/web-manager.png" width="400">
+</p>
+
 ---
 
 ## ⚙️ Configuration

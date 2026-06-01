@@ -204,6 +204,9 @@ Al primer arrencament (o després d'esborrar la config), el dispositiu detecta q
 <!-- ![Portal captiu — mòbil](docs/img/portal_mobile.png) -->
 <!-- ![Portal captiu — escriptori](docs/img/portal_desktop.png) -->
 
+<p align="center">
+  <img src="docs/web-manager.png" width="400">
+</p>
 ---
 
 ## ⚙️ Configuració

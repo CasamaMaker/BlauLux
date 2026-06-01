@@ -204,6 +204,10 @@ En el primer arranque (o después de borrar la config), el dispositivo detecta q
 <!-- ![Portal cautivo — móvil](docs/img/portal_mobile.png) -->
 <!-- ![Portal cautivo — escritorio](docs/img/portal_desktop.png) -->
 
+<p align="center">
+  <img src="docs/web-manager.png" width="400">
+</p>
+
 ---
 
 ## ⚙️ Configuración
