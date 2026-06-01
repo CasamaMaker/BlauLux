@@ -5,6 +5,7 @@
 **Controlador intel·ligent de càrregues AC basat en ESP32**
 
 [![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauLux.svg)](https://github.com/CasamaMaker/BlauLux/releases)
+[![GitHub downloads](https://img.shields.io/github/downloads/CasamaMaker/BlauLux/total.svg)](https://github.com/CasamaMaker/BlauLux/releases/latest)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![Framework](https://img.shields.io/badge/Framework-Arduino-00979D?logo=arduino)](https://www.arduino.cc/)
 [![License](https://img.shields.io/github/license/CasamaMaker/BlauLux)](LICENSE)
@@ -24,7 +25,7 @@
 -->
 <!-- ![BlauLux](docs/img/hero.jpg) -->
 
-*Part receptora de l'ecosistema **BlauLink** — rep ordres sense fils d'un botó ESP-NOW i controla la càrrega connectada.*
+*Part receptora de l'ecosistema **BlauClick** — rep ordres sense fils d'un botó ESP-NOW i controla la càrrega connectada.*
 
 </div>
 
@@ -32,7 +33,7 @@
 
 ## Taula de continguts
 
-- [Ecosistema BlauLink](#ecosistema-blaulink)
+- [Ecosistema BlauClick](#ecosistema-blauclick)
 - [Característiques](#característiques)
 - [Modes de control](#modes-de-control)
 - [Hardware](#hardware)
@@ -47,7 +48,7 @@
   - [Temps d'execució (Web UI)](#temps-dexecució-web-ui)
 - [Ús](#ús)
   - [Botó físic](#botó-físic)
-  - [Control remot via BlauLink](#control-remot-via-blaulink)
+  - [Control remot via BlauClick](#control-remot-via-blauclick)
   - [Interfície web](#interfície-web)
 - [MQTT i Home Assistant](#mqtt-i-home-assistant)
 - [BlauProtocol](#blauprotocol)
@@ -57,13 +58,13 @@
 
 ---
 
-## Ecosistema BlauLink
+## Ecosistema BlauClick
 
 BlauLux és el **receptor** d'un sistema wireless complet per controlar llums i càrregues AC sense necessitat de router ni hub:
 
 ```
 ┌─────────────────┐    ESP-NOW (IEEE 802.11)   ┌──────────────────┐
-│   BlauLink      │ ─────────────────────────► │   BlauLux    │
+│   BlauClick     │ ─────────────────────────► │      BlauLux     │
 │  (botó sender)  │ ◄───────────── ACK ──────  │  (load receiver) │
 │  Bateria · BLE  │                            │  ESP32  ·   WiFi │
 └─────────────────┘                            └────────┬─────────┘
@@ -74,7 +75,7 @@ BlauLux és el **receptor** d'un sistema wireless complet per controlar llums i 
                                      (On/Off)      (NeoPixel)    (AC dimmer)
 ```
 
-La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La latència és < 10 ms i el consum és mínim. Un sol BlauLux pot gestionar fins a **8 BlauLinks** simultàniament.
+La comunicació és **peer-to-peer a la capa MAC**, sense router de per mig. La latència és < 10 ms i el consum és mínim. Un sol BlauLux pot gestionar fins a **8 BlauClicks** simultàniament.
 
 <!--
   📸 FOTO 2 — DIAGRAMA FÍSIC O MUNTATGE COMPLET
@@ -369,8 +370,8 @@ Byte:  0      1      2      3-4        5      6    7    8    9
 | `BLAU_CLICK_WINDOW_MS` | 400 ms | Finestra de detecció de multi-clic |
 | `BLAU_LONG_PRESS_MS` | 800 ms | Llindar de pulsació llarga |
 | `BLAU_DEDUP_WINDOW_MS` | 2000 ms | Finestra de deduplicació al Trigger |
-| `BLAU_MAX_SOURCES` | 8 | Màxim de BlauLinks per Trigger |
-| `BLAU_MAX_TARGETS` | 4 | Màxim de Triggers per BlauLink |
+| `BLAU_MAX_SOURCES` | 8 | Màxim de BlauClicks per Trigger |
+| `BLAU_MAX_TARGETS` | 4 | Màxim de Triggers per BlauClick |
 
 Especificació completa: [`lib/BlauProtocol/blauprotocol.h`](lib/BlauProtocol/blauprotocol.h)
 
@@ -412,7 +413,7 @@ BlauLux/
 | Sempre en mode AP a l'arrencada | GPIO del botó no configurat | Connecta't al portal i desa l'assignació de pins |
 | No s'obre el portal captiu | Bloquejat per xarxa o DNS | Navega manualment a `http://192.168.4.1` |
 | El LED no s'encén | Pin o mode de control incorrecte | Verifica el GPIO i el mode al portal web |
-| No arriba ACK al BlauLink | Finestra de dedup expirada o paquet perdut | BlauLink reintenta fins a 3 vegades; comprova que el canal ESP-NOW coincideix (`ESPNOW_CHANNEL`) |
+| No arriba ACK al BlauClick | Finestra de dedup expirada o paquet perdut | BlauClick reintenta fins a 3 vegades; comprova que el canal ESP-NOW coincideix (`ESPNOW_CHANNEL`) |
 | La config no es desa | NVS plena o corrupte | Defineix `CLEAR_CONFIG`, puja el firmware, torna a comentar-ho i repuja |
 | Error de compilació | Llibreria no trobada | Executa `pio pkg install` per descarregar les dependències |
 | Port USB no detectat | Driver absent | Instal·la el driver CH340 o CP210x pel teu sistema operatiu |
@@ -422,7 +423,7 @@ BlauLux/
 
 ## Projectes relacionats
 
-- **[BlauLink](https://github.com/CasamaMaker/BlauLink)** — Botó wireless amb bateria (sender de l'ecosistema)
+- **[BlauClick](https://github.com/CasamaMaker/BlauClick)** — Botó wireless amb bateria (sender de l'ecosistema)
 
 ---
 
