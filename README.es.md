@@ -4,8 +4,8 @@
 
 **Controlador inteligente de cargas AC basado en ESP32**
 
-[![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauLux.svg)](https://github.com/CasamaMaker/BlauLux/releases)
-[![GitHub downloads](https://img.shields.io/github/downloads/CasamaMaker/BlauLux/total.svg)](https://github.com/CasamaMaker/BlauLux/releases/latest)
+[![GitHub release](https://img.shields.io/github/release/CasamaMaker/BlauLux.svg?nocache=1)](https://github.com/CasamaMaker/BlauLux/releases)
+[![GitHub downloads](https://img.shields.io/github/downloads/CasamaMaker/BlauLux/total.svg?nocache=1)](https://github.com/CasamaMaker/BlauLux/releases/latest)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![Framework](https://img.shields.io/badge/Framework-Arduino-00979D?logo=arduino)](https://www.arduino.cc/)
 [![License](https://img.shields.io/github/license/CasamaMaker/BlauLux)](LICENSE)
