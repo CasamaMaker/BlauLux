@@ -310,48 +310,40 @@ typedef uint8_t (*blau_action_fn_t)(uint8_t pkt_type, uint8_t cmd,
                                      uint8_t p1, uint8_t p2, uint8_t p3);
 
 /* =========================================================
- * blau_trg_on_data_recv
+ * blau_trg_handle_packet
  *
- * Processador complet de paquets rebuts al costat BlauLux.
- * Cridar des del callback OnDataRecv d'ESP-NOW.
- *
- * Gestiona: validació, deduplicació, routing per tipus,
+ * Nucli de processament d'un paquet ja validat (post-parse o
+ * post-desxifrat v2): deduplicació, routing per tipus,
  * construcció de resposta (ACK/PONG/STATUS_RSP) i cua pendent.
  *
- * IMPORTANT: és cridada des d'un context d'interrupció (ESP-NOW
- * callback). No fa operacions bloquejants. L'enviament de la
- * resposta es fa des de loop() via blau_trg_process_pending().
- *
- * @param mac          MAC del remitent
- * @param data         Buffer de dades rebut
- * @param len          Longitud del buffer
- * @param ack_pending  Flag de resposta pendent (escrit aquí, llegit al loop)
- * @param ack_mac_out  Buffer de 6 bytes on guardar la MAC destinatària
- * @param ack_pkt_out  Paquet de resposta a enviar
- * @param action_cb    Callback per executar l'acció (EVT/CMD → ACK status)
- * @param is_on        Estat actual de la càrrega (per STATUS_RSP)
- * @param brightness   Brillantor actual 0–100 (per STATUS_RSP)
- * @param ctrl_type    Tipus de control configurat (per STATUS_RSP)
+ * @param pkt              Paquet validat (v1 natiu o reconstruït des de v2)
+ * @param mac              MAC del remitent
+ * @param ack_pending      Flag de resposta pendent (escrit aquí, llegit al loop)
+ * @param ack_mac_out      Buffer de 6 bytes on guardar la MAC destinatària
+ * @param ack_pkt_out      Paquet de resposta a enviar
+ * @param action_cb        Callback per executar l'acció (EVT/CMD → ACK status)
+ * @param is_on            Estat actual de la càrrega (per STATUS_RSP)
+ * @param brightness       Brillantor actual 0–100 (per STATUS_RSP)
+ * @param ctrl_type        Tipus de control configurat (per STATUS_RSP)
+ * @param force_duplicate  true → tractar com a duplicat sense executar
+ *                         (usat per v2 quan nonce == max_nonce: reintent
+ *                         d'un paquet ja executat → respondre ACK_DUPLICATE)
  * ========================================================= */
-static inline void blau_trg_on_data_recv(const uint8_t    *mac,
-                                          const uint8_t    *data,
-                                          int               len,
-                                          volatile bool    *ack_pending,
-                                          uint8_t          *ack_mac_out,
-                                          BlauPacket_t     *ack_pkt_out,
-                                          blau_action_fn_t  action_cb,
-                                          bool              is_on,
-                                          uint8_t           brightness,
-                                          uint8_t           ctrl_type)
+static inline void blau_trg_handle_packet(const BlauPacket_t *pkt_in,
+                                           const uint8_t      *mac,
+                                           volatile bool      *ack_pending,
+                                           uint8_t            *ack_mac_out,
+                                           BlauPacket_t       *ack_pkt_out,
+                                           blau_action_fn_t    action_cb,
+                                           bool                is_on,
+                                           uint8_t             brightness,
+                                           uint8_t             ctrl_type,
+                                           bool                force_duplicate)
 {
     BlauPacket_t pkt;
-    if (!blau_parse_packet(data, len, &pkt)) {
-        Serial.println("[BlauLux] Paquet invàlid (mida, CRC o versió)");
-        return;
-    }
-    blau_print_packet(&pkt);
+    memcpy(&pkt, pkt_in, sizeof(BlauPacket_t));
 
-    bool    dup      = blau_is_duplicate(pkt.src_id, pkt.seq);
+    bool    dup      = force_duplicate || blau_is_duplicate(pkt.src_id, pkt.seq);
     uint8_t ack_s    = ACK_OK;
     bool    need_ack = true;
 
@@ -401,6 +393,52 @@ static inline void blau_trg_on_data_recv(const uint8_t    *mac,
         Serial.print(") seq=");
         Serial.println(pkt.seq);
     }
+}
+
+/* =========================================================
+ * blau_trg_on_data_recv
+ *
+ * Processador complet de paquets v1 rebuts al costat BlauLux.
+ * Cridar des del callback OnDataRecv d'ESP-NOW.
+ *
+ * Valida el paquet (mida, CRC, versió) i delega el processament
+ * a blau_trg_handle_packet().
+ *
+ * IMPORTANT: és cridada des d'un context d'interrupció (ESP-NOW
+ * callback). No fa operacions bloquejants. L'enviament de la
+ * resposta es fa des de loop() via blau_trg_process_pending().
+ *
+ * @param mac          MAC del remitent
+ * @param data         Buffer de dades rebut
+ * @param len          Longitud del buffer
+ * @param ack_pending  Flag de resposta pendent (escrit aquí, llegit al loop)
+ * @param ack_mac_out  Buffer de 6 bytes on guardar la MAC destinatària
+ * @param ack_pkt_out  Paquet de resposta a enviar
+ * @param action_cb    Callback per executar l'acció (EVT/CMD → ACK status)
+ * @param is_on        Estat actual de la càrrega (per STATUS_RSP)
+ * @param brightness   Brillantor actual 0–100 (per STATUS_RSP)
+ * @param ctrl_type    Tipus de control configurat (per STATUS_RSP)
+ * ========================================================= */
+static inline void blau_trg_on_data_recv(const uint8_t    *mac,
+                                          const uint8_t    *data,
+                                          int               len,
+                                          volatile bool    *ack_pending,
+                                          uint8_t          *ack_mac_out,
+                                          BlauPacket_t     *ack_pkt_out,
+                                          blau_action_fn_t  action_cb,
+                                          bool              is_on,
+                                          uint8_t           brightness,
+                                          uint8_t           ctrl_type)
+{
+    BlauPacket_t pkt;
+    if (!blau_parse_packet(data, len, &pkt)) {
+        Serial.println("[BlauLux] Paquet invàlid (mida, CRC o versió)");
+        return;
+    }
+    blau_print_packet(&pkt);
+
+    blau_trg_handle_packet(&pkt, mac, ack_pending, ack_mac_out, ack_pkt_out,
+                           action_cb, is_on, brightness, ctrl_type, false);
 }
 
 /* =========================================================

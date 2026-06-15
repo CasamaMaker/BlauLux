@@ -75,7 +75,8 @@ void setup() {
   #ifdef CLEAR_CONFIG
     clearConfig();
   #endif
-  loadConfig(); 
+  loadConfig();
+  loadSecurityConfig();   // BlauProtocol v2: clau AES + whitelist + nonces ("blau_rx")
   driverSetupAll();
 
   if (getBotonPin() == PIN_UNUSED) {

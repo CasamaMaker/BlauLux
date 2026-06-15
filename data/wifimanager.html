@@ -88,6 +88,18 @@
         </div>
       </div>
 
+      <!-- ESP-NOW estat -->
+      <div class="card">
+        <label class="section-label" data-i18n="labelEspnow">ESP-NOW</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 0.9em; color: #555;" data-i18n="wifiStatus">Estat</span>
+          <span id="espnowStatusBadge" style="font-size: 0.9em; font-weight: 600; color: #888;">···</span>
+        </div>
+        <div id="espnowWlRow" style="font-size: 0.82em; color: #555;">
+          <span id="espnowWlLabel"></span>
+        </div>
+      </div>
+
       <!-- Botons acció -->
       <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
         <button type="button" onclick="goTo('config')" data-i18n="btnConfig">Configuració</button>
@@ -106,6 +118,7 @@
         <button type="button" onclick="goTo('wifi')">WiFi</button>
         <button type="button" onclick="goTo('mqtt')">MQTT</button>
         <button type="button" onclick="goTo('hardware')">Hardware</button>
+        <button type="button" onclick="goTo('seguretat')" data-i18n="seguretatBtn">Seguretat</button>
         <button type="button" onclick="goTo('altres')" data-i18n="altresBtn">Altres</button>
       </div>
 
@@ -291,6 +304,43 @@
       </div>
 
     </div><!-- /page-hardware -->
+
+    <!-- ═══════════════════ PÀGINA SEGURETAT ═══════════════════ -->
+    <div id="page-seguretat" class="page" style="display:none">
+
+      <button type="button" class="btn-back" onclick="goTo('config')" data-i18n="navBack">← Enrere</button>
+
+      <div class="card" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+        <span style="font-size: 0.9em; color: #555;" data-i18n="wifiStatus">Estat</span>
+        <span id="secStatusBadge" style="font-size: 0.9em; font-weight: 600; color: #888;">···</span>
+      </div>
+
+      <div class="card">
+        <label class="section-label" data-i18n="secTitle">Seguretat ESP-NOW (BlauProtocol v2)</label>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div>
+            <label for="secPassInput" style="margin-bottom: 4px; font-size: 0.9em;" data-i18n="secPass">Contrasenya (8–63 caràcters)</label>
+            <input type="text" id="secPassInput" placeholder="" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" maxlength="63" style="margin-bottom: 0;">
+            <span style="font-size: 0.78em; color: #888; margin-top: 3px; display: block;" data-i18n="secHint">Introdueix la mateixa contrasenya a BlauClick i BlauLux</span>
+          </div>
+          <button type="button" onclick="saveSecurityPass()" data-i18n="secSaveBtn">Guardar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <label class="section-label" data-i18n="secWlTitle">Emissors autoritzats</label>
+        <div id="secWlList" style="font-size:0.85em; color:#555;">—</div>
+      </div>
+
+      <div class="card" style="border:1px solid #f0c0c0;background:#fff8f8;">
+        <p data-i18n="secClearDesc" style="font-size:0.82em;color:#888;margin:0 0 10px;">Esborra la clau i la llista d'emissors autoritzats. El dispositiu torna al mode sense xifrar.</p>
+        <button id="clearSecBtn" type="button" onclick="confirmClearSecurity()" data-i18n="secClearBtn"
+                style="background:#f5f5f5;color:#666;border:1px solid #ddd;cursor:pointer;">
+          Esborrar seguretat
+        </button>
+      </div>
+
+    </div><!-- /page-seguretat -->
 
     <!-- ═══════════════════ PÀGINA ALTRES ═══════════════════ -->
     <div id="page-altres" class="page" style="display:none">

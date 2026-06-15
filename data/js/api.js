@@ -58,6 +58,11 @@ function apiGetDeviceName()      { return fetch('/devicename').then(r => r.text(
 function apiSaveDeviceName(name) { return _postForm('/devicename', 'device_name=' + encodeURIComponent(name)); }
 function apiClearDeviceName()    { return fetch('/cleardevicename', {method:'POST'}).then(r => r.text()); }
 
+// Seguretat BlauProtocol v2
+function apiGetSecurityStatus() { return fetch('/securityStatus').then(r => r.json()); }
+function apiSaveSecurity(pass)  { return _postForm('/security', 'protopass=' + encodeURIComponent(pass)); }
+function apiClearSecurity()     { return fetch('/clearsecurity', {method:'POST'}); }
+
 // Administració
 function apiRestart()       { return fetch('/restart',       {method:'POST'}); }
 function apiClearConfig()   { return fetch('/clearconfig',   {method:'POST'}); }

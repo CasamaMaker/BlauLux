@@ -4,6 +4,7 @@ function goTo(page) {
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
   document.getElementById('page-' + page).style.display = '';
   if (page === 'wifi' && !_wifiSsid) scanWifi();
+  if (page === 'seguretat') fetchSecurityStatus();
 }
 
 function fetchVersion() {
@@ -374,6 +375,85 @@ function confirmClearAltres() {
       showToast(t('clearAltresDone')); btn.disabled = true; btn.textContent = '✓';
     }).catch(function() {
       showToast(t('clearAltresDone')); btn.disabled = true; btn.textContent = '✓';
+    });
+  }
+}
+
+// ── ESP-NOW / BlauProtocol v2 — estat home ───────────────────────
+
+function fetchEspNowStatus() {
+  apiGetSecurityStatus().then(function(data) {
+    const badge = document.getElementById('espnowStatusBadge');
+    if (badge) {
+      badge.textContent = data.configured ? t('espnowActive') : t('espnowLegacy');
+      badge.style.color = data.configured ? '#27ae60' : '#888';
+    }
+    const wlLabel = document.getElementById('espnowWlLabel');
+    if (wlLabel) {
+      if (!data.configured) {
+        wlLabel.textContent = '';
+      } else if (!data.wlMacs || data.wlMacs.length === 0) {
+        wlLabel.textContent = t('secWlLearning');
+      } else {
+        wlLabel.textContent = data.wlMacs.length + ' ' + t('espnowWlLabel');
+      }
+    }
+  }).catch(function() {});
+}
+
+// ── Seguretat BlauProtocol v2 ─────────────────────────────────────
+
+function fetchSecurityStatus() {
+  apiGetSecurityStatus().then(function(data) {
+    const badge = document.getElementById('secStatusBadge');
+    badge.textContent = data.configured ? t('secConfigured') : t('secNotConfigured');
+    badge.style.color = data.configured ? '#27ae60' : '#888';
+    const list = document.getElementById('secWlList');
+    if (!data.configured) {
+      list.textContent = '—';
+    } else if (!data.wlMacs || data.wlMacs.length === 0) {
+      list.textContent = t('secWlLearning');
+    } else {
+      list.innerHTML = data.wlMacs.map(function(m) {
+        return '<div style="font-weight:600;">' + m + '</div>';
+      }).join('');
+    }
+  }).catch(function() {});
+}
+
+function saveSecurityPass() {
+  const pass = document.getElementById('secPassInput').value.trim();
+  if (pass.length < 8 || pass.length > 63) { showToast(t('secLenError')); return; }
+  apiSaveSecurity(pass).then(function(r) {
+    if (!r.ok) throw new Error();
+    document.getElementById('secPassInput').value = '';
+    showToast(t('secSaved'));
+    fetchSecurityStatus();
+  }).catch(function() { showToast(t('secError')); });
+}
+
+let _clearSecPending = false, _clearSecTimer = null;
+function confirmClearSecurity() {
+  const btn = document.getElementById('clearSecBtn');
+  if (!_clearSecPending) {
+    _clearSecPending = true;
+    btn.textContent = t('clearConfigConfirm');
+    btn.style.background = '#e74c3c'; btn.style.color = '#fff'; btn.style.borderColor = '#c0392b';
+    _clearSecTimer = setTimeout(function() {
+      _clearSecPending = false;
+      btn.textContent = t('secClearBtn');
+      btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
+    }, 5000);
+  } else {
+    clearTimeout(_clearSecTimer); _clearSecPending = false;
+    btn.textContent = t('secClearBtn');
+    btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = '';
+    apiClearSecurity().then(function() {
+      showToast(t('secCleared'));
+      fetchSecurityStatus();
+    }).catch(function() {
+      showToast(t('secCleared'));
+      fetchSecurityStatus();
     });
   }
 }
@@ -814,6 +894,9 @@ window.onload = function() {
 
   fetchMqttStatus();
   setInterval(fetchMqttStatus, 10000);
+
+  fetchEspNowStatus();
+  setInterval(fetchEspNowStatus, 30000);
 
   startChannelPolling();
 

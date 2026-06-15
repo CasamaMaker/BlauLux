@@ -27,6 +27,9 @@ extern "C" {
 #define BLAU_PROTO_VERSION    0x01u
 #define BLAU_PACKET_SIZE      10u     /* sizeof(BlauPacket_t) ha de ser sempre 10 */
 
+#define BLAU_PROTO_VERSION_V2 0x02u   /* BlauProtocol v2 — paquet xifrat (blauprotocol_crypto.h) */
+#define BLAU_V2_PACKET_SIZE   21u     /* sizeof(BlauPacketV2_t): ver(1)+cipher(8)+nonce(4)+tag(8) */
+
 /* =========================================================
  * Tipus de missatge  (camp 'type')
  * ========================================================= */

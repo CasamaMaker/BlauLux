@@ -2,11 +2,15 @@
 #include "output.h"
 #include <blauprotocol.h>
 #include <blauprotocol_trg.h>
+#include <blauprotocol_crypto.h>
+#include <blauprotocol_trg2.h>
+#include <Preferences.h>
 
 // Estat ACK privat al mòdul — compartit entre onDataRecv (ISR) i processEspNowPending (loop)
 static volatile bool         _ack_pending = false;
 static volatile uint8_t      _ack_mac[6];
 static volatile BlauPacket_t _ack_pkt;
+static volatile bool         _ack_is_v2 = false;  // la petició era v2 -> resposta xifrada
 
 void initEspNow() {
   if (esp_now_init() == ESP_OK) {
@@ -15,6 +19,64 @@ void initEspNow() {
     LOG_E("[ESPNOW] Init Failed");
     ESP.restart();
   }
+  blau2_trg_tx_nonce_init();  // nonce aleatori per a les respostes xifrades (mesura 4)
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BlauProtocol v2 — gestió de seguretat (NVS "blau_rx")
+// ════════════════════════════════════════════════════════════════
+
+bool loadSecurityConfig() {
+  bool ok = false;
+  Preferences p;
+  if (p.begin(BLAU2_NVS_NAMESPACE, true)) {
+    uint8_t key[BLAU_AES_KEY_LEN];
+    if (p.getBytesLength("aes_key") == BLAU_AES_KEY_LEN) {
+      p.getBytes("aes_key", key, BLAU_AES_KEY_LEN);
+      ok = blau_crypto_set_key(key);
+    }
+    p.end();
+  }
+  LOG_I("[SEC] Clau v2: %s", ok ? "configurada (mode segur)" : "no configurada (mode v1 legacy)");
+  blau2_trg_load_state();  // whitelist + nonces per MAC (mesura 7/8)
+  return ok;
+}
+
+bool saveSecurityPassword(const char *pwd) {
+  uint8_t key[BLAU_AES_KEY_LEN];
+  if (!blau_derive_key(pwd, key)) {
+    LOG_E("[SEC] Error derivant clau PBKDF2");
+    return false;
+  }
+  Preferences p;
+  if (!p.begin(BLAU2_NVS_NAMESPACE, false)) return false;
+  p.putBytes("aes_key", key, BLAU_AES_KEY_LEN);
+  p.end();
+  bool ok = blau_crypto_set_key(key);
+  LOG_I("[SEC] Clau v2 derivada i guardada (password no persistit)");
+  return ok;
+}
+
+void clearSecurity() {
+  Preferences p;
+  if (p.begin(BLAU2_NVS_NAMESPACE, false)) { p.clear(); p.end(); }
+  blau_crypto_clear_key();
+  blau2_trg_load_state();  // reset RAM: whitelist buida -> mode aprenentatge
+  LOG_I("[SEC] Seguretat esborrada — mode v1 legacy");
+}
+
+bool securityConfigured() {
+  return blau_crypto_has_key();
+}
+
+int securityWhitelistCount() {
+  return _blau2_wl_count;
+}
+
+bool securityWhitelistMac(int idx, uint8_t out[6]) {
+  if (idx < 0 || idx >= _blau2_wl_count) return false;
+  memcpy(out, _blau2_wl[idx], 6);
+  return true;
 }
 
 void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
@@ -107,12 +169,31 @@ void onDataRecv(const esp_now_recv_info *recv_info, const uint8_t *data, int len
   LOG_I("[ESPNOW] RX mac=%02X:%02X:%02X:%02X:%02X:%02X len=%d",
         mac[0],mac[1],mac[2],mac[3],mac[4],mac[5], len);
   uint8_t br = (g_driver && g_driver->hasBrightness) ? (uint8_t)getBrightnessForType(getControlType()) : 0;
+  uint8_t ctrl = (uint8_t)(getControlType() < 0 ? 0 : getControlType());
+
+  // Dispatch v2 / v1
+  if (len == (int)BLAU_V2_PACKET_SIZE && data[0] == BLAU_PROTO_VERSION_V2) {
+    _ack_is_v2 = true;
+    blau2_trg_on_data_recv(mac, data, len,
+                           &_ack_pending, (uint8_t*)_ack_mac, (BlauPacket_t*)&_ack_pkt,
+                           handleAction, getState(), br, ctrl);
+    return;
+  }
+
+  // Anti-downgrade: amb clau v2 configurada no s'accepta v1 en clar
+  if (blau_crypto_has_key()) {
+    LOG_I("[SEC] Paquet v1 rebutjat: clau v2 configurada (anti-downgrade)");
+    return;
+  }
+
+  _ack_is_v2 = false;
   blau_trg_on_data_recv(mac, data, len,
                         &_ack_pending, (uint8_t*)_ack_mac, (BlauPacket_t*)&_ack_pkt,
                         handleAction,
-                        getState(), br, (uint8_t)(getControlType() < 0 ? 0 : getControlType()));
+                        getState(), br, ctrl);
 }
 
 void processEspNowPending() {
-  blau_trg_process_pending(&_ack_pending, (const uint8_t*)_ack_mac, (const BlauPacket_t*)&_ack_pkt);
+  blau2_trg_process_pending(&_ack_pending, (const uint8_t*)_ack_mac,
+                            (const BlauPacket_t*)&_ack_pkt, &_ack_is_v2);
 }

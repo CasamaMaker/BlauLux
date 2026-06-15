@@ -2,6 +2,7 @@
 #include "output.h"
 #include "nvsconfig.h"
 #include "mqtt.h"
+#include "espnow.h"
 
 void serveixWifiManager(AsyncWebServerRequest *request) {
   request->send(LittleFS, "/wifimanager.html", "text/html");
@@ -510,6 +511,42 @@ void webServerSetup() {
     prefs.end();
     LOG_I("[CFG] Nom del dispositiu esborrat (default: %s)", device_name.c_str());
     r->send(200, "text/plain", device_name);
+  });
+
+  // ── Seguretat BlauProtocol v2 ─────────────────────────────────
+
+  server.on("/securityStatus", HTTP_GET, [](AsyncWebServerRequest *r) {
+    String json = "{\"configured\":" + String(securityConfigured() ? "true" : "false")
+                + ",\"wl\":" + String(securityWhitelistCount())
+                + ",\"wlMacs\":[";
+    for (int i = 0; i < securityWhitelistCount(); i++) {
+      uint8_t m[6];
+      if (!securityWhitelistMac(i, m)) break;
+      char buf[20];
+      snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+               m[0], m[1], m[2], m[3], m[4], m[5]);
+      if (i > 0) json += ",";
+      json += "\"" + String(buf) + "\"";
+    }
+    json += "]}";
+    r->send(200, "application/json", json);
+  });
+
+  server.on("/security", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!r->hasParam("protopass", true)) { r->send(400, "text/plain", "missing protopass"); return; }
+    String pass = r->getParam("protopass", true)->value();
+    pass.trim();
+    if (pass.length() < 8 || pass.length() > 63) {
+      r->send(400, "text/plain", "password length 8-63");
+      return;
+    }
+    bool ok = saveSecurityPassword(pass.c_str());   // PBKDF2 ~100 ms
+    r->send(ok ? 200 : 500, "text/plain", ok ? "OK" : "ERROR");
+  });
+
+  server.on("/clearsecurity", HTTP_POST, [](AsyncWebServerRequest *r) {
+    clearSecurity();
+    r->send(200, "text/plain", "OK");
   });
 
   // ── Administració ─────────────────────────────────────────────
