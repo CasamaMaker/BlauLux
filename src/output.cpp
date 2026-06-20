@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 // ── NeoPixel per GPIO ────────────────────────────────────────────
-static Adafruit_NeoPixel* _neoPixel[22] = {};
+static Adafruit_NeoPixel* _neoPixel[MAX_GPIO_COUNT] = {};
 
 // ── Triac fase (ZCD + FreeRTOS task) ────────────────────────────
 static SemaphoreHandle_t _zcdSemaphore    = NULL;
@@ -152,7 +152,7 @@ static void driverSetupZcd(int triacGpio, int zcdGpio) {
 
 // ── Helper ──────────────────────────────────────────────────────
 int findGpio(GpioFunc func) {
-  for (int i = 0; i <= 21; i++)
+  for (int i = 0; i < MAX_GPIO_COUNT; i++)
     if (gpioMap[i].cfg.func == func) return i;
   return PIN_UNUSED;
 }
@@ -173,7 +173,7 @@ static void _updateGDriver() {
   int         pwmCount = 0;
   bool        hasOutput = false;
 
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     switch (gpioMap[i].cfg.func) {
       case FUNC_ON_OFF:
         hasOutput = true; typeName = "switch"; break;
@@ -244,7 +244,7 @@ void driverSetup(int gpio) {
     case FUNC_TRIAC_FASE: {
       pinMode(gpio, OUTPUT);
       int zcdGpio = (int)gpioMap[gpio].rt.param2;
-      if (zcdGpio >= 0 && zcdGpio <= 21) driverSetupZcd(gpio, zcdGpio);
+      if (zcdGpio >= 0 && zcdGpio < MAX_GPIO_COUNT) driverSetupZcd(gpio, zcdGpio);
       break;
     }
     case FUNC_ZCD:
@@ -260,7 +260,7 @@ void driverSetup(int gpio) {
 void driverSetupAll() {
   cleanupTriac();
   cleanupTriacCycle();
-  for (int i = 0; i <= 21; i++) driverSetup(i);
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) driverSetup(i);
   _updateGDriver();
   LOG_D("[DRV] driverSetupAll complet");
 }
@@ -328,7 +328,7 @@ void driverToggleAll() {
   bool hasLed  = false;
 
   // Passada 1: tot excepte DIGITAL_LED
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;
     if (f == FUNC_DIGITAL_LED) { hasLed = true; continue; }
@@ -339,7 +339,7 @@ void driverToggleAll() {
   if (powerOn && hasLed) delay(LED_POWER_SETTLE_MS);
 
   // Passada 2: DIGITAL_LED
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func == FUNC_DIGITAL_LED) driverToggle(i);
   }
 }
@@ -357,7 +357,7 @@ void applyGpioConfig()  { driverSetupAll(); }
 void configuracioLlum() {}
 
 static int _firstOutputGpio() {
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if (f == FUNC_ON_OFF || f == FUNC_PWM || f == FUNC_TRIAC_CYCLE ||
         f == FUNC_TRIAC_FASE || f == FUNC_DIGITAL_LED) return i;
@@ -374,7 +374,7 @@ void applyOutput(bool on) {
   bool powerOn = false;
 
   // Passada 1: tot excepte DIGITAL_LED
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD || f == FUNC_DIGITAL_LED) continue;
     gpioMap[i].rt.state        = on;
@@ -386,7 +386,7 @@ void applyOutput(bool on) {
   if (powerOn && findGpio(FUNC_DIGITAL_LED) != PIN_UNUSED) delay(LED_POWER_SETTLE_MS);
 
   // Passada 2: DIGITAL_LED
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func != FUNC_DIGITAL_LED) continue;
     gpioMap[i].rt.state        = on;
     gpioMap[i].rt.lastChangeMs = (uint32_t)millis();
@@ -397,7 +397,7 @@ void applyOutput(bool on) {
 void toggleOutput() { driverToggleAll(); }
 
 void renderVisualFeedback(const char* mode) {
-  // for (int i = 0; i <= 21; i++) {
+  // for (int i = 0; i < MAX_GPIO_COUNT; i++) {
   //   GpioFunc f = gpioMap[i].cfg.func;
   //   if (f == FUNC_PWM) {
   //     int ch = ledcChannelFor(i);
@@ -444,7 +444,7 @@ int getPin2() { return PIN_UNUSED; }
 int getPin3() { return PIN_UNUSED; }
 
 int getBrightnessForType(int ct) {
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if (ct == CTRL_TYPE_PWM         && f == FUNC_PWM)         return (int)gpioMap[i].rt.param1;
     if (ct == CTRL_TYPE_TRIAC_CYCLE && f == FUNC_TRIAC_CYCLE) return (int)gpioMap[i].rt.param1;
@@ -456,7 +456,7 @@ int getBrightnessForType(int ct) {
 
 void setBrightnessForType(int ct, int v) {
   v = constrain(v, 0, 100);
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if ((ct == CTRL_TYPE_PWM         && f == FUNC_PWM)         ||
         (ct == CTRL_TYPE_TRIAC_CYCLE && f == FUNC_TRIAC_CYCLE) ||
@@ -469,7 +469,7 @@ void setBrightnessForType(int ct, int v) {
 
 int getBrightnessCW() {
   bool first = true;
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func != FUNC_PWM) continue;
     if (first) { first = false; continue; }
     return (int)gpioMap[i].rt.param1;
@@ -480,7 +480,7 @@ int getBrightnessCW() {
 void setBrightnessCW(int v) {
   v = constrain(v, 0, 100);
   bool first = true;
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func != FUNC_PWM) continue;
     if (first) { first = false; continue; }
     gpioMap[i].rt.param1 = (uint32_t)v;
@@ -506,7 +506,7 @@ void applyBrightness(int br) {
 
 void applyMosfetDuty(int duty) {
   int main = _firstOutputGpio();
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func != FUNC_PWM || i == main) continue;
     gpioMap[i].rt.param1 = (uint32_t)constrain(duty, 0, 100);
     driverApply(i);

@@ -5,6 +5,7 @@ function goTo(page) {
   document.getElementById('page-' + page).style.display = '';
   if (page === 'wifi' && !_wifiSsid) scanWifi();
   if (page === 'seguretat') fetchSecurityStatus();
+  if (page === 'ota') fetchOtaVersion();
 }
 
 function fetchVersion() {
@@ -876,6 +877,42 @@ function chSetColor(ch, picker) {
     DBG.hw('CH' + ch + ': color → ' + hex);
     apiSetChannel(ch, 'r=' + r + '&g=' + g + '&b=' + b).finally(function() { delete _chDebounce['color' + ch]; });
   }, 200);
+}
+
+// ── OTA ──────────────────────────────────────────────────────────
+
+function fetchOtaVersion() {
+  var el = document.getElementById('otaVersion');
+  if (el) el.textContent = FW_VER ? t('otaCurrentVer') + FW_VER : '';
+}
+
+function startOTA() {
+  var file = document.getElementById('otaFile').files[0];
+  if (!file) { _otaMsg(t('otaNoFile'), false); return; }
+  var xhr = new XMLHttpRequest();
+  xhr.upload.onprogress = function(e) {
+    if (!e.lengthComputable) return;
+    var pct = Math.round(e.loaded / e.total * 100);
+    document.getElementById('otaProgress').value = pct;
+    document.getElementById('otaPct').textContent = pct + '%';
+  };
+  xhr.onload = function() {
+    var ok = false;
+    try { ok = JSON.parse(xhr.responseText).ok; } catch(e) {}
+    _otaMsg(ok ? t('otaOk') : t('otaError'), !ok);
+  };
+  xhr.onerror = function() { _otaMsg(t('otaError'), true); };
+  var form = new FormData();
+  form.append('file', file, file.name);
+  document.getElementById('otaProgressWrap').style.display = 'block';
+  _otaMsg(t('otaUploading'), false);
+  xhr.open('POST', '/ota-upload');
+  xhr.send(form);
+}
+
+function _otaMsg(text, isError) {
+  var el = document.getElementById('otaStatus');
+  if (el) { el.textContent = text; el.style.color = isError ? '#e74c3c' : '#555'; }
 }
 
 window.onload = function() {

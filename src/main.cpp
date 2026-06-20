@@ -15,7 +15,7 @@
 // ════════════════════════════════════════════════════════════════
 //  DEFINICIONS DE VARIABLES GLOBALS (font de veritat única)
 // ════════════════════════════════════════════════════════════════
-Gpio   gpioMap[22];
+Gpio   gpioMap[MAX_GPIO_COUNT];
 String device_name = WIFI_SSID;
 
 AsyncWebServer server(HTTP_PORT);

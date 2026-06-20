@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" type="text/css" href="style.css" />
   <title>Configurador BlauLux</title>
-  <script src="/js/i18n.js"></script>
-  <script src="/js/debug.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/gpio.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="/js/i18n.js?v=2"></script>
+  <script src="/js/debug.js?v=2"></script>
+  <script src="/js/api.js?v=2"></script>
+  <script src="/js/gpio.js?v=2"></script>
+  <script src="/js/app.js?v=2"></script>
 </head>
 <body>
   <div class="container">
@@ -120,6 +120,7 @@
         <button type="button" onclick="goTo('hardware')">Hardware</button>
         <button type="button" onclick="goTo('seguretat')" data-i18n="seguretatBtn">Seguretat</button>
         <button type="button" onclick="goTo('altres')" data-i18n="altresBtn">Altres</button>
+        <button type="button" onclick="goTo('ota')" data-i18n="navOta">Actualitzar</button>
       </div>
 
       <div class="card" id="clearConfigCard" style="border:1px solid #f0c0c0;background:#fff8f8;">
@@ -255,8 +256,7 @@
             <label style="margin:0; font-size:0.9em;" data-i18n="labelMcu">Microcontrolador</label>
             <select id="mcuSelect" style="width:100%; font-size:0.9em;" onchange="selectMcu(this.value)">
               <option value="" data-i18n="mcuDefault">— Selecciona MCU —</option>
-              <option value="esp32c3">ESP32-C3</option>
-              <option value="esp32s3">ESP32-S3</option>
+              <!-- poblat dinàmicament per populateMcuSelect() des de /gpiocaps -->
             </select>
           </div>
 
@@ -341,6 +341,30 @@
       </div>
 
     </div><!-- /page-seguretat -->
+
+    <!-- ═══════════════════ PÀGINA OTA ═══════════════════ -->
+    <div id="page-ota" class="page" style="display:none">
+
+      <button type="button" class="btn-back" onclick="goTo('config')" data-i18n="navBack">← Enrere</button>
+
+      <div class="card">
+        <label class="section-label" data-i18n="otaTitle">Actualitzar firmware</label>
+        <p id="otaVersion" style="font-size:0.85em; color:#888; margin:2px 0 12px;"></p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div>
+            <label for="otaFile" style="margin-bottom:4px; font-size:0.9em;" data-i18n="otaFileLabel">Fitxer OTA (.bin)</label>
+            <input type="file" id="otaFile" accept=".bin" style="margin-bottom:0;">
+          </div>
+          <button type="button" onclick="startOTA()" data-i18n="otaUploadBtn">Pujar i actualitzar</button>
+          <div id="otaProgressWrap" style="display:none;">
+            <progress id="otaProgress" value="0" max="100" style="width:100%; height:12px;"></progress>
+            <span id="otaPct" style="font-size:0.85em; color:#555;">0%</span>
+          </div>
+          <p id="otaStatus" style="font-size:0.85em; margin:0; min-height:1.2em;"></p>
+        </div>
+      </div>
+
+    </div><!-- /page-ota -->
 
     <!-- ═══════════════════ PÀGINA ALTRES ═══════════════════ -->
     <div id="page-altres" class="page" style="display:none">

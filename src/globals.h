@@ -38,7 +38,7 @@ struct Gpio {
 };
 
 // ── Mapa GPIO ────────────────────────────────────────────────────
-extern Gpio gpioMap[22];
+extern Gpio gpioMap[MAX_GPIO_COUNT];
 
 // ── Configuració runtime ─────────────────────────────────────────
 extern String device_name;

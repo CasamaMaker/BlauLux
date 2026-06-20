@@ -49,7 +49,7 @@ void loadConfig() {
 
   // assigna valors guardats --> gpioMap[i].cfg (funció, params, nom)
   char key[4];
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     snprintf(key, sizeof(key), "f%d", i);
     gpioMap[i].cfg.func   = (GpioFunc)prefs.getUChar(key, 0);
     snprintf(key, sizeof(key), "a%d", i);
@@ -89,7 +89,7 @@ void saveConfig() {
   prefs.begin("blau", false);
   prefs.putUChar("schema", CONFIG_SCHEMA_VERSION);
   char key[4];
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     snprintf(key, sizeof(key), "f%d", i);
     prefs.putUChar(key, (uint8_t)gpioMap[i].cfg.func);
     snprintf(key, sizeof(key), "a%d", i);
@@ -115,7 +115,7 @@ void saveConfig() {
   prefs.putChar  ("sel_tmpl",      selectedTemplate);
   prefs.end();
   LOG_D("[CFG] Config guardada (schema v%d)", CONFIG_SCHEMA_VERSION);
-  for (int i = 0; i <= 21; i++) {
+  for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     GpioFunc f = gpioMap[i].cfg.func;
     if (f == FUNC_NONE) continue;
     const char* fid = (f < FUNC_COUNT) ? FUNC_REGISTRY[f].id : "?";

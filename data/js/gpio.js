@@ -1,21 +1,57 @@
 let _mcuProfiles = {}; // perfils MCU carregats des del servidor (/gpiocaps)
 let _currentMcu  = null; // perfil MCU actiu (null = cap seleccionat)
+let _gpioCount   = 22;  // nombre de GPIO a mostrar (dinàmic per MCU)
 
 function fetchGpioCaps() {
   return apiGetGpioCaps().then(function(data) {
     _mcuProfiles = data;
-  }).catch(function() { _mcuProfiles = {}; });
+  }).catch(function() {
+    _mcuProfiles = {};
+  }).then(function() {
+    populateMcuSelect();
+  });
+}
+
+function populateMcuSelect() {
+  const sel = document.getElementById('mcuSelect');
+  if (!sel) return;
+  const saved = sel.value;
+  sel.innerHTML = '<option value="" data-i18n="mcuDefault">' + t('mcuDefault') + '</option>';
+  Object.keys(_mcuProfiles).forEach(function(key) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = _mcuProfiles[key].name || key;
+    sel.appendChild(opt);
+  });
+  if (saved && _mcuProfiles[saved]) { sel.value = saved; }
 }
 
 function selectMcu(mcuId) {
   _currentMcu = _mcuProfiles[mcuId] || null;
   try { localStorage.setItem('blau_mcu', mcuId || ''); } catch(e) {}
+  const newCount = _currentMcu ? _currentMcu.caps.length : 22;
+  if (newCount !== _gpioCount) {
+    _gpioCount = newCount;
+    const oldState = gpioState;
+    gpioState = Array.from({length: _gpioCount}, function(_, i) {
+      return oldState[i] || { name: '', func: 'none', params: {}, zcdGpio: null };
+    });
+    const tbody = document.getElementById('gpioTableBody');
+    if (tbody) {
+      tbody.innerHTML = '';
+      for (let g = 0; g < _gpioCount; g++) {
+        tbody.appendChild(buildGpioRow(g));
+        const fd = FUNC_DEFS.find(function(f) { return f.id === gpioState[g].func; });
+        if (fd && fd.hasSubRow) tbody.appendChild(buildSubRow(g));
+      }
+    }
+  }
   applyMcuProfile();
 }
 
 function applyMcuProfile() {
   if (!_currentMcu) return;
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     const cap = _currentMcu.caps[g];
     const row = document.getElementById('gpio_row_' + g);
     const sub = document.getElementById('gpio_sub_' + g);
@@ -53,10 +89,41 @@ const FUNC_DEFS = [
   { id: 'triac_phase', i18nKey: 'func_triac_phase', firmwareId: 'triac_fase',  hasSubRow: true  },
 ];
 
-let gpioState = Array.from({length: 22}, () =>
+let gpioState = Array.from({length: _gpioCount}, () =>
   ({ name: '', func: 'none', params: {}, zcdGpio: null })
 );
 let zcdReserved = new Set();
+
+// Funcions exclusives: només una per dispositiu (totes del grup es bloquegen)
+const EXCLUSIVE_FUNC_GROUPS = [['btn', 'btn_inv']];
+
+function isExclusivelyTaken(funcId, excludeGpio) {
+  const group = EXCLUSIVE_FUNC_GROUPS.find(function(gr) { return gr.includes(funcId); });
+  if (!group) return false;
+  for (let g = 0; g < _gpioCount; g++) {
+    if (g === excludeGpio) continue;
+    if (group.includes(gpioState[g].func)) return true;
+  }
+  return false;
+}
+
+function refreshFuncSelects() {
+  for (let g = 0; g < _gpioCount; g++) {
+    const sel = document.getElementById('gpio_func_' + g);
+    if (!sel) continue;
+    const currentFunc = gpioState[g].func;
+    if (currentFunc === 'zcd_reserved') continue;
+    sel.innerHTML = '';
+    FUNC_DEFS.forEach(function(fd) {
+      if (isExclusivelyTaken(fd.id, g) && fd.id !== currentFunc) return;
+      const opt = document.createElement('option');
+      opt.value = fd.id;
+      opt.textContent = t(fd.i18nKey);
+      if (fd.id === currentFunc) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+}
 
 function needsChan() { return false; }
 
@@ -123,14 +190,14 @@ function onTemplateChange(val) {
 }
 
 function clearGpioMap() {
-  gpioState = Array.from({length: 22}, () =>
+  gpioState = Array.from({length: _gpioCount}, () =>
     ({ name: '', func: 'none', params: {}, zcdGpio: null })
   );
   zcdReserved.clear();
   const tbody = document.getElementById('gpioTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     tbody.appendChild(buildGpioRow(g));
   }
   applyMcuProfile();
@@ -155,13 +222,16 @@ function buildGpioTable(gpiomap) {
   const tbody = document.getElementById('gpioTableBody');
   if (!tbody) return;
 
-  gpioState = Array.from({length: 22}, () =>
+  // Decodificar sempre tots els GPIOs del servidor (fins a MAX),
+  // independentment de _gpioCount actual — selectMcu() pot ampliar la taula.
+  const _decodeCount = 40;
+  gpioState = Array.from({length: _decodeCount}, () =>
     ({ name: '', func: 'none', params: {}, zcdGpio: null })
   );
   zcdReserved.clear();
 
   // Pas 1: decodificar funcs
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _decodeCount; g++) {
     const funcIdx = gpiomap['f' + g] || 0;
     const fwFuncDef = _funclist[funcIdx];
     const fwId = fwFuncDef ? fwFuncDef.id : 'none';
@@ -170,7 +240,7 @@ function buildGpioTable(gpiomap) {
   }
 
   // Pas 2: llegir params per GPIO i reconstruir parelles triac_phase ↔ ZCD
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _decodeCount; g++) {
     const a = gpiomap['a' + g] || 0;
     const b = gpiomap['b' + g] || 0;
     const c = gpiomap['c' + g] || 0;
@@ -190,7 +260,7 @@ function buildGpioTable(gpiomap) {
         break;
       case 'triac_phase':
         gpioState[g].params.duty = a || 50;
-        if (b >= 0 && b <= 21 && (_funclist[gpiomap['f' + b] || 0] || {}).id === 'zcd') {
+        if (b >= 0 && b < _decodeCount && (_funclist[gpiomap['f' + b] || 0] || {}).id === 'zcd') {
           gpioState[g].zcdGpio = b;
           gpioState[b].func = 'zcd_reserved';
           zcdReserved.add(b);
@@ -200,14 +270,14 @@ function buildGpioTable(gpiomap) {
   }
 
   // Pas 3: llegir noms
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _decodeCount; g++) {
     const nm = gpiomap['n' + g];
     if (nm !== undefined) gpioState[g].name = nm;
   }
 
-  // Pas 4: construir DOM
+  // Pas 4: construir DOM (només fins a _gpioCount — selectMcu() pot ampliar després)
   tbody.innerHTML = '';
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     tbody.appendChild(buildGpioRow(g));
     const fd = FUNC_DEFS.find(f => f.id === gpioState[g].func);
     if (fd && fd.hasSubRow) tbody.appendChild(buildSubRow(g));
@@ -260,6 +330,7 @@ function buildGpioRow(gpio) {
   sel.style.cssText = 'width:100%; font-size:0.82em;';
   sel.disabled = isZcdReserved;
   FUNC_DEFS.forEach(function(fd) {
+    if (isExclusivelyTaken(fd.id, gpio) && fd.id !== state.func) return;
     const opt = document.createElement('option');
     opt.value = fd.id;
     opt.textContent = t(fd.i18nKey);
@@ -456,7 +527,7 @@ function makeZcdSelect(ownerGpio) {
   blank.value = '';
   blank.textContent = t('zcdSelectHint');
   sel.appendChild(blank);
-  for (let z = 0; z <= 21; z++) {
+  for (let z = 0; z < _gpioCount; z++) {
     if (z === ownerGpio) continue;
     const isCurrentZcd = (z === gpioState[ownerGpio].zcdGpio);
     const isAvailable = (gpioState[z].func === 'none' || isCurrentZcd);
@@ -513,7 +584,7 @@ function refreshRow(gpio) {
 
 function rebuildZcdReserved() {
   zcdReserved.clear();
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     if (gpioState[g].func !== 'triac_phase') continue;
     const z = gpioState[g].zcdGpio;
     if (z !== null) {
@@ -569,7 +640,7 @@ function onNameChange(gpio) {
   if (oldName !== gpioState[gpio].name)
     DBG.change(`GPIO ${gpio}: nom  "${oldName}" → "${gpioState[gpio].name}"`);
   // Actualitzar les opcions dels selects ZCD que mostren aquest GPIO
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     if (gpioState[g].func !== 'triac_phase') continue;
     const zcdSel = document.getElementById('sub_zcd_' + g);
     if (!zcdSel) continue;
@@ -589,7 +660,7 @@ function applyTemplate(idx) {
   if (!tmpl) return;
 
   // Reinicialitzar estat
-  gpioState = Array.from({length: 22}, () =>
+  gpioState = Array.from({length: _gpioCount}, () =>
     ({ name: '', func: 'none', params: {}, zcdGpio: null })
   );
   zcdReserved.clear();
@@ -604,7 +675,7 @@ function applyTemplate(idx) {
   });
 
   // Reconstruir parelles triac ↔ zcd (parella pel primer ZCD trobat)
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     if (gpioState[g].func !== 'triac_phase') continue;
     tmpl.pins.forEach(function(p) {
       if (gpioState[g].zcdGpio !== null) return;
@@ -621,7 +692,7 @@ function applyTemplate(idx) {
   const tbody = document.getElementById('gpioTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     tbody.appendChild(buildGpioRow(g));
     const fd = FUNC_DEFS.find(f => f.id === gpioState[g].func);
     if (fd && fd.hasSubRow) tbody.appendChild(buildSubRow(g));
@@ -646,7 +717,7 @@ function validateGpioMap() {
   let hasErrors = false;
   let hasBtn = false;
 
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     const s = gpioState[g];
     if (s.func === 'zcd_reserved') continue;
     if (s.func === 'btn' || s.func === 'btn_inv') hasBtn = true;
@@ -670,12 +741,13 @@ function validateGpioMap() {
   msgEl.style.color = hasErrors ? '#e74c3c' : '#e67e22';
   const saveBtn = document.getElementById('gpioSaveBtn');
   if (saveBtn) saveBtn.disabled = hasErrors;
+  refreshFuncSelects();
 }
 
 function debugLogGpioConfig() {
   console.groupCollapsed('%c[CONFIG] Guardat: mapa GPIO complet', 'color:#2980b9;font-weight:700');
   let count = 0;
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     const s = gpioState[g];
     if (s.func === 'none') continue;
     count++;
@@ -693,7 +765,7 @@ function debugLogGpioConfig() {
 function saveGpioMap() {
   const params = new URLSearchParams();
 
-  for (let g = 0; g <= 21; g++) {
+  for (let g = 0; g < _gpioCount; g++) {
     const s = gpioState[g];
     let firmwareId, a = 0, b = 0, c = 0;
 

@@ -3,6 +3,7 @@
 #include "nvsconfig.h"
 #include "mqtt.h"
 #include "espnow.h"
+#include <Update.h>
 
 void serveixWifiManager(AsyncWebServerRequest *request) {
   request->send(LittleFS, "/wifimanager.html", "text/html");
@@ -152,7 +153,7 @@ void webServerSetup() {
   server.on("/channels", HTTP_GET, [](AsyncWebServerRequest *r) {
     String json = "{\"channels\":[";
     bool first = true;
-    for (int i = 0; i <= 21; i++) {
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
       GpioFunc f = gpioMap[i].cfg.func;
       if (f == FUNC_NONE || f == FUNC_BTN || f == FUNC_BTN_INV || f == FUNC_ZCD) continue;
 
@@ -365,7 +366,7 @@ void webServerSetup() {
   server.on("/clearhardware", HTTP_POST, [](AsyncWebServerRequest *r) {
     prefs.begin("blau", false);
     char key[4];
-    for (int i = 0; i <= 21; i++) {
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
       snprintf(key, sizeof(key), "f%d", i); prefs.remove(key);
       snprintf(key, sizeof(key), "a%d", i); prefs.remove(key);
       snprintf(key, sizeof(key), "b%d", i); prefs.remove(key);
@@ -385,7 +386,7 @@ void webServerSetup() {
   server.on("/gpiomap", HTTP_GET, [](AsyncWebServerRequest *r) {
     String json = "{";
     char key[4];
-    for (int i = 0; i <= 21; i++) {
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
       if (i > 0) json += ",";
       snprintf(key, sizeof(key), "f%d", i);
       json += "\"" + String(key) + "\":" + String((int)gpioMap[i].cfg.func);
@@ -406,7 +407,7 @@ void webServerSetup() {
 
   server.on("/gpiomap", HTTP_POST, [](AsyncWebServerRequest *r) {
     char key[4];
-    for (int i = 0; i <= 21; i++) {
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
       snprintf(key, sizeof(key), "f%d", i);
       if (r->hasParam(key, true))
         gpioMap[i].cfg.func = (GpioFunc)r->getParam(key, true)->value().toInt();
@@ -477,6 +478,7 @@ void webServerSetup() {
       return s + "]";
     };
     String json = "{"
+      "\"esp32\":{\"name\":\"ESP32\",\"caps\":"      + capsJson(ESP32_GPIO_CAPS,   40) + "},"
       "\"esp32c3\":{\"name\":\"ESP32-C3\",\"caps\":" + capsJson(ESP32C3_GPIO_CAPS, 22) + "},"
       "\"esp32s3\":{\"name\":\"ESP32-S3\",\"caps\":" + capsJson(ESP32S3_GPIO_CAPS, 22) + "}"
       "}";
@@ -559,6 +561,60 @@ void webServerSetup() {
     clearConfig();
     r->send(200, "text/plain", "OK"); delay(500); ESP.restart();
   });
+
+  // ── OTA update ───────────────────────────────────────────────
+  server.on("/ota-upload", HTTP_POST,
+    [](AsyncWebServerRequest *r) {
+      bool ok = !Update.hasError();
+      r->send(200, "application/json",
+        ok ? "{\"ok\":true}"
+           : String("{\"ok\":false,\"err\":\"") + Update.errorString() + "\"}");
+      if (ok) { delay(200); ESP.restart(); }
+    },
+    [](AsyncWebServerRequest*, const String&, size_t index,
+       uint8_t *data, size_t len, bool) {
+      static uint32_t _app_sz, _lfs_sz, _written, _phase, _hdr_bytes;
+      static uint8_t  _hdr[12];
+
+      if (index == 0) {
+        _app_sz = _lfs_sz = _written = _phase = _hdr_bytes = 0;
+        Update.abort();
+      }
+
+      size_t off = 0;
+      if (_hdr_bytes < 12) {
+        size_t take = min((size_t)(12 - _hdr_bytes), len);
+        memcpy(_hdr + _hdr_bytes, data, take);
+        _hdr_bytes += take;
+        off += take;
+        if (_hdr_bytes < 12) return;
+        if (memcmp(_hdr, "BLAU", 4) != 0) { Update.abort(); return; }
+        memcpy(&_app_sz, _hdr + 4, 4);
+        memcpy(&_lfs_sz, _hdr + 8, 4);
+        if (!Update.begin(_app_sz, U_FLASH)) { Update.abort(); return; }
+        _phase = 0; _written = 0;
+      }
+
+      uint8_t *ptr = data + off;
+      size_t   rem = len  - off;
+      while (rem > 0) {
+        if (_phase == 0) {
+          size_t can = min((size_t)(_app_sz - _written), rem);
+          if (can > 0) { Update.write(ptr, can); _written += can; ptr += can; rem -= can; }
+          if (_written >= _app_sz) {
+            Update.end(true);
+            if (_lfs_sz > 0 && Update.begin(_lfs_sz, U_SPIFFS)) {
+              _phase = 1; _written = 0;
+            } else { _phase = 2; }
+          }
+        } else if (_phase == 1) {
+          size_t can = min((size_t)(_lfs_sz - _written), rem);
+          if (can > 0) { Update.write(ptr, can); _written += can; ptr += can; rem -= can; }
+          if (_written >= _lfs_sz) { Update.end(true); _phase = 2; }
+        } else { break; }
+      }
+    }
+  );
 
   server.onNotFound(serveixWifiManager);
   server.begin();

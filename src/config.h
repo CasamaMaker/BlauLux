@@ -41,6 +41,9 @@ static const FuncDef FUNC_REGISTRY[] = {
   { FUNC_TRIAC_CYCLE, "triac_cycle", "Triac (cicle)",      false },
 };
 
+// Màxim de GPIOs suportats (cobreix ESP32 original amb 40 pads)
+#define MAX_GPIO_COUNT 40
+
 // Capacitats per GPIO (usades per la web per validar configuració)
 struct GpioCaps { bool valid; bool hasPwm; bool hasAdc; bool inputOnly; };
 
@@ -68,6 +71,50 @@ static const GpioCaps ESP32C3_GPIO_CAPS[22] = {
   {  true, false, false,  false },  // 19 (USB D+)
   {  true,  true, false,  false },  // 20
   {  true,  true, false,  false },  // 21
+};
+
+static const GpioCaps ESP32_GPIO_CAPS[40] = {
+  //       valid,  hasPwm, hasAdc, inputOnly
+  {  true,  true,  true,  false },  //  0 (strapping, ADC2_CH1)
+  {  true,  true, false,  false },  //  1 (TX0)
+  {  true,  true,  true,  false },  //  2 (strapping, ADC2_CH2)
+  {  true,  true, false,  false },  //  3 (RX0)
+  {  true,  true,  true,  false },  //  4 (ADC2_CH0)
+  {  true,  true, false,  false },  //  5 (strapping)
+  { false, false, false,  false },  //  6 (flash CLK)
+  { false, false, false,  false },  //  7 (flash D0)
+  { false, false, false,  false },  //  8 (flash D1)
+  { false, false, false,  false },  //  9 (flash D2)
+  { false, false, false,  false },  // 10 (flash D3)
+  { false, false, false,  false },  // 11 (flash CMD)
+  {  true,  true,  true,  false },  // 12 (strapping, ADC2_CH5)
+  {  true,  true,  true,  false },  // 13 (ADC2_CH4)
+  {  true,  true,  true,  false },  // 14 (ADC2_CH6)
+  {  true,  true,  true,  false },  // 15 (strapping, ADC2_CH3)
+  {  true,  true, false,  false },  // 16
+  {  true,  true, false,  false },  // 17
+  {  true,  true, false,  false },  // 18
+  {  true,  true, false,  false },  // 19
+  { false, false, false,  false },  // 20 (no existeix)
+  {  true,  true, false,  false },  // 21 (I2C SDA)
+  {  true,  true, false,  false },  // 22 (I2C SCL)
+  {  true,  true, false,  false },  // 23 (SPI MOSI)
+  { false, false, false,  false },  // 24 (no existeix)
+  {  true,  true,  true,  false },  // 25 (ADC2_CH8, DAC1)
+  {  true,  true,  true,  false },  // 26 (ADC2_CH9, DAC2)
+  {  true,  true,  true,  false },  // 27 (ADC2_CH7)
+  { false, false, false,  false },  // 28 (no existeix)
+  { false, false, false,  false },  // 29 (no existeix)
+  { false, false, false,  false },  // 30 (no existeix)
+  { false, false, false,  false },  // 31 (no existeix)
+  {  true,  true,  true,  false },  // 32 (ADC1_CH4)
+  {  true,  true,  true,  false },  // 33 (ADC1_CH5)
+  {  true, false,  true,   true },  // 34 (ADC1_CH6, input-only)
+  {  true, false,  true,   true },  // 35 (ADC1_CH7, input-only)
+  {  true, false,  true,   true },  // 36 (ADC1_CH0, VP, input-only)
+  {  true, false,  true,   true },  // 37 (ADC1_CH1, input-only)
+  {  true, false,  true,   true },  // 38 (ADC1_CH2, input-only)
+  {  true, false,  true,   true },  // 39 (ADC1_CH3, VN, input-only)
 };
 
 static const GpioCaps ESP32S3_GPIO_CAPS[22] = {
@@ -214,7 +261,7 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 // ════════════════════════════════════════════════════════════════
 #define LOG_LEVEL              3        // 0=silent 1=error 2=info 3=debug
 #define CONFIG_SCHEMA_VERSION  4        // incrementa quan canvies claus NVS
-#define FIRMWARE_VERSION       "1.0"
+#define FIRMWARE_VERSION       "2.0"
 #define SERIAL_BAUD            115200  // velocitat del port sèrie
 #define WIFI_AP_HOLD_MS          3000  // ms prement el botó per entrar al mode AP
 #define WIFI_AP_TIMEOUT_MS     120000  // ms màxims en mode AP abans de reiniciar
