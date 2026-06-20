@@ -613,6 +613,24 @@ function saveMqttConfig() {
   }).catch(() => showToast(t('mqttError')));
 }
 
+function fetchPowerupMode() {
+  apiGetPowerupMode().then(v => {
+    const sel = document.getElementById('powerupSelect');
+    if (sel) sel.value = v.trim();
+  }).catch(() => {});
+}
+
+function savePowerupMode() {
+  const v = document.getElementById('powerupSelect').value;
+  apiSavePowerupMode(v).then(() => {
+    const st = document.getElementById('powerupStatus');
+    if (st) {
+      st.textContent = t('powerupSaved');
+      setTimeout(() => { st.textContent = ''; }, 2000);
+    }
+  }).catch(() => showToast(t('altresError')));
+}
+
 function fetchDeviceName() {
   apiGetDeviceName().then(name => {
       const n = name.trim();
@@ -922,6 +940,7 @@ window.onload = function() {
 
   fetchVersion();
   fetchMyMac();
+  fetchPowerupMode();
   fetchDeviceName();
   fetchConfigMode();
   fetchDriveMode();

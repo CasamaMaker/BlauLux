@@ -19,6 +19,7 @@ extern const OutputDriver* g_driver;
 int   findGpio(GpioFunc func);
 void  driverSetup(int gpio);
 void  driverSetupAll();
+void  applyPowerupState();
 void  driverApply(int gpio);
 void  driverToggle(int gpio);
 void  driverToggleAll();

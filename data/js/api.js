@@ -53,6 +53,10 @@ function apiGetTemplates()      { return fetch('/templates').then(r => r.json())
 function apiGetGpioMap()        { return fetch('/gpiomap').then(r => r.json()); }
 function apiSaveGpioMap(params) { return _postForm('/gpiomap', params.toString()); }
 
+// Estat en arrencada
+function apiGetPowerupMode()       { return fetch('/powerupmode').then(r => r.text()); }
+function apiSavePowerupMode(mode)  { return _postForm('/powerupmode', 'mode=' + mode); }
+
 // Nom dispositiu
 function apiGetDeviceName()      { return fetch('/devicename').then(r => r.text()); }
 function apiSaveDeviceName(name) { return _postForm('/devicename', 'device_name=' + encodeURIComponent(name)); }

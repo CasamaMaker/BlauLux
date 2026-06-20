@@ -70,14 +70,16 @@ void setup() {
   wdtSetup();
   logResetReason();
 
-  delay(2000);
-
   #ifdef CLEAR_CONFIG
     clearConfig();
   #endif
   loadConfig();
-  loadSecurityConfig();   // BlauProtocol v2: clau AES + whitelist + nonces ("blau_rx")
   driverSetupAll();
+  applyPowerupState();
+
+  delay(2000);
+
+  loadSecurityConfig();   // BlauProtocol v2: clau AES + whitelist + nonces ("blau_rx")
 
   if (getBotonPin() == PIN_UNUSED) {
     bool wifiOk = false;

@@ -515,6 +515,24 @@ void webServerSetup() {
     r->send(200, "text/plain", device_name);
   });
 
+  // ── Estat en arrencada ────────────────────────────────────────
+
+  server.on("/powerupmode", HTTP_GET, [](AsyncWebServerRequest *r) {
+    r->send(200, "text/plain", String(powerupMode));
+  });
+
+  server.on("/powerupmode", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (r->hasParam("mode", true)) {
+      int m = r->getParam("mode", true)->value().toInt();
+      if (m >= 0 && m <= 2) {
+        powerupMode = (uint8_t)m;
+        savePowerupMode(powerupMode);
+        LOG_I("[CFG] powerupMode: %d", powerupMode);
+      }
+    }
+    r->send(200, "text/plain", "OK");
+  });
+
   // ── Seguretat BlauProtocol v2 ─────────────────────────────────
 
   server.on("/securityStatus", HTTP_GET, [](AsyncWebServerRequest *r) {

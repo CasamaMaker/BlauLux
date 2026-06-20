@@ -1,4 +1,5 @@
 #include "output.h"
+#include "nvsconfig.h"
 #include <esp_timer.h>
 #include <Adafruit_NeoPixel.h>
 
@@ -342,6 +343,7 @@ void driverToggleAll() {
   for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func == FUNC_DIGITAL_LED) driverToggle(i);
   }
+  saveLastOutputState(getState());
 }
 
 // ── getAcFreqHz ──────────────────────────────────────────────────
@@ -392,6 +394,14 @@ void applyOutput(bool on) {
     gpioMap[i].rt.lastChangeMs = (uint32_t)millis();
     driverApply(i);
   }
+  saveLastOutputState(getState());
+}
+
+void applyPowerupState() {
+  bool on = false;
+  if      (powerupMode == 1) on = true;
+  else if (powerupMode == 2) on = (lastSavedState == 1);
+  applyOutput(on);
 }
 
 void toggleOutput() { driverToggleAll(); }

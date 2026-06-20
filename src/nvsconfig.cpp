@@ -2,6 +2,8 @@
 #include "output.h"
 
 int8_t selectedTemplate = -1;
+uint8_t powerupMode    = 0;
+uint8_t lastSavedState = 0;
 
 const char* resetReasonStr(esp_reset_reason_t r) {
   switch (r) {
@@ -35,6 +37,9 @@ void clearConfig() {
 void loadConfig() {
   memset(gpioMap, 0, sizeof(gpioMap));
   prefs.begin("blau", true);
+
+  powerupMode    = prefs.getUChar("pwrup",  0);
+  lastSavedState = prefs.getUChar("lastst", 0);
 
   // si NO coincideix la versió de la configuració, inicialitza amb valors predeterminats
   uint8_t schema = prefs.getUChar("schema", 0);
@@ -83,6 +88,18 @@ void loadConfig() {
   LOG_D("[CFG] MQTT: host='%s' port=%d user='%s' client='%s' topic='%s' fulltopic='%s'",
     mqtt_host.c_str(), mqtt_port, mqtt_user.c_str(),
     mqtt_client.c_str(), mqtt_topic.c_str(), mqtt_fulltopic.c_str());
+}
+
+void savePowerupMode(uint8_t mode) {
+  prefs.begin("blau", false);
+  prefs.putUChar("pwrup", mode);
+  prefs.end();
+}
+
+void saveLastOutputState(bool on) {
+  prefs.begin("blau", false);
+  prefs.putUChar("lastst", on ? 1 : 0);
+  prefs.end();
 }
 
 void saveConfig() {

@@ -42,6 +42,8 @@ extern Gpio gpioMap[MAX_GPIO_COUNT];
 
 // ── Configuració runtime ─────────────────────────────────────────
 extern String device_name;
+extern uint8_t powerupMode;    // 0=off, 1=on, 2=last_state
+extern uint8_t lastSavedState; // 0=off, 1=on
 
 // ── Estat ────────────────────────────────────────────────────────
 extern bool webTesting;

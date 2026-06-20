@@ -372,6 +372,21 @@
       <button type="button" class="btn-back" onclick="goTo('config')" data-i18n="navBack">← Enrere</button>
 
       <div class="card">
+        <label class="section-label" data-i18n="powerupLabel">Estat en arrencar</label>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div>
+            <select id="powerupSelect" style="margin-bottom: 0;">
+              <option value="0" data-i18n="powerupOff">Apagat</option>
+              <option value="1" data-i18n="powerupOn">Encès</option>
+              <option value="2" data-i18n="powerupLast">Últim estat</option>
+            </select>
+          </div>
+          <button type="button" onclick="savePowerupMode()" data-i18n="powerupSaveBtn">Guardar</button>
+          <span id="powerupStatus" style="font-size: 0.85em; color: #27ae60;"></span>
+        </div>
+      </div>
+
+      <div class="card">
         <label class="section-label" data-i18n="altresTitle">Nom del dispositiu</label>
         <div style="display: flex; flex-direction: column; gap: 10px;">
           <div>

@@ -7,3 +7,5 @@ void logResetReason();
 void clearConfig();
 void loadConfig();
 void saveConfig();
+void savePowerupMode(uint8_t mode);
+void saveLastOutputState(bool on);
