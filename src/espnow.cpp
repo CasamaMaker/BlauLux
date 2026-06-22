@@ -79,6 +79,10 @@ bool securityWhitelistMac(int idx, uint8_t out[6]) {
   return true;
 }
 
+void securityStartLearning() {
+  blau2_trg_start_learning(60000);
+}
+
 void onDataSent(const wifi_tx_info_t *info, esp_now_send_status_t status) {
   (void)info;
   LOG_I("[ESPNOW] ACK TX: %s", status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAIL");

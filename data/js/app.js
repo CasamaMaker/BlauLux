@@ -422,6 +422,33 @@ function fetchSecurityStatus() {
   }).catch(function() {});
 }
 
+var _learningTimer = null;
+var _learningEnd = 0;
+
+function startLearning() {
+  apiStartLearning().then(function(r) {
+    if (!r.ok) { showToast(t('secError')); return; }
+    _learningEnd = Date.now() + 60000;
+    var btn = document.getElementById('btnStartLearning');
+    var cd  = document.getElementById('learningCountdown');
+    btn.disabled = true;
+    cd.style.display = '';
+    clearInterval(_learningTimer);
+    _learningTimer = setInterval(function() {
+      var rem = Math.ceil((_learningEnd - Date.now()) / 1000);
+      if (rem <= 0) {
+        clearInterval(_learningTimer);
+        cd.style.display = 'none';
+        btn.disabled = false;
+        fetchSecurityStatus();
+        return;
+      }
+      cd.textContent = t('secWlLearningActive').replace('{s}', rem);
+      fetchSecurityStatus();
+    }, 1000);
+  }).catch(function() { showToast(t('secError')); });
+}
+
 function saveSecurityPass() {
   const pass = document.getElementById('secPassInput').value.trim();
   if (pass.length < 8 || pass.length > 63) { showToast(t('secLenError')); return; }

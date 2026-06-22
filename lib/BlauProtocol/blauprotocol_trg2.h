@@ -86,6 +86,7 @@ static uint8_t       _blau2_wl[BLAU2_MAX_WHITELIST][6];
 static uint8_t       _blau2_wl_count = 0;
 static volatile bool _blau2_wl_pending_persist = false;  /* alta TOFU pendent d'escriure */
 static uint8_t       _blau2_wl_pending_idx = 0;
+static uint32_t      _blau2_learning_until_ms = 0;       /* mode afegir estès: 0=inactiu */
 
 /* Nonce d'emissió per a les respostes xifrades (només RAM, random per boot) */
 static uint32_t _blau2_tx_nonce = 0;
@@ -101,6 +102,14 @@ static bool _blau2_no_key_logged = false;
 static inline void blau2_trg_tx_nonce_init(void)
 {
     _blau2_tx_nonce = blau_random_initial_nonce();
+}
+
+/* Activa el mode "afegir emissor" durant duration_ms ms.
+ * Qualsevol paquet v2 vàlid rebut en aquest interval d'un MAC
+ * no conegut s'afegirà automàticament a la whitelist. */
+static inline void blau2_trg_start_learning(uint32_t duration_ms)
+{
+    _blau2_learning_until_ms = (uint32_t)millis() + duration_ms;
 }
 
 /* =========================================================
@@ -254,7 +263,10 @@ static inline void blau2_trg_on_data_recv(const uint8_t    *mac,
 
     /* === MESURA 8: MAC whitelist (abans de cap operació crypto) === */
     bool learning = (_blau2_wl_count == 0);
-    if (!learning && !_blau2_mac_allowed(mac)) return;
+    bool ext_learning = (!learning
+        && _blau2_learning_until_ms > 0
+        && (int32_t)((uint32_t)millis() - _blau2_learning_until_ms) < 0);
+    if (!learning && !ext_learning && !_blau2_mac_allowed(mac)) return;
 
     uint32_t now = (uint32_t)millis();
     Blau2SenderState_t *s = _blau2_get_sender(mac, now);
@@ -272,14 +284,17 @@ static inline void blau2_trg_on_data_recv(const uint8_t    *mac,
     }
     uint32_t nonce = pkt_v2.nonce;
 
-    /* === TOFU: 1r emissor amb GCM vàlid s'autoregistra === */
-    if (learning) {
-        memcpy(_blau2_wl[0], mac, 6);
-        _blau2_wl_count           = 1;
-        _blau2_wl_pending_idx     = 0;
+    /* === TOFU / mode afegir: registra nous emissors amb GCM vàlid === */
+    if ((learning || ext_learning) && !_blau2_mac_allowed(mac)
+            && _blau2_wl_count < BLAU2_MAX_WHITELIST) {
+        uint8_t idx = _blau2_wl_count;
+        memcpy(_blau2_wl[idx], mac, 6);
+        _blau2_wl_count++;
+        _blau2_wl_pending_idx     = idx;
         _blau2_wl_pending_persist = true;          /* el loop l'escriu a NVS */
-        Serial.printf("[BlauTrg2] TOFU: emissor %02X:%02X:%02X:%02X:%02X:%02X registrat\n",
-                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        Serial.printf("[BlauTrg2] %s: emissor %02X:%02X:%02X:%02X:%02X:%02X registrat (wl[%d])\n",
+                      learning ? "TOFU" : "Add",
+                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], idx);
     }
 
     /* === MESURES 3 + 7: anti-replay + testimoni/finestra post-boot === */

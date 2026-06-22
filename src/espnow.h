@@ -14,6 +14,7 @@ void processEspNowPending();
 bool loadSecurityConfig();                       // clau de NVS + whitelist/nonces (al setup)
 bool saveSecurityPassword(const char *pwd);      // PBKDF2 -> aes_key a NVS (password no es guarda)
 void clearSecurity();                            // esborra clau + whitelist + nonces -> mode v1
+void securityStartLearning();                    // activa mode "afegir emissor" 60 s
 bool securityConfigured();
 int  securityWhitelistCount();
 bool securityWhitelistMac(int idx, uint8_t out[6]);

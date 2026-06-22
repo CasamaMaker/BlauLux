@@ -66,6 +66,7 @@ function apiClearDeviceName()    { return fetch('/cleardevicename', {method:'POS
 function apiGetSecurityStatus() { return fetch('/securityStatus').then(r => r.json()); }
 function apiSaveSecurity(pass)  { return _postForm('/security', 'protopass=' + encodeURIComponent(pass)); }
 function apiClearSecurity()     { return fetch('/clearsecurity', {method:'POST'}); }
+function apiStartLearning()     { return fetch('/startlearning', {method:'POST'}); }
 
 // Administració
 function apiRestart()       { return fetch('/restart',       {method:'POST'}); }

@@ -575,6 +575,12 @@ void webServerSetup() {
     r->send(200, "text/plain", "OK");
   });
 
+  server.on("/startlearning", HTTP_POST, [](AsyncWebServerRequest *r) {
+    if (!securityConfigured()) { r->send(400, "text/plain", "not configured"); return; }
+    securityStartLearning();
+    r->send(200, "text/plain", "OK");
+  });
+
   // ── Administració ─────────────────────────────────────────────
 
   server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *r) {
