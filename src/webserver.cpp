@@ -372,6 +372,7 @@ void webServerSetup() {
       snprintf(key, sizeof(key), "b%d", i); prefs.remove(key);
       snprintf(key, sizeof(key), "c%d", i); prefs.remove(key);
       snprintf(key, sizeof(key), "n%d", i); prefs.remove(key);
+      snprintf(key, sizeof(key), "e%d", i); prefs.remove(key);
       // snprintf(key, sizeof(key), "g%d", i); prefs.remove(key);  // clau antiga
     }
     // prefs.remove("b1"); prefs.remove("b2"); prefs.remove("b3");
@@ -396,6 +397,8 @@ void webServerSetup() {
       json += ",\"" + String(key) + "\":" + String(gpioMap[i].cfg.param2);
       snprintf(key, sizeof(key), "c%d", i);
       json += ",\"" + String(key) + "\":" + String(gpioMap[i].cfg.param3);
+      snprintf(key, sizeof(key), "e%d", i);
+      json += ",\"" + String(key) + "\":" + (gpioMap[i].cfg.notificador ? "1" : "0");
       if (gpioMap[i].cfg.name[0]) {
         snprintf(key, sizeof(key), "n%d", i);
         json += ",\"" + String(key) + "\":\"" + String(gpioMap[i].cfg.name) + "\"";
@@ -426,6 +429,9 @@ void webServerSetup() {
         strncpy(gpioMap[i].cfg.name, nm.c_str(), 12);
         gpioMap[i].cfg.name[12] = '\0';
       }
+      snprintf(key, sizeof(key), "e%d", i);
+      if (r->hasParam(key, true))
+        gpioMap[i].cfg.notificador = r->getParam(key, true)->value().toInt() == 1;
     }
     if (r->hasParam("tmpl", true))
       selectedTemplate = (int8_t)r->getParam("tmpl", true)->value().toInt();

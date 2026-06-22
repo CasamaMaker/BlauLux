@@ -76,8 +76,9 @@ void setup() {
   loadConfig();
   driverSetupAll();
   applyPowerupState();
+  renderVisualFeedback("inici");
 
-  delay(2000);
+  // delay(2000);
 
   loadSecurityConfig();   // BlauProtocol v2: clau AES + whitelist + nonces ("blau_rx")
 
@@ -115,7 +116,7 @@ void setup() {
     LOG_I("[CFG] WiFi ok, operacio normal (sense boto)");
   }
 
-  renderVisualFeedback("inici");
+  
   configDeviceAP();
 
   if (!LittleFS.begin()) { LOG_E("[FS] Error muntant LittleFS"); }

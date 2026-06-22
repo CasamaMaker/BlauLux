@@ -407,31 +407,96 @@ void applyPowerupState() {
 void toggleOutput() { driverToggleAll(); }
 
 void renderVisualFeedback(const char* mode) {
-  // for (int i = 0; i < MAX_GPIO_COUNT; i++) {
-  //   GpioFunc f = gpioMap[i].cfg.func;
-  //   if (f == FUNC_PWM) {
-  //     int ch = ledcChannelFor(i);
-  //     if (ch < 0) break;
-  //     if (strcmp(mode, "inici") == 0) {
-  //       ledcWrite(ch, map(gpioMap[i].rt.param1, 0, 100, 0, 255));
-  //       delay(INICI_BLINK_MS);
-  //       ledcWrite(ch, 0);
-  //     } else if (strcmp(mode, "wifiAP") == 0) {
-  //       uint16_t osc    = (uint16_t)((millis() / 2) % 510);
-  //       uint8_t  bright = osc < 255 ? (uint8_t)osc : (uint8_t)(510 - osc);
-  //       ledcWrite(ch, bright);
-  //     }
-  //     return;
-  //   }
-  //   if (f == FUNC_ON_OFF) {
-  //     if (strcmp(mode, "inici") == 0) {
-  //       digitalWrite(i, HIGH); delay(INICI_BLINK_MS); digitalWrite(i, LOW);
-  //     } else if (strcmp(mode, "wifiAP") == 0) {
-  //       digitalWrite(i, (millis() / 500) % 2 ? HIGH : LOW);
-  //     }
-  //     return;
-  //   }
-  // }
+  if (strcmp(mode, "inici") == 0) {
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
+      if (!gpioMap[i].cfg.notificador) continue;
+      GpioFunc f = gpioMap[i].cfg.func;
+      if (f == FUNC_DIGITAL_LED && _neoPixel[i]) {
+        uint32_t col = FEEDBACK_STARTUP_COLOR;
+        _neoPixel[i]->fill(_neoPixel[i]->Color(
+          (col >> 16) & 0xFF, (col >> 8) & 0xFF, col & 0xFF));
+        _neoPixel[i]->show();
+      } else if (f == FUNC_ON_OFF) {
+        digitalWrite(i, HIGH);
+      } else if (f == FUNC_PWM) {
+        ledcWrite(i, 200);
+      }
+    }
+    delay(FEEDBACK_STARTUP_DURATION_MS);
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
+      if (!gpioMap[i].cfg.notificador) continue;
+      GpioFunc f = gpioMap[i].cfg.func;
+      if (f == FUNC_DIGITAL_LED && _neoPixel[i]) {
+        _neoPixel[i]->clear(); _neoPixel[i]->show();
+      } else if (f == FUNC_ON_OFF) {
+        digitalWrite(i, LOW);
+      } else if (f == FUNC_PWM) {
+        ledcWrite(i, 0);
+      }
+    }
+    delay(FEEDBACK_STARTUP_DURATION_MS);
+
+  } else if (strcmp(mode, "wifiAP") == 0) {
+    uint32_t now  = millis();
+    uint32_t osc  = now % FEEDBACK_WIFIAP_BREATHE_FREQ_MS;
+    uint32_t half = FEEDBACK_WIFIAP_BREATHE_FREQ_MS / 2;
+    uint8_t  bright = (osc < half)
+      ? (uint8_t)(osc * 255 / half)
+      : (uint8_t)((FEEDBACK_WIFIAP_BREATHE_FREQ_MS - osc) * 255 / half);
+
+    static bool     _blinkInit                       = false;
+    static uint8_t  _blinkCnt[MAX_GPIO_COUNT]        = {};
+    static uint32_t _blinkLastMs[MAX_GPIO_COUNT]     = {};
+    static bool     _blinkOn[MAX_GPIO_COUNT]         = {};
+
+    if (!_blinkInit) {
+      for (int i = 0; i < MAX_GPIO_COUNT; i++) {
+        _blinkCnt[i]    = FEEDBACK_WIFIAP_BLINK_COUNT * 2;
+        _blinkLastMs[i] = now;
+        _blinkOn[i]     = false;
+      }
+      _blinkInit = true;
+    }
+
+    for (int i = 0; i < MAX_GPIO_COUNT; i++) {
+      if (!gpioMap[i].cfg.notificador) continue;
+      GpioFunc f = gpioMap[i].cfg.func;
+
+      if (f == FUNC_DIGITAL_LED && _neoPixel[i]) {
+        uint32_t col = FEEDBACK_WIFIAP_BREATHE_COLOR;
+        _neoPixel[i]->fill(_neoPixel[i]->Color(
+          (uint8_t)((uint16_t)((col >> 16) & 0xFF) * bright / 255),
+          (uint8_t)((uint16_t)((col >>  8) & 0xFF) * bright / 255),
+          (uint8_t)((uint16_t)( col        & 0xFF) * bright / 255)));
+        _neoPixel[i]->show();
+
+      } else if (f == FUNC_ON_OFF || f == FUNC_PWM) {
+        bool setOn    = false;
+        bool doUpdate = false;
+
+        if (FEEDBACK_WIFIAP_BLINK_LOOP) {
+          setOn    = (now / FEEDBACK_WIFIAP_BLINK_DURATION_MS) % 2 == 0;
+          doUpdate = true;
+        } else {
+          if (_blinkCnt[i] > 0 &&
+              now - _blinkLastMs[i] >= FEEDBACK_WIFIAP_BLINK_DURATION_MS) {
+            _blinkOn[i]     = !_blinkOn[i];
+            _blinkCnt[i]--;
+            _blinkLastMs[i] = now;
+            setOn    = _blinkOn[i];
+            doUpdate = true;
+          } else if (_blinkCnt[i] == 0 && _blinkOn[i]) {
+            setOn = false; _blinkOn[i] = false; doUpdate = true;
+          }
+        }
+
+        if (doUpdate) {
+          if (f == FUNC_ON_OFF) digitalWrite(i, setOn ? HIGH : LOW);
+          else                  ledcWrite(i,    setOn ? 200   : 0);
+        }
+      }
+    }
+  }
 }
 
 int  getBotonPin()    { int g = findGpio(FUNC_BTN); return g != PIN_UNUSED ? g : findGpio(FUNC_BTN_INV); }

@@ -20,6 +20,7 @@ struct GpioConfig {       // persistent — guardat a NVS
   uint32_t param1;
   uint16_t param2;
   uint16_t param3;
+  bool     notificador;
 };
 
 struct GpioRuntime {      // volatile — només RAM

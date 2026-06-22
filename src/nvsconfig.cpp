@@ -67,6 +67,8 @@ void loadConfig() {
     String nm = prefs.getString(key, "");
     strncpy(gpioMap[i].cfg.name, nm.c_str(), 12);
     gpioMap[i].cfg.name[12] = '\0';
+    snprintf(key, sizeof(key), "e%d", i);
+    gpioMap[i].cfg.notificador = prefs.getBool(key, false);
   }
 
   // assigna valors guardats --> wifi i mqtt
@@ -118,6 +120,8 @@ void saveConfig() {
     snprintf(key, sizeof(key), "n%d", i);
     if (gpioMap[i].cfg.name[0]) prefs.putString(key, gpioMap[i].cfg.name);
     else prefs.remove(key);
+    snprintf(key, sizeof(key), "e%d", i);
+    prefs.putBool(key, gpioMap[i].cfg.notificador);
   }
   prefs.putString("sta_ssid",      sta_ssid);
   prefs.putString("sta_pass",      sta_pass);

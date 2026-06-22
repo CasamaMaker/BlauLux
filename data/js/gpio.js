@@ -34,7 +34,7 @@ function selectMcu(mcuId) {
     _gpioCount = newCount;
     const oldState = gpioState;
     gpioState = Array.from({length: _gpioCount}, function(_, i) {
-      return oldState[i] || { name: '', func: 'none', params: {}, zcdGpio: null };
+      return oldState[i] || { name: '', func: 'none', params: {}, zcdGpio: null, notificador: false };
     });
     const tbody = document.getElementById('gpioTableBody');
     if (tbody) {
@@ -82,7 +82,7 @@ const FUNC_DEFS = [
   { id: 'none',        i18nKey: 'func_none',       firmwareId: 'none',        hasSubRow: false },
   { id: 'btn',         i18nKey: 'func_btn',         firmwareId: 'btn',         hasSubRow: false },
   { id: 'btn_inv',     i18nKey: 'func_btn_inv',     firmwareId: 'btn_inv',     hasSubRow: false },
-  { id: 'relay',       i18nKey: 'func_relay_out',   firmwareId: 'on_off',      hasSubRow: false },
+  { id: 'relay',       i18nKey: 'func_relay_out',   firmwareId: 'on_off',      hasSubRow: true  },
   { id: 'neopixel',    i18nKey: 'func_neopixel',    firmwareId: 'digital_led', hasSubRow: true  },
   { id: 'pwm',         i18nKey: 'func_pwm',         firmwareId: 'pwm',         hasSubRow: true  },
   { id: 'triac_cycle', i18nKey: 'func_triac_cycle', firmwareId: 'triac_cycle', hasSubRow: true  },
@@ -90,7 +90,7 @@ const FUNC_DEFS = [
 ];
 
 let gpioState = Array.from({length: _gpioCount}, () =>
-  ({ name: '', func: 'none', params: {}, zcdGpio: null })
+  ({ name: '', func: 'none', params: {}, zcdGpio: null, notificador: false })
 );
 let zcdReserved = new Set();
 
@@ -269,10 +269,11 @@ function buildGpioTable(gpiomap) {
     }
   }
 
-  // Pas 3: llegir noms
+  // Pas 3: llegir noms i notificador
   for (let g = 0; g < _decodeCount; g++) {
     const nm = gpiomap['n' + g];
     if (nm !== undefined) gpioState[g].name = nm;
+    gpioState[g].notificador = !!(gpiomap['e' + g]);
   }
 
   // Pas 4: construir DOM (només fins a _gpioCount — selectMcu() pot ampliar després)
@@ -413,6 +414,25 @@ function buildSubRow(gpio) {
         DBG.change(`GPIO ${gpio} triac_phase: duty → ${v}%`);
         gpioState[gpio].params.duty = v;
       })));
+  }
+
+  const isOutput = ['relay','neopixel','pwm','triac_cycle','triac_phase'].includes(func);
+  if (isOutput) {
+    const cbDiv = document.createElement('div');
+    cbDiv.className = 'gpio-sub-field';
+    const cbLabel = document.createElement('label');
+    cbLabel.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'sub_notif_' + gpio;
+    cb.checked = gpioState[gpio].notificador || false;
+    cb.addEventListener('change', function() { gpioState[gpio].notificador = cb.checked; });
+    const cbText = document.createElement('span');
+    cbText.textContent = t('labelNotificador');
+    cbLabel.appendChild(cb);
+    cbLabel.appendChild(cbText);
+    cbDiv.appendChild(cbLabel);
+    inner.appendChild(cbDiv);
   }
 
   td.appendChild(inner);
@@ -801,6 +821,7 @@ function saveGpioMap() {
     params.append('a' + g, a);
     params.append('b' + g, b);
     params.append('c' + g, c);
+    params.append('e' + g, s.notificador ? '1' : '0');
     if (s.name) params.set('n' + g, s.name);
   }
 

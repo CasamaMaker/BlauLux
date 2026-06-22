@@ -167,6 +167,14 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
     { 17, FUNC_BTN   },
     { 18, FUNC_ON_OFF},
   }, 3 },
+    { "GL-C-211WL", {
+    { 0, FUNC_BTN_INV},
+    { 4, FUNC_PWM    },
+    { 16, FUNC_PWM   },
+    { 17, FUNC_PWM   },
+    { 18, FUNC_PWM   },
+    { 19, FUNC_PWM   },
+  }, 6 },
 };
 
 
@@ -271,6 +279,17 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
 #define DNS_POLL_MS               100  // interval de polling DNS al bucle AP
 #define ESPNOW_CHANNEL              1  // canal Wi-Fi per a ESP-NOW
 #define INICI_BLINK_MS            500  // durada del parpelleig d'inici
-#define BUTTON_DEBOUNCE_MS        500  // debounce després de clic de botó
-#define BUTTON_RELEASE_DEBOUNCE_MS 200 // debounce detecció alliberament de botó
+
+// ── renderVisualFeedback ─────────────────────────────────────────
+#define FEEDBACK_STARTUP_DURATION_MS      200
+#define FEEDBACK_STARTUP_COLOR            COLOR_INICI
+
+#define FEEDBACK_WIFIAP_BREATHE_FREQ_MS   3000
+#define FEEDBACK_WIFIAP_BREATHE_COLOR     COLOR_WIFI_AP
+
+#define FEEDBACK_WIFIAP_BLINK_COUNT       3
+#define FEEDBACK_WIFIAP_BLINK_DURATION_MS 500
+#define FEEDBACK_WIFIAP_BLINK_LOOP        true
+#define BUTTON_DEBOUNCE_MS        100  // debounce després de clic de botó
+#define BUTTON_RELEASE_DEBOUNCE_MS 50 // debounce detecció alliberament de botó
 #define LED_POWER_SETTLE_MS         5  // espera (ms) entre activar MOSFET alimentació i enviar dades NeoPixel
