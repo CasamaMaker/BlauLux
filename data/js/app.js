@@ -927,8 +927,46 @@ function chSetColor(ch, picker) {
 // ── OTA ──────────────────────────────────────────────────────────
 
 function fetchOtaVersion() {
-  var el = document.getElementById('otaVersion');
-  if (el) el.textContent = FW_VER ? t('otaCurrentVer') + FW_VER : '';
+  var el = document.getElementById('otaInfo');
+  if (!el) return;
+  apiGetChipInfo()
+    .then(function(info) {
+      function fmtBytes(n) {
+        if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+        return Math.round(n / 1024) + ' kB';
+      }
+      var rows = [
+        [t('otaFwVer'),   info.fw_ver  || '—'],
+        [t('otaFwFile'),  info.fw_file || '—'],
+        null,
+        ['Xip',           info.chip + '  rev.' + info.chip_rev],
+        [t('otaCores'),   info.cores + ' × ' + info.cpu_mhz + ' MHz'],
+        ['IDF',           info.idf_ver],
+        [t('otaHeap'),    fmtBytes(info.heap_free) + ' lliure / ' + fmtBytes(info.heap_total)],
+      ];
+      if (info.psram_size > 0) rows.push(['PSRAM', fmtBytes(info.psram_free) + ' lliure / ' + fmtBytes(info.psram_size)]);
+      rows.push(['Flash',           fmtBytes(info.flash_size) + ' @ ' + info.flash_mhz + ' MHz']);
+      rows.push([t('otaSketch'),    fmtBytes(info.sketch_size) + ' / ' + fmtBytes(info.sketch_size + info.sketch_free)]);
+      rows.push([t('otaFilesys'),   fmtBytes(info.fs_used)     + ' / ' + fmtBytes(info.fs_total)]);
+      rows.push(['MAC',             info.mac]);
+
+      var html = '<table style="border-collapse:collapse;width:100%;">';
+      rows.forEach(function(r) {
+        if (r === null) {
+          html += '<tr><td colspan="2" style="padding:3px 0;"><hr style="border:none;border-top:1px solid #e0e0e0;margin:0;"></td></tr>';
+        } else {
+          html += '<tr>'
+            + '<td style="padding:1px 10px 1px 0;color:#888;white-space:nowrap;">' + r[0] + '</td>'
+            + '<td style="padding:1px 0;font-weight:500;color:#333;">' + r[1] + '</td>'
+            + '</tr>';
+        }
+      });
+      html += '</table>';
+      el.innerHTML = html;
+    })
+    .catch(function() {
+      el.textContent = FW_VER ? t('otaCurrentVer') + FW_VER : '';
+    });
 }
 
 function startOTA() {

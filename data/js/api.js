@@ -10,6 +10,7 @@ function _postForm(path, body) {
 
 // Dispositiu
 function apiGetVersion()      { return fetch('/version').then(r => r.text()); }
+function apiGetChipInfo()     { return fetch('/chipinfo').then(r => r.json()); }
 function apiGetMyMac()        { return fetch('/mymac',       {method:'POST'}).then(r => r.text()); }
 function apiGetDriverMode()   { return fetch('/driverMode',  {method:'POST'}).then(r => r.text()); }
 function apiGetConfigMode()   { return fetch('/configMode',  {method:'POST'}).then(r => r.text()); }

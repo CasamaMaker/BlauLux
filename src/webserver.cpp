@@ -96,6 +96,34 @@ void webServerSetup() {
     r->send(200, "text/plain", FIRMWARE_VERSION);
   });
 
+  server.on("/chipinfo", HTTP_GET, [](AsyncWebServerRequest *r) {
+    prefs.begin("blau", true);
+    String fwFile = prefs.getString("fw_file", "");
+    prefs.end();
+    String mac = WiFi.macAddress();
+    String json = "{";
+    json += "\"fw_ver\":\""   + String(FIRMWARE_VERSION)            + "\",";
+    json += "\"fw_file\":\""  + fwFile                              + "\",";
+    json += "\"chip\":\""     + String(ESP.getChipModel())          + "\",";
+    json += "\"chip_rev\":"   + String(ESP.getChipRevision())       + ",";
+    json += "\"cores\":"      + String(ESP.getChipCores())          + ",";
+    json += "\"cpu_mhz\":"    + String(ESP.getCpuFreqMHz())         + ",";
+    json += "\"idf_ver\":\""  + String(ESP.getSdkVersion())         + "\",";
+    json += "\"heap_free\":"  + String(ESP.getFreeHeap())           + ",";
+    json += "\"heap_total\":" + String(ESP.getHeapSize())           + ",";
+    json += "\"psram_size\":" + String(ESP.getPsramSize())          + ",";
+    json += "\"psram_free\":" + String(ESP.getFreePsram())          + ",";
+    json += "\"flash_size\":" + String(ESP.getFlashChipSize())      + ",";
+    json += "\"flash_mhz\":"  + String(ESP.getFlashChipSpeed()/1000000) + ",";
+    json += "\"sketch_size\":"+ String(ESP.getSketchSize())         + ",";
+    json += "\"sketch_free\":"+ String(ESP.getFreeSketchSpace())    + ",";
+    json += "\"fs_used\":"    + String(LittleFS.usedBytes())        + ",";
+    json += "\"fs_total\":"   + String(LittleFS.totalBytes())       + ",";
+    json += "\"mac\":\""      + mac                                 + "\"";
+    json += "}";
+    r->send(200, "application/json", json);
+  });
+
   server.on("/acfreq", HTTP_GET, [](AsyncWebServerRequest *r) {
     char buf[32];
     snprintf(buf, sizeof(buf), "{\"freq\":%.1f}", getAcFreqHz());
@@ -593,20 +621,28 @@ void webServerSetup() {
   });
 
   // ── OTA update ───────────────────────────────────────────────
+  static String s_pending_fw_file;
+
   server.on("/ota-upload", HTTP_POST,
     [](AsyncWebServerRequest *r) {
       bool ok = !Update.hasError();
+      if (ok && s_pending_fw_file.length() > 0) {
+        prefs.begin("blau", false);
+        prefs.putString("fw_file", s_pending_fw_file);
+        prefs.end();
+      }
       r->send(200, "application/json",
         ok ? "{\"ok\":true}"
            : String("{\"ok\":false,\"err\":\"") + Update.errorString() + "\"}");
       if (ok) { delay(200); ESP.restart(); }
     },
-    [](AsyncWebServerRequest*, const String&, size_t index,
+    [](AsyncWebServerRequest*, const String& filename, size_t index,
        uint8_t *data, size_t len, bool) {
       static uint32_t _app_sz, _lfs_sz, _written, _phase, _hdr_bytes;
       static uint8_t  _hdr[12];
 
       if (index == 0) {
+        if (filename.length() > 0) s_pending_fw_file = filename;
         _app_sz = _lfs_sz = _written = _phase = _hdr_bytes = 0;
         Update.abort();
       }

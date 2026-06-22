@@ -163,6 +163,12 @@ const i18n = {
     otaError:           'Error en actualitzar',
     otaNoFile:          'Selecciona un fitxer .bin',
     otaCurrentVer:      'Versió actual: ',
+    otaFwVer:           'Versió SW',
+    otaFwFile:          'Fitxer firmware',
+    otaCores:           'Nuclis / CPU',
+    otaHeap:            'RAM lliure',
+    otaSketch:          'Sketch',
+    otaFilesys:         'Filesystem',
   },
   en: {
     pageTitle: 'BlauLux Configurator',
@@ -328,6 +334,12 @@ const i18n = {
     otaError:           'Update error',
     otaNoFile:          'Select a .bin file',
     otaCurrentVer:      'Current version: ',
+    otaFwVer:           'SW version',
+    otaFwFile:          'Firmware file',
+    otaCores:           'Cores / CPU',
+    otaHeap:            'Free RAM',
+    otaSketch:          'Sketch',
+    otaFilesys:         'Filesystem',
   },
   es: {
     pageTitle: 'Configurador BlauLux',
@@ -493,6 +505,12 @@ const i18n = {
     otaError:           'Error al actualizar',
     otaNoFile:          'Selecciona un archivo .bin',
     otaCurrentVer:      'Versión actual: ',
+    otaFwVer:           'Versión SW',
+    otaFwFile:          'Archivo firmware',
+    otaCores:           'Núcleos / CPU',
+    otaHeap:            'RAM libre',
+    otaSketch:          'Sketch',
+    otaFilesys:         'Filesystem',
   },
 };
 
