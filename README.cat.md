@@ -146,6 +146,26 @@ GPIO 1  →  Botó de configuració
 -->
 <!-- ![Esquema de connexions](docs/img/wiring.png) -->
 
+### 💾 Mapa de la flash (4 MB)
+
+```
+┌─────────────────────┐ 0x000000
+│  Bootloader  ~28 kB │
+├─────────────────────┤ 0x008000
+│  Taula particions 4 kB│
+├─────────────────────┤ 0x009000
+│  NVS         ~20 kB │  ← configuració (WiFi, MQTT, config)
+├─────────────────────┤ 0x00E000
+│  OTA data     8 kB  │  ← registre de partició activa
+├─────────────────────┤ 0x010000
+│  Sketch       2.4 MB│
+├─────────────────────┤
+│  Filesystem   1.4 MB│
+└─────────────────────┘ 0x400000  (4 MB)
+```
+
+> La zona del sistema (~200 kB) — bootloader + taula de particions + NVS + metadades OTA — és reservada i no es pot usar per codi ni fitxers. L'ús real de Sketch i Filesystem és visible a la interfície web → pàgina *Actualitzar*.
+
 ---
 
 ## 🚀 Primers passos

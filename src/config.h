@@ -168,7 +168,7 @@ static const DeviceTemplate DEVICE_TEMPLATES[] = {
     { 18, FUNC_ON_OFF},
   }, 3 },
     { "GL-C-211WL", {
-    { 0, FUNC_BTN_INV},
+    { 0, FUNC_BTN},
     { 4, FUNC_PWM    },
     { 16, FUNC_PWM   },
     { 17, FUNC_PWM   },

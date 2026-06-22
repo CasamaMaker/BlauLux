@@ -146,6 +146,26 @@ GPIO 1  →  Configuration button
 -->
 <!-- ![Wiring diagram](docs/img/wiring.png) -->
 
+### 💾 Flash layout (4 MB)
+
+```
+┌─────────────────────┐ 0x000000
+│  Bootloader  ~28 kB │
+├─────────────────────┤ 0x008000
+│  Partition table 4 kB│
+├─────────────────────┤ 0x009000
+│  NVS         ~20 kB │  ← settings (WiFi, MQTT, config)
+├─────────────────────┤ 0x00E000
+│  OTA data     8 kB  │  ← tracks active partition
+├─────────────────────┤ 0x010000
+│  Sketch       2.4 MB│
+├─────────────────────┤
+│  Filesystem   1.4 MB│
+└─────────────────────┘ 0x400000  (4 MB)
+```
+
+> The ~200 kB system area (bootloader + partition table + NVS + OTA metadata) is reserved — not available for code or files. Actual Sketch and Filesystem usage is visible in the web UI → *Update* page.
+
 ---
 
 ## 🚀 Getting Started
