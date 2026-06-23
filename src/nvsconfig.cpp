@@ -93,23 +93,39 @@ void loadConfig() {
 }
 
 void savePowerupMode(uint8_t mode) {
-  prefs.begin("blau", false);
-  prefs.putUChar("pwrup", mode);
-  prefs.end();
+  Preferences p;
+  p.begin("blau", false);
+  p.putUChar("pwrup", mode);
+  p.end();
 }
 
 void saveLastOutputState(bool on) {
-  prefs.begin("blau", false);
-  prefs.putUChar("lastst", on ? 1 : 0);
-  prefs.end();
+  Preferences p;
+  p.begin("blau", false);
+  p.putUChar("lastst", on ? 1 : 0);
+  p.end();
 }
 
 void saveConfig() {
-  prefs.begin("blau", false);
+  if (!prefs.begin("blau", false)) {
+    LOG_E("[CFG] NVS open failed — config NOT saved");
+    return;
+  }
   prefs.putUChar("schema", CONFIG_SCHEMA_VERSION);
   char key[4];
   for (int i = 0; i < MAX_GPIO_COUNT; i++) {
+    bool empty = (gpioMap[i].cfg.func == FUNC_NONE &&
+                  gpioMap[i].cfg.param1 == 0 &&
+                  gpioMap[i].cfg.param2 == 0 &&
+                  gpioMap[i].cfg.param3 == 0 &&
+                  gpioMap[i].cfg.name[0] == 0 &&
+                  !gpioMap[i].cfg.notificador);
     snprintf(key, sizeof(key), "f%d", i);
+    if (empty) { prefs.remove(key); snprintf(key, sizeof(key), "a%d", i); prefs.remove(key);
+                 snprintf(key, sizeof(key), "b%d", i); prefs.remove(key);
+                 snprintf(key, sizeof(key), "c%d", i); prefs.remove(key);
+                 snprintf(key, sizeof(key), "n%d", i); prefs.remove(key);
+                 snprintf(key, sizeof(key), "e%d", i); prefs.remove(key); continue; }
     prefs.putUChar(key, (uint8_t)gpioMap[i].cfg.func);
     snprintf(key, sizeof(key), "a%d", i);
     prefs.putUInt(key, gpioMap[i].cfg.param1);

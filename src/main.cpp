@@ -110,7 +110,7 @@ void setup() {
         //   ESP.restart();
         // }
       }
-      delay(500);
+      delay(2000);
       ESP.restart();
     }
     LOG_I("[CFG] WiFi ok, operacio normal (sense boto)");

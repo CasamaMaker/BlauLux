@@ -280,23 +280,25 @@ void webServerSetup() {
     }
     if (r->hasParam("br", true)) {
       int br = constrain(r->getParam("br", true)->value().toInt(), 0, 100);
-      if (f == FUNC_DIGITAL_LED) gpioMap[ch].rt.param2 = (uint16_t)br;
-      else                       gpioMap[ch].rt.param1 = (uint32_t)br;
+      if (f == FUNC_DIGITAL_LED) { gpioMap[ch].rt.param2 = (uint16_t)br; gpioMap[ch].cfg.param2 = (uint16_t)br; }
+      else                       { gpioMap[ch].rt.param1 = (uint32_t)br; gpioMap[ch].cfg.param1 = (uint32_t)br; }
       driverApply(ch);
     }
     if (r->hasParam("freq", true)) {
       int fv = r->getParam("freq", true)->value().toInt();
-      if (f == FUNC_PWM)         gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 300, 40000);
-      if (f == FUNC_TRIAC_CYCLE) gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 5, 50);
+      if (f == FUNC_PWM)         { gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 300, 40000); gpioMap[ch].cfg.param2 = gpioMap[ch].rt.param2; }
+      if (f == FUNC_TRIAC_CYCLE) { gpioMap[ch].rt.param2 = (uint16_t)constrain(fv, 5, 50);      gpioMap[ch].cfg.param2 = gpioMap[ch].rt.param2; }
       driverApply(ch);
     }
     if (r->hasParam("r", true) && f == FUNC_DIGITAL_LED) {
       int rv = constrain(r->getParam("r", true)->value().toInt(), 0, 255);
       int gv = r->hasParam("g", true) ? constrain(r->getParam("g", true)->value().toInt(), 0, 255) : 0;
       int bv = r->hasParam("b", true) ? constrain(r->getParam("b", true)->value().toInt(), 0, 255) : 0;
-      gpioMap[ch].rt.param1 = ((uint32_t)rv << 16) | ((uint32_t)gv << 8) | (uint32_t)bv;
+      gpioMap[ch].rt.param1  = ((uint32_t)rv << 16) | ((uint32_t)gv << 8) | (uint32_t)bv;
+      gpioMap[ch].cfg.param1 = gpioMap[ch].rt.param1;
       driverApply(ch);
     }
+    saveConfig();
     r->send(200, "text/plain", "OK");
   });
 

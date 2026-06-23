@@ -535,10 +535,13 @@ void setBrightnessForType(int ct, int v) {
     GpioFunc f = gpioMap[i].cfg.func;
     if ((ct == CTRL_TYPE_PWM         && f == FUNC_PWM)         ||
         (ct == CTRL_TYPE_TRIAC_CYCLE && f == FUNC_TRIAC_CYCLE) ||
-        (ct == CTRL_TYPE_TRIAC_PHASE && f == FUNC_TRIAC_FASE))
-      gpioMap[i].rt.param1 = (uint32_t)v;
-    else if (ct == CTRL_TYPE_ONOFF   && f == FUNC_DIGITAL_LED)
-      gpioMap[i].rt.param2 = (uint16_t)v;
+        (ct == CTRL_TYPE_TRIAC_PHASE && f == FUNC_TRIAC_FASE)) {
+      gpioMap[i].rt.param1  = (uint32_t)v;
+      gpioMap[i].cfg.param1 = (uint32_t)v;
+    } else if (ct == CTRL_TYPE_ONOFF && f == FUNC_DIGITAL_LED) {
+      gpioMap[i].rt.param2  = (uint16_t)v;
+      gpioMap[i].cfg.param2 = (uint16_t)v;
+    }
   }
 }
 
@@ -558,7 +561,8 @@ void setBrightnessCW(int v) {
   for (int i = 0; i < MAX_GPIO_COUNT; i++) {
     if (gpioMap[i].cfg.func != FUNC_PWM) continue;
     if (first) { first = false; continue; }
-    gpioMap[i].rt.param1 = (uint32_t)v;
+    gpioMap[i].rt.param1  = (uint32_t)v;
+    gpioMap[i].cfg.param1 = (uint32_t)v;
     return;
   }
 }
