@@ -251,15 +251,15 @@ function buildGpioTable(gpiomap) {
         gpioState[g].params.numLeds    = c || 1;
         break;
       case 'pwm':
-        gpioState[g].params.duty = a || 50;
+        gpioState[g].params.duty = gpiomap['a' + g] != null ? Number(gpiomap['a' + g]) : 50;
         gpioState[g].params.freq = b || 5000;
         break;
       case 'triac_cycle':
-        gpioState[g].params.duty = a || 50;
+        gpioState[g].params.duty = gpiomap['a' + g] != null ? Number(gpiomap['a' + g]) : 50;
         gpioState[g].params.freq = b || 10;
         break;
       case 'triac_phase':
-        gpioState[g].params.duty = a || 50;
+        gpioState[g].params.duty = gpiomap['a' + g] != null ? Number(gpiomap['a' + g]) : 50;
         if (b >= 0 && b < _decodeCount && (_funclist[gpiomap['f' + b] || 0] || {}).id === 'zcd') {
           gpioState[g].zcdGpio = b;
           gpioState[b].func = 'zcd_reserved';

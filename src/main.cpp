@@ -75,8 +75,8 @@ void setup() {
   #endif
   loadConfig();
   driverSetupAll();
-  applyPowerupState();
   renderVisualFeedback("inici");
+  applyPowerupState();
 
   // delay(2000);
 
